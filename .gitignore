@@ -1,0 +1,7 @@
+.idea
+_deps
+build
+build-*
+build_*
+.DS_Store
+*.pdf
