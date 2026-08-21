@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
+#include "src/pico_helpers.h"
 
 #define ADC_PIN 26  // GPIO 26
 #define ADC_INPUT 0 // GPIO 26 is ADC 0
@@ -21,6 +22,7 @@ bool hit_detected = false;
  */
 void find_hit_threshold()
 {
+    pico_set_led(true);
     printf("Finding minimum hit threshold based on %d samples with interval %d us...\n", THRESHOLD_FINDER_SAMPLES, SAMPLE_INTERVAL_US);
     uint16_t min_value = 65535;
     uint16_t max_value = 0;
@@ -47,6 +49,7 @@ void find_hit_threshold()
     hit_threshold = max_value + (max_value - min_value) * 0.1f;
     dynamic_hit_threshold = hit_threshold;
     printf("Set hit threshold to %d based on observed range of %d to %d\n", hit_threshold, min_value, max_value);
+    pico_set_led(false);
 }
 
 void process_piezo_sample()
@@ -67,6 +70,7 @@ void process_piezo_sample()
         {
             printf("Hit detected! Value: %d\n", raw_value);
             hit_detected = true;
+            pico_set_led(true);
         }
         // Update the dynamic threshold to the new peak value to prevent immediate re-triggering by the same hit
         dynamic_hit_threshold = raw_value;
@@ -75,12 +79,14 @@ void process_piezo_sample()
     {
         printf("Hit ended. Value: %d\n", raw_value);
         hit_detected = false;
+        pico_set_led(false);
     }
 }
 
 int main()
 {
     stdio_init_all();
+    pico_led_init();
     adc_init();
     adc_gpio_init(ADC_PIN);
     adc_select_input(ADC_INPUT);
