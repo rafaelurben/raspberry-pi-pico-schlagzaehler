@@ -55,7 +55,7 @@ target_include_directories(schlagzaehler PRIVATE
 
 # Add any user requested libraries
 target_link_libraries(schlagzaehler 
-        
+        hardware_adc
         )
 
 pico_add_extra_outputs(schlagzaehler)
