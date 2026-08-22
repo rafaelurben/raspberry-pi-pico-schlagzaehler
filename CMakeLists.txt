@@ -40,6 +40,7 @@ pico_sdk_init()
 add_executable(schlagzaehler
     schlagzaehler.c
     src/pico_helpers.c
+    src/piezo_analyzer.c
 )
 
 pico_set_program_name(schlagzaehler "schlagzaehler")

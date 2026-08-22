@@ -7,15 +7,16 @@
 # ]
 # ///
 import sys
+import os
+from datetime import datetime
 
 import serial
 import csv
 import matplotlib.pyplot as plt
 
 # --- Configuration ---
-SERIAL_PORT = None
 # SERIAL_PORT = 'COM3'                    # Example for Windows
-# SERIAL_PORT = "/dev/tty.usbmodem21202"  # Example for Linux/Mac
+SERIAL_PORT = "/dev/tty.usbmodem21202"  # Example for Linux/Mac
 # --- End Configuration ---
 
 BAUD_RATE = 115200
@@ -72,27 +73,33 @@ def collect_and_generate_chart(filename_prefix: str):
                     except UnicodeDecodeError:
                         continue  # Skip corrupted bytes
 
-                    if line.startswith("END"):
-                        print("END detected.")
-                        break
                     if line.startswith("TRIGGER"):
-                        print("TRIGGER detected.")
+                        print("TRIGGER detected - collecting data...")
                         continue
+                    if line.startswith("START"):
+                        print("START detected - beginning data transfer.")
+                        continue
+                    if line.startswith("END"):
+                        print("END detected - data transfer complete.")
+                        break
 
-                    # Artifact filter: Ensure format is exactly "digits,digits"
                     parts = line.split(",")
-                    if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-                        sample = int(parts[0])
-                        adc_value = int(parts[1])
+                    if len(parts) == 2:
+                        try:
+                            sample = int(parts[0])
+                            adc_value = int(parts[1])
 
-                        # Save to backup CSV
-                        writer.writerow([sample, adc_value])
+                            # Save to backup CSV
+                            writer.writerow([sample, adc_value])
 
-                        # Save to memory for the chart
-                        timestamps.append(sample)
-                        adc_values.append(adc_value)
+                            # Save to memory for the chart
+                            timestamps.append(sample)
+                            adc_values.append(adc_value)
+                        except ValueError:
+                            print(f"Skipping malformed line: {line}")
+                            continue
                     else:
-                        print(f"Skipping malformed line: {line}")
+                        print(f"Skipping unknown line: {line}")
     finally:
         ser.close()
 
@@ -115,7 +122,9 @@ if __name__ == "__main__":
         i = 0
         while True:
             print("Run #", i)
-            collect_and_generate_chart(f"data/piezo_{i:03d}")
+            datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            os.makedirs(f"data/{datetime_str}", exist_ok=True)
+            collect_and_generate_chart(f"data/{datetime_str}/piezo_{i:03d}")
             print("Restarting data collection...")
             i += 1
     except KeyboardInterrupt:

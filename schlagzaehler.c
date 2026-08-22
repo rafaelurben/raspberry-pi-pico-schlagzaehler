@@ -3,6 +3,7 @@
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
 #include "src/pico_helpers.h"
+#include "src/piezo_analyzer.h"
 
 #define ADC_PIN 26  // GPIO 26
 #define ADC_INPUT 0 // GPIO 26 is ADC 0
@@ -20,7 +21,7 @@ bool hit_detected = false;
 /**
  * @brief Find the minimum ADC hit threshold based on initial environmental readings.
  */
-void find_hit_threshold()
+void piezo_find_hit_threshold()
 {
     pico_set_led(true);
     printf("Finding minimum hit threshold based on %d samples with interval %d us...\n", THRESHOLD_FINDER_SAMPLES, SAMPLE_INTERVAL_US);
@@ -93,7 +94,10 @@ int main()
 
     printf("Program started.\n");
 
-    find_hit_threshold();
+    piezo_find_hit_threshold();
+    
+    // Uncomment to run the piezo analyzer
+    //run_piezo_analyzer();
 
     while (true)
     {

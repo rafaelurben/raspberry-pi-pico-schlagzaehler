@@ -4,9 +4,9 @@
  * @brief A small script to analyze piezo sensor data from the ADC and output it in CSV format.
  * @version 0.1
  * @date 2026-08-21
- * 
+ *
  * @copyright Copyright (c) 2026 Rafael Urben
- * 
+ *
  */
 
 #include <stdio.h>
@@ -15,34 +15,22 @@
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
 
-#define ADC_PIN 26
-#define ADC_INPUT 0
+#define SAMPLE_INTERVAL_US 100                        // Interval between samples in microseconds
+#define SAMPLE_RATE_HZ (1000000 / SAMPLE_INTERVAL_US) // Sample rate in Hz
 
-#define SAMPLE_RATE_HZ 10000
-#define SAMPLE_PERIOD_US (1000000 / SAMPLE_RATE_HZ)
+#define SAMPLE_COUNT_PRE_TRIGGER (SAMPLE_RATE_HZ / 10) // Number of samples to capture before the trigger event (0.1 seconds worth of samples)
+#define SAMPLE_COUNT_POST_TRIGGER (SAMPLE_RATE_HZ * 2) // Number of samples to capture after the trigger event (2 seconds worth of samples)
+#define SAMPLE_BUFFER_SIZE (SAMPLE_COUNT_PRE_TRIGGER + SAMPLE_COUNT_POST_TRIGGER)
 
-#define PRE_TRIGGER 100     // Number of samples to capture before the trigger event
-#define POST_TRIGGER 20000  // Number of samples to capture after the trigger event
+extern uint16_t hit_threshold; // Threshold for hit detection
 
-#define TRIGGER_THRESHOLD 100   // ADC value threshold to detect a hit
-
-#define BUFFER_SIZE (PRE_TRIGGER + POST_TRIGGER)
-
-static uint16_t buffer[BUFFER_SIZE];
-
-int main(void)
+void run_piezo_analyzer(void)
 {
-    stdio_init_all();
-
-    adc_init();
-    adc_gpio_init(ADC_PIN);
-    adc_select_input(ADC_INPUT);
-
-    sleep_ms(2000);
+    static uint16_t buffer[SAMPLE_BUFFER_SIZE];
 
     printf("Piezo analyzer\n");
     printf("Sample rate: %d Hz\n", SAMPLE_RATE_HZ);
-    printf("Trigger threshold: %d\n", TRIGGER_THRESHOLD);
+    printf("Trigger threshold: %d\n", hit_threshold);
     printf("\n");
 
     uint32_t sample = 0;
@@ -51,7 +39,7 @@ int main(void)
      * Circular buffer containing the samples immediately
      * preceding the trigger.
      */
-    uint16_t circular[PRE_TRIGGER];
+    uint16_t circular[SAMPLE_COUNT_PRE_TRIGGER];
     uint32_t circular_index = 0;
 
     absolute_time_t next_sample = get_absolute_time();
@@ -65,7 +53,7 @@ int main(void)
 
         next_sample = delayed_by_us(
             next_sample,
-            SAMPLE_PERIOD_US);
+            SAMPLE_INTERVAL_US);
 
         uint16_t value = adc_read();
 
@@ -75,13 +63,13 @@ int main(void)
         circular[circular_index] = value;
 
         circular_index++;
-        if (circular_index >= PRE_TRIGGER)
+        if (circular_index >= SAMPLE_COUNT_PRE_TRIGGER)
             circular_index = 0;
 
         /*
          * Trigger detection.
          */
-        if (value >= TRIGGER_THRESHOLD)
+        if (value >= hit_threshold)
         {
             printf("TRIGGER\n");
             /*
@@ -91,10 +79,10 @@ int main(void)
              * circular buffer into the output buffer.
              */
 
-            for (uint32_t i = 0; i < PRE_TRIGGER; i++)
+            for (uint32_t i = 0; i < SAMPLE_COUNT_PRE_TRIGGER; i++)
             {
                 uint32_t index =
-                    (circular_index + i) % PRE_TRIGGER;
+                    (circular_index + i) % SAMPLE_COUNT_PRE_TRIGGER;
 
                 buffer[i] = circular[index];
             }
@@ -103,20 +91,20 @@ int main(void)
              * The current sample is already the first
              * post-trigger sample.
              */
-            buffer[PRE_TRIGGER] = value;
+            buffer[SAMPLE_COUNT_PRE_TRIGGER] = value;
 
             /*
              * Capture the remaining samples.
              */
-            for (uint32_t i = PRE_TRIGGER + 1;
-                 i < BUFFER_SIZE;
+            for (uint32_t i = SAMPLE_COUNT_PRE_TRIGGER + 1;
+                 i < SAMPLE_BUFFER_SIZE;
                  i++)
             {
                 sleep_until(next_sample);
 
                 next_sample = delayed_by_us(
                     next_sample,
-                    SAMPLE_PERIOD_US);
+                    SAMPLE_INTERVAL_US);
 
                 buffer[i] = adc_read();
             }
@@ -124,13 +112,13 @@ int main(void)
             /*
              * Output CSV.
              */
-            printf("sample,adc\n");
+            printf("START\n");
 
-            for (uint32_t i = 0; i < BUFFER_SIZE; i++)
+            for (int32_t i = 0; i < SAMPLE_BUFFER_SIZE; i++)
             {
                 printf(
-                    "%lu,%u\n",
-                    i,
+                    "%d,%u\n",
+                    i - SAMPLE_COUNT_PRE_TRIGGER,
                     buffer[i]);
             }
 
@@ -143,7 +131,7 @@ int main(void)
              * This prevents one hit from producing multiple
              * captures.
              */
-            while (adc_read() >= TRIGGER_THRESHOLD)
+            while (adc_read() >= hit_threshold)
             {
                 sleep_us(100);
             }
