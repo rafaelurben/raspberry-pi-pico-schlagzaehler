@@ -19,7 +19,7 @@
 #define SAMPLE_RATE_HZ (1000000 / SAMPLE_INTERVAL_US) // Sample rate in Hz
 
 #define SAMPLE_COUNT_PRE_TRIGGER (SAMPLE_RATE_HZ / 10) // Number of samples to capture before the trigger event (0.1 seconds worth of samples)
-#define SAMPLE_COUNT_POST_TRIGGER (SAMPLE_RATE_HZ * 2) // Number of samples to capture after the trigger event (2 seconds worth of samples)
+#define SAMPLE_COUNT_POST_TRIGGER (SAMPLE_RATE_HZ * 1) // Number of samples to capture after the trigger event (1 second worth of samples)
 #define SAMPLE_BUFFER_SIZE (SAMPLE_COUNT_PRE_TRIGGER + SAMPLE_COUNT_POST_TRIGGER)
 
 extern uint16_t hit_threshold; // Threshold for hit detection
