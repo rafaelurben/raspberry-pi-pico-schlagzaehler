@@ -38,11 +38,13 @@ def create_chart(timestamps: list, adc_values: list, filename_prefix: str):
     plt.legend(loc="upper right")
 
     # Save the chart image automatically
-    plt.savefig(filename_prefix + "_chart.png", dpi=300, bbox_inches="tight")
-    print("Chart saved as '" + filename_prefix + "_chart.png'.")
+    filename = filename_prefix + "_chart.png"
+    plt.savefig(filename, dpi=300, bbox_inches="tight")
+    path = os.path.abspath(filename)
+    print("Chart saved as '" + path + "'.")
 
     # Open the interactive window
-    plt.show(block=True)
+    #plt.show(block=True)
 
 
 def collect_and_generate_chart(filename_prefix: str):
@@ -120,9 +122,9 @@ if __name__ == "__main__":
 
     try:
         i = 0
+        datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         while True:
             print("Run #", i)
-            datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
             os.makedirs(f"data/{datetime_str}", exist_ok=True)
             collect_and_generate_chart(f"data/{datetime_str}/piezo_{i:03d}")
             print("Restarting data collection...")
