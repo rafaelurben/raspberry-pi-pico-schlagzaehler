@@ -117,7 +117,7 @@ void run_piezo_analyzer(void)
             for (int32_t i = 0; i < SAMPLE_BUFFER_SIZE; i++)
             {
                 printf(
-                    "%d,%u\n",
+                    "%ld,%u\n",
                     i - SAMPLE_COUNT_PRE_TRIGGER,
                     buffer[i]);
             }
