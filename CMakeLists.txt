@@ -36,6 +36,9 @@ project(schlagzaehler C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+# Turn on all compiler warnings
+add_compile_options(-Wall -Wextra)
+
 # Add executable. Default name is the project name, version 0.1
 add_executable(schlagzaehler
     schlagzaehler.c
@@ -64,8 +67,11 @@ target_include_directories(schlagzaehler PRIVATE
 )
 
 # Add any user requested libraries
+add_subdirectory(libs/displaylib_16bit)
+
 target_link_libraries(schlagzaehler
     hardware_adc
+    pico_displaylib_16
 )
 
 pico_add_extra_outputs(schlagzaehler)
