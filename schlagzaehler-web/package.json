@@ -6,7 +6,8 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "format": "prettier --write \"**/*.{ts,js,json,css,html,md}\""
   },
   "private": true,
   "packageManager": "npm@12.0.2",
