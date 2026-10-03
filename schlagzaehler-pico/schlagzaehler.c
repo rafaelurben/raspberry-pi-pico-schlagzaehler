@@ -1,7 +1,12 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
+#include "hardware/pio.h"
+#include "hardware/clocks.h"
+#include "libs/ws2812/ws2812.h"
+#include "libs/ws2812/generated/ws2812.pio.h"
 #include "src/pico_helpers.h"
 #include "src/piezo_analyzer.h"
 
@@ -106,7 +111,7 @@ void callback_gpio_irq(uint gpio, uint32_t events)
         printf("Button DOWN pressed. New hit threshold: %d\n", hit_threshold);
     }
 }
-
+/* 
 int main()
 {
     stdio_init_all();
@@ -114,6 +119,15 @@ int main()
     adc_init();
     adc_gpio_init(ADC_PIN);
     adc_select_input(ADC_INPUT);
+
+    PIO pio = pio0;
+    uint sm = 0;
+    uint offset = pio_add_program(pio, &ws2812_program);
+    ws2812_program_init(pio, sm, offset, PINS_GPIO, 800000, is_rgbw);
+
+    // Format: (G << 16) | (R << 8) | B
+    uint32_t color = (g_val << 16) | (r_val << 8) | b_val;
+    pio_sm_put_blocking(pio, sm, color);
 
     printf("Program started.\n");
 
@@ -139,3 +153,42 @@ int main()
         sleep_us(SAMPLE_INTERVAL_US);
     }
 }
+ */
+/* int main()
+{
+    // set_sys_clock_48();
+    stdio_init_all();
+    printf("WS2812 Smoke Test, using pin %d\n", WS2812_PIN);
+
+    // todo get free sm
+    PIO pio;
+    uint sm;
+    uint offset;
+
+    // This will find a free pio and state machine for our program and load it for us
+    // We use pio_claim_free_sm_and_add_program_for_gpio_range (for_gpio_range variant)
+    // so we will get a PIO instance suitable for addressing gpios >= 32 if needed and supported by the hardware
+    bool success = pio_claim_free_sm_and_add_program_for_gpio_range(&ws2812_program, &pio, &sm, &offset, WS2812_PIN, 1, true);
+    hard_assert(success);
+
+    ws2812_program_init(pio, sm, offset, WS2812_PIN, 800000, IS_RGBW);
+
+    int t = 0;
+    while (1)
+    {
+        int pat = rand() % pattern_table_count;
+        int dir = (rand() >> 30) & 1 ? 1 : -1;
+        puts(pattern_table[pat].name);
+        puts(dir == 1 ? "(forward)" : "(backward)");
+        for (int i = 0; i < 1000; ++i)
+        {
+            pattern_table[pat].pat(pio, sm, NUM_PIXELS, t);
+            sleep_ms(10);
+            t += dir;
+        }
+    }
+
+    // This will free resources and unload our program
+    pio_remove_program_and_unclaim_sm(&ws2812_program, pio, sm, offset);
+} */
+

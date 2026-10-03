@@ -6,3 +6,4 @@ build_*
 .DS_Store
 *.pdf
 analysis/data
+/.vscode

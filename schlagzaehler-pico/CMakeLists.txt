@@ -41,7 +41,7 @@ add_compile_options(-Wall -Wextra)
 
 # Add executable. Default name is the project name, version 0.1
 add_executable(schlagzaehler
-    schlagzaehler.c
+    schlagzaehler.cpp
     src/pico_helpers.c
     src/piezo_analyzer.c
 )
@@ -67,10 +67,12 @@ target_include_directories(schlagzaehler PRIVATE
 )
 
 # Add any user requested libraries
+add_subdirectory(libs/ws2812)
 add_subdirectory(libs/displaylib_16bit)
 
 target_link_libraries(schlagzaehler
     hardware_adc
+    ws2812
     pico_displaylib_16
 )
 
