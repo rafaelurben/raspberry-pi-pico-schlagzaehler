@@ -1,59 +1,54 @@
-# SchlagzaehlerWeb
+# Schlagzähler Web Interface
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.1.8.
+Real-time multi-device Web Serial interface for Raspberry Pi Pico devices built with Angular v22, Tailwind CSS 4, and Vitest.
 
-## Development server
+## Features
 
-To start a local development server, run:
+- **Multi-Device Concurrency**: Connects to multiple Raspberry Pi Pico devices concurrently using the W3C Web Serial API.
+- **Transport Abstraction Layer**: Generic `DeviceTransport` contract allowing future transports (e.g. Web Bluetooth, WebSocket) to be plugged in without changing the UI or application state.
+- **Robust Line Buffering**: `NewlineEventParser` handles chunk fragmentation, CRLF / LF line endings, and ignores empty lines.
+- **Fault Isolation**: Device connection drops and transport errors are isolated per-device without affecting other active streams.
+- **Modern Angular State**: Uses Angular Signals for UI and connection state management, with RxJS for asynchronous event streams.
+- **Accessible UI**: High-contrast, WCAG AA compliant dashboard built with Tailwind CSS.
 
-```bash
-ng serve
-```
+## Getting Started
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+### Development Server
 
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+Run:
 
 ```bash
-ng generate --help
+npm start
 ```
 
-## Building
+Navigate to `http://localhost:4200/` using a browser supporting the Web Serial API (Google Chrome, Microsoft Edge, Opera).
 
-To build the project run:
+### Running Tests
 
 ```bash
-ng build
+npm test -- --watch=false
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+All unit tests are executed using [Vitest](https://vitest.dev/).
 
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+### Linting
 
 ```bash
-ng test
+npm run lint
 ```
 
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
+### Formatting
 
 ```bash
-ng e2e
+npm run format
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+### Production Build
 
-## Additional Resources
+```bash
+npm run build
+```
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+## Architecture
+
+See the root [**`AGENTS.md`**](../AGENTS.md) and [`AGENTS.md`](./AGENTS.md) for full architectural specifications, design guidelines, and extension runbooks.
