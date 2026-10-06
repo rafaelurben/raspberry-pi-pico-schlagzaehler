@@ -1,0 +1,44 @@
+@startuml
+
+top to bottom direction
+
+[*] --> ModusZählen
+
+state Spiel {
+    state "Spielmodus Zählen" as ModusZählen
+    state "Spielmodus Zeit" as ModusZeit
+    state "Spielmodus Rennen" as ModusRennen
+
+    ModusZählen -[hidden]down-> ModusZeit
+    ModusZeit -[hidden]down-> ModusRennen
+
+    ModusZählen --> ModusZählen : RIGHT (Reset Counter)
+
+    ModusZeit --> ModusZeit : RIGHT (Restart) - UP/DOWN (Zeit erhöhen/verringern)
+
+    ModusRennen --> ModusRennen : RIGHT (Restart) - UP/DOWN (Anzahl Schläge erhöhen/verringern)
+}
+
+state Menu {
+    state "Modus Zählen" as MenuZählen
+    state "Modus Zeit" as MenuZeit
+    state "Modus Rennen" as MenuRennen
+
+    MenuZählen -down-> MenuZeit : DOWN
+    MenuZeit -down-> MenuRennen : DOWN
+    MenuRennen --> MenuZählen : DOWN
+
+    MenuZählen --> MenuRennen : UP
+    MenuRennen --> MenuZeit : UP
+    MenuZeit --> MenuZählen : UP
+}
+
+MenuZählen -right> ModusZählen : RIGHT
+MenuZeit -right> ModusZeit : RIGHT
+MenuRennen -right> ModusRennen : RIGHT
+
+ModusZählen -left-> MenuZählen : LEFT
+ModusZeit -left-> MenuZeit : LEFT
+ModusRennen -left-> MenuRennen : LEFT
+
+@enduml
