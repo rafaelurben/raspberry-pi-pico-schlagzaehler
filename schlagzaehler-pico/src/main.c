@@ -16,7 +16,7 @@ int main(void) {
 
     /* Run Core 0 authoritative processing loop */
     for (;;) {
-        App_run(&app);
+        App_run_core0(&app);
     }
 
     return 0;

@@ -11,6 +11,7 @@
 static App* s_app_instance = NULL;
 
 static void core1_entry(void) {
+    App_init_core1(s_app_instance);
     while (s_app_instance && s_app_instance->is_running) {
         App_run_core1(s_app_instance);
     }
@@ -35,27 +36,14 @@ void App_init(App* app, const Config* config) {
     OsalQueue_init(&app->queue_core0_to_core1, NULL, sizeof(Core0ToCore1Message), QUEUE_CORE0_TO_CORE1_CAPACITY);
     OsalQueue_init(&app->queue_core1_to_core0, NULL, sizeof(Core1ToCore0Message), QUEUE_CORE1_TO_CORE0_CAPACITY);
 
-    /* Initialize drivers */
-    GpioDriver_init();
-    PiezoAdcDriver_init(&app->config);
-    UsbSerialDriver_init();
-    DisplayDriver_init();
+    /* Launch Core 1 only after all queues and shared resources are initialized */
+    CoreStartup_launch_core1(core1_entry);
 
-    /* Initialize Core 0 components */
-    HitDetector_init(&app->hit_detector, &app->config);
-    ButtonController_init(&app->button_controller);
-    GameController_init(&app->game_controller, &app->config, &app->queue_core0_to_core1);
-
-    /* Initialize Core 1 components */
-    DisplayPresenter_init(&app->display_presenter);
-    CommandHandler_init(&app->command_handler, &app->queue_core1_to_core0);
-    CompanionProtocol_init(&app->companion_protocol, &app->command_handler);
+    /* Initialize Core 0 */
+    App_init_core0(app);
 
     /* Initialize Watchdog */
     WatchdogService_init(&app->watchdog_service, app->config.watchdog_timeout_ms);
-
-    /* Launch Core 1 only after all queues and shared resources are initialized */
-    CoreStartup_launch_core1(core1_entry);
 
     /* Start continuous ADC DMA sampling */
     PiezoAdcDriver_start();
@@ -72,7 +60,36 @@ void App_init(App* app, const Config* config) {
     OsalQueue_push(&app->queue_core0_to_core1, &boot_msg);
 }
 
-void App_run(App* app) {
+void App_init_core0(App *app)
+{
+    if (!app) return;
+
+    /* Initialize core 0 drivers */
+    GpioDriver_init();
+    PiezoAdcDriver_init(&app->config);
+
+    /* Initialize Core 0 components */
+    HitDetector_init(&app->hit_detector, &app->config);
+    ButtonController_init(&app->button_controller);
+    GameController_init(&app->game_controller, &app->config, &app->queue_core0_to_core1);
+    CompanionProtocol_init(&app->companion_protocol, &app->command_handler);
+}
+
+void App_init_core1(App *app)
+{
+    if (!app) return;
+
+    /* Initialize Core 1 drivers */
+    UsbSerialDriver_init();
+    DisplayDriver_init();
+
+    /* Initialize Core 1 components */
+    DisplayPresenter_init(&app->display_presenter);
+    CommandHandler_init(&app->command_handler, &app->queue_core1_to_core0);
+    CompanionProtocol_init(&app->companion_protocol, &app->command_handler);
+}
+
+void App_run_core0(App* app) {
     if (!app) return;
 
     /* 1. Process completed ADC DMA buffer */
@@ -152,7 +169,7 @@ void App_run_core1(App* app) {
     }
 
     /* 2. Poll incoming serial commands from Companion */
-    CompanionProtocol_poll_input(&app->companion_protocol);
+    //CompanionProtocol_poll_input(&app->companion_protocol);
 
     /* 3. Render any dirty UI components on Display */
     DisplayPresenter_render(&app->display_presenter);

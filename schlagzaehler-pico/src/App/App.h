@@ -45,12 +45,22 @@ typedef struct {
 void App_init(App* app, const Config* config);
 
 /**
- * @brief Non-blocking Core 0 main loop iteration.
+ * @brief Core 0 initialization
  */
-void App_run(App* app);
+void App_init_core0(App *app);
 
 /**
- * @brief Core 1 main loop iteration (called repeatedly on Core 1).
+ * @brief Core 1 initialization
+ */
+void App_init_core1(App *app);
+
+/**
+ * @brief Non-blocking Core 0 main loop iteration.
+ */
+void App_run_core0(App *app);
+
+/**
+ * @brief Core 1 main loop iteration
  */
 void App_run_core1(App* app);
 
