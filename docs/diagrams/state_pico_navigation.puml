@@ -1,0 +1,44 @@
+@startuml
+
+top to bottom direction
+
+[*] --> ModeCount
+
+state Spiel {
+    state "Spielmodus Zählen" as ModeCount
+    state "Spielmodus Zeit" as ModeTimed
+    state "Spielmodus Rennen" as ModeRace
+
+    ModeCount -[hidden]down-> ModeTimed
+    ModeTimed -[hidden]down-> ModeRace
+
+    ModeCount --> ModeCount : RIGHT (Reset Counter)
+
+    ModeTimed --> ModeTimed : RIGHT (Restart) - UP/DOWN (Zeit erhöhen/verringern)
+
+    ModeRace --> ModeRace : RIGHT (Restart) - UP/DOWN (Anzahl Schläge erhöhen/verringern)
+}
+
+state Menu {
+    state "Modus Zählen" as MenuModeCount
+    state "Modus Zeit" as MenuModeTimed
+    state "Modus Rennen" as MenuModeRace
+
+    MenuModeCount -down-> MenuModeTimed : DOWN
+    MenuModeTimed -down-> MenuModeRace : DOWN
+    MenuModeRace --> MenuModeCount : DOWN
+
+    MenuModeCount --> MenuModeRace : UP
+    MenuModeRace --> MenuModeTimed : UP
+    MenuModeTimed --> MenuModeCount : UP
+}
+
+MenuModeCount -right> ModeCount : RIGHT
+MenuModeTimed -right> ModeTimed : RIGHT
+MenuModeRace -right> ModeRace : RIGHT
+
+ModeCount -left-> MenuModeCount : LEFT
+ModeTimed -left-> MenuModeTimed : LEFT
+ModeRace -left-> MenuModeRace : LEFT
+
+@enduml

@@ -1,0 +1,76 @@
+@startuml
+
+top to bottom direction
+
+[*] --> Init
+
+Init --> Calibrating
+
+Calibrating --> ModeCount
+
+state Spiel {
+    state "Spielmodus Zählen" as ModeCount {
+        state "Bereit" as ModeCountReady
+        state "Aktiv" as ModeCountActive
+
+        [*] -right-> ModeCountReady
+
+        ModeCountReady -right-> ModeCountActive : HIT
+        ModeCountActive -left-> ModeCountReady : RIGHT (Reset Counter)
+    }
+    state "Spielmodus Zeit" as ModeTimed {
+        state "Bereit" as ModeTimedReady
+        state "Aktiv" as ModeTimedActive
+        state "Resultat" as ModeTimedResult
+
+        [*] -right-> ModeTimedReady
+
+        ModeTimedReady -right-> ModeTimedActive : HIT
+        ModeTimedActive -left-> ModeTimedReady : RIGHT (Restart)
+        ModeTimedActive -down-> ModeTimedResult : TIME_LIMIT
+        ModeTimedResult --> ModeTimedReady : RIGHT (Restart)
+
+        ModeTimedReady --> ModeTimedReady : UP/DOWN (Zeit erhöhen/verringern)
+    }
+    state "Spielmodus Rennen" as ModeRace {
+        state "Bereit" as ModeRaceReady
+        state "Aktiv" as ModeRaceActive
+        state "Resultat" as ModeRaceResult
+
+        [*] -right-> ModeRaceReady
+
+        ModeRaceReady -right-> ModeRaceActive : HIT
+        ModeRaceActive -left-> ModeRaceReady : RIGHT (Restart)
+        ModeRaceActive -down-> ModeRaceResult : HIT_LIMIT
+        ModeRaceResult --> ModeRaceReady : RIGHT (Restart)
+
+        ModeRaceReady --> ModeRaceReady : UP/DOWN (Zeit erhöhen/verringern)
+    }
+
+    ModeCount -[hidden]down-> ModeTimed
+    ModeTimed -[hidden]down-> ModeRace
+}
+
+state Menu {
+    state "Modus Zählen" as MenuModeCount
+    state "Modus Zeit" as MenuModeTimed
+    state "Modus Rennen" as MenuModeRace
+
+    MenuModeCount -down-> MenuModeTimed : DOWN
+    MenuModeTimed -down-> MenuModeRace : DOWN
+    MenuModeRace --> MenuModeCount : DOWN
+
+    MenuModeCount --> MenuModeRace : UP
+    MenuModeRace --> MenuModeTimed : UP
+    MenuModeTimed --> MenuModeCount : UP
+}
+
+MenuModeCount -right> ModeCount : RIGHT
+MenuModeTimed -right> ModeTimed : RIGHT
+MenuModeRace -right> ModeRace : RIGHT
+
+ModeCount -left-> MenuModeCount : LEFT
+ModeTimed -left-> MenuModeTimed : LEFT
+ModeRace -left-> MenuModeRace : LEFT
+
+@enduml
