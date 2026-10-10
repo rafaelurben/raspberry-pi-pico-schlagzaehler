@@ -39,39 +39,71 @@ pico_sdk_init()
 # Turn on all compiler warnings
 add_compile_options(-Wall -Wextra)
 
-# Add executable. Default name is the project name, version 0.1
+# Add executable with all architectural components
 add_executable(schlagzaehler
-    schlagzaehler.c
-    src/pico_helpers.c
-    src/piezo_analyzer.c
+    src/main.c
+    src/Common/Crc.c
+    src/Platform/Pico/PicoBoard.c
+    src/Platform/Pico/PicoInterrupt.c
+    src/Platform/Pico/PicoTime.c
+    src/Platform/Pico/PicoQueue.c
+    src/Platform/Pico/PicoDma.c
+    src/Platform/Pico/PicoUsbSerial.c
+    src/Platform/Pico/CoreStartup.c
+    src/Drivers/PiezoAdcDriver.c
+    src/Drivers/GpioDriver.c
+    src/Drivers/UsbSerialDriver.c
+    src/Drivers/DisplayDriverAdapter.cpp
+    src/Services/ConfigService.c
+    src/Services/WatchdogService.c
+    src/App/HitDetection/HitDetector.c
+    src/App/Input/ButtonController.c
+    src/App/Game/GameState.c
+    src/App/Game/Modes/CountMode.c
+    src/App/Game/Modes/TimedMode.c
+    src/App/Game/Modes/RaceMode.c
+    src/App/Game/GameController.c
+    src/App/Display/DisplayPresenter.c
+    src/App/Companion/CommandHandler.c
+    src/App/Companion/CompanionProtocol.c
+    src/App/App.c
 )
 
 pico_set_program_name(schlagzaehler "schlagzaehler")
-pico_set_program_version(schlagzaehler "0.1")
+pico_set_program_version(schlagzaehler "0.2")
 
-# Modify the below lines to enable/disable output over UART/USB
+# Enable both UART and USB CDC stdio output
 pico_enable_stdio_uart(schlagzaehler 1)
-pico_enable_stdio_usb(schlagzaehler 0)
+pico_enable_stdio_usb(schlagzaehler 1)
 
-# Add the standard library to the build
+# Add standard and hardware libraries to the build
 target_link_libraries(schlagzaehler
-    pico_stdlib)
+    pico_stdlib
+    pico_multicore
+    pico_util
+    hardware_adc
+    hardware_dma
+    hardware_gpio
+    hardware_timer
+    hardware_sync
+    hardware_watchdog
+    hardware_spi
+)
 
 if(PICO_CYW43_SUPPORTED)
     target_link_libraries(schlagzaehler pico_cyw43_arch_none)
 endif()
 
-# Add the standard include files to the build
-target_include_directories(schlagzaehler PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}
+# Add display library
+add_subdirectory(libs/displaylib_16bit)
+target_link_libraries(schlagzaehler
+    pico_displaylib_16
 )
 
-# Add any user requested libraries
-add_subdirectory(libs/displaylib_16bit)
-
-target_link_libraries(schlagzaehler
-    hardware_adc
-    pico_displaylib_16
+# Add include directories
+target_include_directories(schlagzaehler PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/src
+    ${CMAKE_CURRENT_LIST_DIR}/libs/displaylib_16bit/include
 )
 
 pico_add_extra_outputs(schlagzaehler)
