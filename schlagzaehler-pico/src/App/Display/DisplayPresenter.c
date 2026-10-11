@@ -32,10 +32,14 @@ void DisplayPresenter_handle_message(DisplayPresenter* presenter, const Core0ToC
     switch (msg->type) {
         case MSG_GAME_STATE_CHANGED:
             presenter->state = msg->data.game_state.new_state;
+            if (presenter->state == GAME_STATE_MENU) {
+                presenter->menu_selected_mode = presenter->active_mode;
+            }
             presenter->needs_full_redraw = true;
             break;
         case MSG_GAME_MODE_CHANGED:
             presenter->active_mode = msg->data.game_mode.mode;
+            presenter->menu_selected_mode = msg->data.game_mode.menu_selected_mode;
             presenter->parameter = msg->data.game_mode.parameter;
             presenter->needs_full_redraw = true;
             break;

@@ -26,6 +26,7 @@ static void broadcast_mode_change(GameController* gc) {
         .timestamp_us = Time_now_us(),
         .data.game_mode = {
             .mode = gc->state_model.active_mode,
+            .menu_selected_mode = gc->state_model.menu_selected_mode,
             .parameter = gc->state_model.parameter
         }
     };
@@ -81,7 +82,13 @@ void GameController_init(GameController* gc, const Config* config, OsalQueue* qu
     gc->last_timer_broadcast_us = 0;
 
     GameState_init(&gc->state_model, gc->config.default_mode);
-    gc->state_model.parameter = gc->config.timed_duration_s;
+    if (gc->state_model.active_mode == GAME_MODE_TIMED) {
+        gc->state_model.parameter = gc->config.timed_duration_s;
+    } else if (gc->state_model.active_mode == GAME_MODE_RACE) {
+        gc->state_model.parameter = gc->config.race_target_hits;
+    } else {
+        gc->state_model.parameter = 0;
+    }
 
     CountMode_init(&gc->count_mode);
     TimedMode_init(&gc->timed_mode, gc->config.timed_duration_s);
@@ -203,10 +210,26 @@ void GameController_on_button(GameController* gc, const ButtonEvent* btn) {
         if (btn->button == BTN_ID_UP) {
             gc->state_model.menu_selected_mode =
                 (GameMode)((gc->state_model.menu_selected_mode + GAME_MODE_COUNT_TOTAL - 1) % GAME_MODE_COUNT_TOTAL);
+            gc->state_model.active_mode = gc->state_model.menu_selected_mode;
+            if (gc->state_model.active_mode == GAME_MODE_TIMED) {
+                gc->state_model.parameter = gc->config.timed_duration_s;
+            } else if (gc->state_model.active_mode == GAME_MODE_RACE) {
+                gc->state_model.parameter = gc->config.race_target_hits;
+            } else {
+                gc->state_model.parameter = 0;
+            }
             broadcast_mode_change(gc);
         } else if (btn->button == BTN_ID_DOWN) {
             gc->state_model.menu_selected_mode =
                 (GameMode)((gc->state_model.menu_selected_mode + 1) % GAME_MODE_COUNT_TOTAL);
+            gc->state_model.active_mode = gc->state_model.menu_selected_mode;
+            if (gc->state_model.active_mode == GAME_MODE_TIMED) {
+                gc->state_model.parameter = gc->config.timed_duration_s;
+            } else if (gc->state_model.active_mode == GAME_MODE_RACE) {
+                gc->state_model.parameter = gc->config.race_target_hits;
+            } else {
+                gc->state_model.parameter = 0;
+            }
             broadcast_mode_change(gc);
         } else if (btn->button == BTN_ID_RIGHT) {
             /* Select mode and enter READY */
@@ -233,6 +256,7 @@ void GameController_on_button(GameController* gc, const ButtonEvent* btn) {
             gc->state_model.menu_selected_mode = gc->state_model.active_mode;
             gc->state_model.state = GAME_STATE_MENU;
             broadcast_state_change(gc, GAME_STATE_READY, GAME_STATE_MENU);
+            broadcast_mode_change(gc);
         } else if (btn->button == BTN_ID_RIGHT) {
             /* Reset counter */
             GameState_reset_score(&gc->state_model);
@@ -265,6 +289,7 @@ void GameController_on_button(GameController* gc, const ButtonEvent* btn) {
             gc->state_model.menu_selected_mode = gc->state_model.active_mode;
             gc->state_model.state = GAME_STATE_MENU;
             broadcast_state_change(gc, GAME_STATE_RUNNING, GAME_STATE_MENU);
+            broadcast_mode_change(gc);
         } else if (btn->button == BTN_ID_RIGHT) {
             /* Restart: back to READY */
             GameState_reset_score(&gc->state_model);
@@ -281,6 +306,7 @@ void GameController_on_button(GameController* gc, const ButtonEvent* btn) {
             gc->state_model.menu_selected_mode = gc->state_model.active_mode;
             gc->state_model.state = GAME_STATE_MENU;
             broadcast_state_change(gc, GAME_STATE_FINISHED, GAME_STATE_MENU);
+            broadcast_mode_change(gc);
         } else if (btn->button == BTN_ID_RIGHT) {
             /* Restart in same mode */
             GameState_reset_score(&gc->state_model);
@@ -310,6 +336,13 @@ void GameController_on_command(GameController* gc, const Core1ToCore0Message* cm
         case MSG_SET_GAME_MODE:
             gc->state_model.active_mode = cmd->data.set_mode.mode;
             gc->state_model.menu_selected_mode = cmd->data.set_mode.mode;
+            if (gc->state_model.active_mode == GAME_MODE_TIMED) {
+                gc->state_model.parameter = gc->config.timed_duration_s;
+            } else if (gc->state_model.active_mode == GAME_MODE_RACE) {
+                gc->state_model.parameter = gc->config.race_target_hits;
+            } else {
+                gc->state_model.parameter = 0;
+            }
             GameState_reset_score(&gc->state_model);
             broadcast_mode_change(gc);
             break;

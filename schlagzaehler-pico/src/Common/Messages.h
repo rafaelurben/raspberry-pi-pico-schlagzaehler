@@ -59,6 +59,7 @@ typedef struct {
 
 typedef struct {
     GameMode mode;
+    GameMode menu_selected_mode;
     uint32_t parameter; /* duration in seconds or target hits */
 } MsgGameModeChanged;
 

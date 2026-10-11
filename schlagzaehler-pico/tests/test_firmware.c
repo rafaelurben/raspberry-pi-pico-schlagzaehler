@@ -204,15 +204,51 @@ void test_game_controller_and_modes(void) {
     GameController_on_button(&gc, &btn_l);
     assert(gc.state_model.state == GAME_STATE_MENU);
 
+    /* Drain queue from state change */
+    Core0ToCore1Message msg;
+    while (OsalQueue_pop(&q0_to_q1, &msg));
+
     /* Menu navigation: DOWN cycles to TIMED */
     ButtonEvent btn_d = { .button = BTN_ID_DOWN, .pressed = true, .timestamp_us = s_mock_time_us };
     GameController_on_button(&gc, &btn_d);
     assert(gc.state_model.menu_selected_mode == GAME_MODE_TIMED);
+    assert(gc.state_model.active_mode == GAME_MODE_TIMED);
+    assert(gc.state_model.parameter == cfg.timed_duration_s);
+
+    /* Verify message broadcast to Core 1 contains updated mode and parameter */
+    bool found_mode_msg = false;
+    while (OsalQueue_pop(&q0_to_q1, &msg)) {
+        if (msg.type == MSG_GAME_MODE_CHANGED) {
+            assert(msg.data.game_mode.mode == GAME_MODE_TIMED);
+            assert(msg.data.game_mode.menu_selected_mode == GAME_MODE_TIMED);
+            assert(msg.data.game_mode.parameter == cfg.timed_duration_s);
+            found_mode_msg = true;
+        }
+    }
+    assert(found_mode_msg);
+
+    /* Menu navigation: DOWN cycles to RACE */
+    GameController_on_button(&gc, &btn_d);
+    assert(gc.state_model.menu_selected_mode == GAME_MODE_RACE);
+    assert(gc.state_model.active_mode == GAME_MODE_RACE);
+    assert(gc.state_model.parameter == cfg.race_target_hits);
+
+    found_mode_msg = false;
+    while (OsalQueue_pop(&q0_to_q1, &msg)) {
+        if (msg.type == MSG_GAME_MODE_CHANGED) {
+            assert(msg.data.game_mode.mode == GAME_MODE_RACE);
+            assert(msg.data.game_mode.menu_selected_mode == GAME_MODE_RACE);
+            assert(msg.data.game_mode.parameter == cfg.race_target_hits);
+            found_mode_msg = true;
+        }
+    }
+    assert(found_mode_msg);
 
     /* RIGHT selects mode -> READY */
     GameController_on_button(&gc, &btn_r);
     assert(gc.state_model.state == GAME_STATE_READY);
-    assert(gc.state_model.active_mode == GAME_MODE_TIMED);
+    assert(gc.state_model.active_mode == GAME_MODE_RACE);
+    assert(gc.state_model.parameter == cfg.race_target_hits);
 
     printf("PASS: test_game_controller_and_modes\n");
 }
@@ -246,6 +282,19 @@ void test_companion_protocol(void) {
     };
     CompanionProtocol_send_message(&cp, &out_msg);
     assert(strncmp(s_last_serial_line, "HIT id=42", 9) == 0);
+
+    /* Outgoing mode change formatting */
+    Core0ToCore1Message mode_msg = {
+        .type = MSG_GAME_MODE_CHANGED,
+        .timestamp_us = 1000,
+        .data.game_mode = {
+            .mode = GAME_MODE_TIMED,
+            .menu_selected_mode = GAME_MODE_TIMED,
+            .parameter = 30
+        }
+    };
+    CompanionProtocol_send_message(&cp, &mode_msg);
+    assert(strcmp(s_last_serial_line, "MODE active=TIMED param=30") == 0);
 
     printf("PASS: test_companion_protocol\n");
 }
