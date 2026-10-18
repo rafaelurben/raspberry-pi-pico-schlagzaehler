@@ -132,9 +132,9 @@ void App_run_core0(App* app) {
         PiezoAdcDriver_release_buffer();
     }
 
-    /* 2. Process local buttons */
+    /* 2. Process interrupt-queued local button events */
     ButtonEvent btn_event;
-    while (ButtonController_poll_event(&app->button_controller, &btn_event)) {
+    while (ButtonController_pop_event(&app->button_controller, &btn_event)) {
         GameController_on_button(&app->game_controller, &btn_event);
     }
 

@@ -15,15 +15,26 @@
 #include "../src/App/Game/Modes/TimedMode.h"
 #include "../src/App/Game/Modes/RaceMode.h"
 #include "../src/App/Game/GameController.h"
+#include "../src/App/Input/ButtonController.h"
+#include "../src/Drivers/GpioDriver.h"
 #include "../src/App/Companion/CommandHandler.h"
 #include "../src/App/Companion/CompanionProtocol.h"
 
-/* Mock host Time implementation for testing */
+/* Mock host Time & Interrupt implementation for testing */
 static uint64_t s_mock_time_us = 1000000;
 uint64_t Time_now_us(void) { return s_mock_time_us; }
 uint32_t Time_now_ms(void) { return (uint32_t)(s_mock_time_us / 1000); }
 void Time_delay_us(uint32_t us) { s_mock_time_us += us; }
 void Time_delay_ms(uint32_t ms) { s_mock_time_us += (uint64_t)ms * 1000; }
+uint32_t Interrupt_disable(void) { return 0; }
+void Interrupt_restore(uint32_t status) { (void)status; }
+
+static GpioButtonIrqCallback s_mock_gpio_cb = NULL;
+static void* s_mock_gpio_user_data = NULL;
+void GpioDriver_enable_button_irqs(GpioButtonIrqCallback callback, void* user_data) {
+    s_mock_gpio_cb = callback;
+    s_mock_gpio_user_data = user_data;
+}
 
 /* Mock host Queue implementation for testing */
 typedef struct {
@@ -299,6 +310,54 @@ void test_companion_protocol(void) {
     printf("PASS: test_companion_protocol\n");
 }
 
+void test_button_controller_interrupts(void) {
+    ButtonController bc;
+    s_mock_gpio_cb = NULL;
+    s_mock_gpio_user_data = NULL;
+
+    ButtonController_init(&bc);
+    assert(s_mock_gpio_cb != NULL);
+    assert(s_mock_gpio_user_data == &bc);
+
+    ButtonEvent ev;
+    assert(ButtonController_pop_event(&bc, &ev) == false);
+
+    /* Simulate interrupt on BTN_ID_UP press (falling edge) */
+    s_mock_gpio_cb(BTN_ID_UP, true, s_mock_gpio_user_data);
+
+    /* Simulate switch bounce within 25ms (rising + falling edges) */
+    s_mock_time_us += 1000;
+    s_mock_gpio_cb(BTN_ID_UP, false, s_mock_gpio_user_data);
+    s_mock_time_us += 1000;
+    s_mock_gpio_cb(BTN_ID_UP, true, s_mock_gpio_user_data);
+
+    /* Only 1 press event should have been queued */
+    assert(ButtonController_pop_event(&bc, &ev) == true);
+    assert(ev.button == BTN_ID_UP);
+    assert(ev.pressed == true);
+    assert(ButtonController_pop_event(&bc, &ev) == false);
+
+    /* Hold for 100ms, then release (rising edge) + release bounce (falling edge 1ms later) */
+    s_mock_time_us += 100000;
+    s_mock_gpio_cb(BTN_ID_UP, false, s_mock_gpio_user_data);
+    s_mock_time_us += 1000;
+    s_mock_gpio_cb(BTN_ID_UP, true, s_mock_gpio_user_data);
+    assert(ButtonController_pop_event(&bc, &ev) == false);
+
+    /* Press DOWN, LEFT, RIGHT after debounce interval */
+    s_mock_time_us += 50000;
+    s_mock_gpio_cb(BTN_ID_DOWN, true, s_mock_gpio_user_data);
+    s_mock_gpio_cb(BTN_ID_LEFT, true, s_mock_gpio_user_data);
+    s_mock_gpio_cb(BTN_ID_RIGHT, true, s_mock_gpio_user_data);
+
+    assert(ButtonController_pop_event(&bc, &ev) == true && ev.button == BTN_ID_DOWN);
+    assert(ButtonController_pop_event(&bc, &ev) == true && ev.button == BTN_ID_LEFT);
+    assert(ButtonController_pop_event(&bc, &ev) == true && ev.button == BTN_ID_RIGHT);
+    assert(ButtonController_pop_event(&bc, &ev) == false);
+
+    printf("PASS: test_button_controller_interrupts\n");
+}
+
 int main(void) {
     printf("--- Running Schlagzaehler Architecture Unit Tests ---\n");
     test_crc();
@@ -306,6 +365,7 @@ int main(void) {
     test_hit_detector_and_calibration();
     test_game_controller_and_modes();
     test_companion_protocol();
-    printf("--- ALL 5 ARCHITECTURE TEST SUITES PASSED! ---\n");
+    test_button_controller_interrupts();
+    printf("--- ALL 6 ARCHITECTURE TEST SUITES PASSED! ---\n");
     return 0;
 }

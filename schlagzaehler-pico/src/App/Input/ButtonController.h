@@ -9,24 +9,36 @@
 extern "C" {
 #endif
 
+#define BUTTON_EVENT_QUEUE_CAPACITY 8
+
 typedef struct {
-    bool last_raw_state[BTN_ID_COUNT];
-    bool debounced_state[BTN_ID_COUNT];
     uint64_t last_change_time_us[BTN_ID_COUNT];
     uint32_t debounce_time_us;
 
-    /* Single event queue slot or pending event */
-    bool has_pending_event;
-    ButtonEvent pending_event;
+    /* Interrupt-safe ring buffer for detected button press events */
+    ButtonEvent event_queue[BUTTON_EVENT_QUEUE_CAPACITY];
+    volatile uint8_t queue_head;
+    volatile uint8_t queue_count;
 } ButtonController;
 
+/**
+ * @brief Initialize the button controller and register GPIO interrupts.
+ */
 void ButtonController_init(ButtonController* ctrl);
 
 /**
- * @brief Update debouncing logic and poll for newly pressed button events.
- * @return true if a button press event occurred.
+ * @brief Handle a GPIO button edge interrupt (called from ISR context).
+ * @param ctrl ButtonController instance
+ * @param button Button identifier (UP/DOWN/LEFT/RIGHT)
+ * @param is_press_edge true if falling edge (active-low button pressed), false if rising edge
  */
-bool ButtonController_poll_event(ButtonController* ctrl, ButtonEvent* out_event);
+void ButtonController_on_irq(ButtonController* ctrl, ButtonId button, bool is_press_edge);
+
+/**
+ * @brief Pop the next interrupt-triggered button press event from the queue.
+ * @return true if an event was available and written to out_event.
+ */
+bool ButtonController_pop_event(ButtonController* ctrl, ButtonEvent* out_event);
 
 #ifdef __cplusplus
 }
