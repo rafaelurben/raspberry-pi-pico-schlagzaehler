@@ -1,0 +1,302 @@
+@startuml
+title Schlagzähler Pico – Software Architecture
+
+top to bottom direction
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam nodesep 25
+skinparam ranksep 45
+hide empty members
+hide circle
+
+skinparam class {
+    BackgroundColor White
+    BorderColor Black
+    ArrowColor Black
+    FontColor Black
+}
+
+' ============================================================================
+' 1. APPLICATIONS LAYER (bg=LIGHT_GRAY)
+' ============================================================================
+package "Applications" as LayerApp #LightGray {
+
+    class "App" as App
+    class "ConfigService" as ConfigService
+    class "WatchdogService" as WatchdogService
+    class "HitDetector" as HitDetector
+    class "ButtonController" as ButtonController
+    class "DisplayPresenter" as DisplayPresenter
+
+    together {
+        class "GameController" as GameController
+        class "GameState" as GameState
+        class "CountMode" as CountMode
+        class "TimedMode" as TimedMode
+        class "RaceMode" as RaceMode
+    }
+
+    together {
+        class "CompanionProtocol" as CompanionProtocol
+        class "CommandHandler" as CommandHandler
+    }
+
+    ' Top row to second row composition inside Applications
+    App *-down- ConfigService
+    App *-down- WatchdogService
+    App *-down- HitDetector
+    App *-down- ButtonController
+    App *-down- GameController
+    App *-down- DisplayPresenter
+    App *-down- CompanionProtocol
+    App *-down- CommandHandler
+
+    ' GameController & Companion sub-components (row 3 of Applications)
+    GameController *-down- GameState
+    GameController *-down- CountMode
+    GameController *-down- TimedMode
+    GameController *-down- RaceMode
+
+    CompanionProtocol --> CommandHandler
+}
+
+' ============================================================================
+' 2. ABSTRACTION LAYER: DRIVERS, OSAL & PLATFORM (bg=CYAN)
+' ============================================================================
+package "Abstraction Layer" as LayerAbstraction #Cyan {
+    together {
+        class "PicoBoard\n<<interface>>" as I_PicoBoard
+        class "PicoBoard" as Impl_PicoBoard
+    }
+    together {
+        class "CoreStartup\n<<interface>>" as I_CoreStartup
+        class "CoreStartup" as Impl_CoreStartup
+    }
+    together {
+        class "Queue\n<<interface>>" as I_Queue
+        class "PicoQueue" as Impl_Queue
+    }
+    together {
+        class "Time\n<<interface>>" as I_Time
+        class "PicoTime" as Impl_Time
+    }
+    together {
+        class "Interrupt\n<<interface>>" as I_Interrupt
+        class "PicoInterrupt" as Impl_Interrupt
+    }
+    together {
+        class "GpioDriver\n<<interface>>" as I_GpioDriver
+        class "GpioDriver" as Impl_GpioDriver
+    }
+    together {
+        class "PiezoAdcDriver\n<<interface>>" as I_PiezoAdcDriver
+        class "PiezoAdcDriver" as Impl_PiezoAdcDriver
+    }
+    together {
+        class "Dma\n<<interface>>" as I_Dma
+        class "PicoDma" as Impl_Dma
+    }
+    together {
+        class "DisplayDriver\n<<interface>>" as I_DisplayDriver
+        class "DisplayDriverAdapter" as Impl_DisplayDriver
+    }
+    together {
+        class "UsbSerialDriver\n<<interface>>" as I_UsbSerialDriver
+        class "PicoUsbSerial" as Impl_UsbSerialDriver
+    }
+
+    ' Realization (Implementation directly below Interface)
+    I_PicoBoard <|.down. Impl_PicoBoard
+    I_CoreStartup <|.down. Impl_CoreStartup
+    I_Queue <|.down. Impl_Queue
+    I_Time <|.down. Impl_Time
+    I_Interrupt <|.down. Impl_Interrupt
+    I_GpioDriver <|.down. Impl_GpioDriver
+    I_PiezoAdcDriver <|.down. Impl_PiezoAdcDriver
+    I_Dma <|.down. Impl_Dma
+    I_DisplayDriver <|.down. Impl_DisplayDriver
+    I_UsbSerialDriver <|.down. Impl_UsbSerialDriver
+}
+
+' ============================================================================
+' INTERMEDIATE LAYER (between Abstraction Layer and Pico C SDK)
+' ============================================================================
+class "main" as Main
+
+package "displaylib_16bit\n(External C++ Library)" as LayerDisplayLib #LightYellow {
+    together {
+        class "ST7735_TFT\n<<interface>>" as I_DisplayLib
+        class "ST7735_TFT" as Impl_DisplayLib
+    }
+
+    I_DisplayLib <|.down. Impl_DisplayLib
+}
+
+' ============================================================================
+' 3. PICO C SDK LAYER (bg=PINK)
+' ============================================================================
+package "Pico C SDK" as LayerSdk #Pink {
+
+    together {
+        class "pico_cyw43_arch\n<<interface>>" as I_SdkCyw43
+        class "pico_cyw43_arch" as Impl_SdkCyw43
+    }
+    together {
+        class "pico_multicore\n<<interface>>" as I_SdkMulticore
+        class "pico_multicore" as Impl_SdkMulticore
+    }
+    together {
+        class "pico_util_queue\n<<interface>>" as I_SdkQueue
+        class "pico_util_queue" as Impl_SdkQueue
+    }
+    together {
+        class "hardware_timer\n<<interface>>" as I_SdkTimer
+        class "hardware_timer" as Impl_SdkTimer
+    }
+    together {
+        class "hardware_watchdog\n<<interface>>" as I_SdkWatchdog
+        class "hardware_watchdog" as Impl_SdkWatchdog
+    }
+    together {
+        class "hardware_sync\n<<interface>>" as I_SdkSync
+        class "hardware_sync" as Impl_SdkSync
+    }
+    together {
+        class "hardware_gpio\n<<interface>>" as I_SdkGpio
+        class "hardware_gpio" as Impl_SdkGpio
+    }
+    together {
+        class "hardware_adc\n<<interface>>" as I_SdkAdc
+        class "hardware_adc" as Impl_SdkAdc
+    }
+    together {
+        class "hardware_dma\n<<interface>>" as I_SdkDma
+        class "hardware_dma" as Impl_SdkDma
+    }
+    together {
+        class "hardware_spi\n<<interface>>" as I_SdkSpi
+        class "hardware_spi" as Impl_SdkSpi
+    }
+    together {
+        class "pico_stdlib\n<<interface>>" as I_SdkStdlib
+        class "pico_stdlib" as Impl_SdkStdlib
+    }
+
+    ' Realization (Implementation directly below Interface)
+    I_SdkCyw43 <|.down. Impl_SdkCyw43
+    I_SdkMulticore <|.down. Impl_SdkMulticore
+    I_SdkQueue <|.down. Impl_SdkQueue
+    I_SdkTimer <|.down. Impl_SdkTimer
+    I_SdkWatchdog <|.down. Impl_SdkWatchdog
+    I_SdkSync <|.down. Impl_SdkSync
+    I_SdkGpio <|.down. Impl_SdkGpio
+    I_SdkAdc <|.down. Impl_SdkAdc
+    I_SdkDma <|.down. Impl_SdkDma
+    I_SdkSpi <|.down. Impl_SdkSpi
+    I_SdkStdlib <|.down. Impl_SdkStdlib
+}
+
+' ============================================================================
+' CROSS-LAYER DEPENDENCIES
+' ============================================================================
+
+' Applications -> Abstraction Layer (<interface>)
+App -down-> I_PicoBoard
+App -down-> I_CoreStartup
+App -down-> I_Queue
+App -down-> I_Time
+App -down-> I_GpioDriver
+App -down-> I_PiezoAdcDriver
+App -down-> I_DisplayDriver
+App -down-> I_UsbSerialDriver
+
+GameController -down-> I_Queue
+GameController -down-> I_Time
+CommandHandler -down-> I_Queue
+
+HitDetector -down-> I_Time
+WatchdogService -down-> I_Time
+
+ButtonController -down-> I_GpioDriver
+ButtonController -down-> I_Time
+ButtonController -down-> I_Interrupt
+
+DisplayPresenter -down-> I_DisplayDriver
+CompanionProtocol -down-> I_UsbSerialDriver
+
+' Internal Abstraction Layer dependencies & callbacks
+Impl_PiezoAdcDriver --> I_Dma
+I_Dma .[#Red].> Impl_PiezoAdcDriver : <color:Red>callback</color>
+
+' Callbacks from Abstraction Layer to Applications (fg=RED)
+I_GpioDriver .[#Red]up.> ButtonController : <color:Red>callback</color>
+I_CoreStartup .[#Red]up.> App : <color:Red>callback</color>
+
+' main wiring
+Main --> App
+Main --> I_PicoBoard
+Main --> ConfigService
+
+' Abstraction Layer -> displaylib_16bit (Intermediate Layer) -> Pico C SDK
+Impl_DisplayDriver -down-> I_DisplayLib
+Impl_DisplayLib -down-> I_SdkSpi
+Impl_DisplayLib -down-> I_SdkGpio
+Impl_DisplayLib -down-> I_SdkStdlib
+
+' Abstraction Layer -> Pico C SDK (<interface>)
+Impl_PicoBoard -down-> I_SdkCyw43
+Impl_PicoBoard -down-> I_SdkStdlib
+Impl_CoreStartup -down-> I_SdkMulticore
+Impl_Queue -down-> I_SdkQueue
+Impl_Time -down-> I_SdkTimer
+Impl_Time -down-> I_SdkWatchdog
+Impl_Interrupt -down-> I_SdkSync
+Impl_GpioDriver -down-> I_SdkGpio
+Impl_PiezoAdcDriver -down-> I_SdkAdc
+Impl_Dma -down-> I_SdkDma
+Impl_UsbSerialDriver -down-> I_SdkStdlib
+
+' ============================================================================
+' LAYOUT
+' ============================================================================
+
+' Applications: keep App at the top, with its collaborators in a stable row.
+App -[hidden]down- ConfigService
+ConfigService -[hidden]right- WatchdogService
+WatchdogService -[hidden]right- HitDetector
+HitDetector -[hidden]right- ButtonController
+ButtonController -[hidden]right- GameController
+GameController -[hidden]right- DisplayPresenter
+DisplayPresenter -[hidden]right- CompanionProtocol
+CompanionProtocol -[hidden]right- CommandHandler
+
+' Game logic below GameController.
+GameState -[hidden]right- CountMode
+CountMode -[hidden]right- TimedMode
+TimedMode -[hidden]right- RaceMode
+
+' Abstraction layer: order interfaces by subsystem and expected SDK dependency.
+I_PicoBoard -[hidden]right- I_CoreStartup
+I_CoreStartup -[hidden]right- I_Queue
+I_Queue -[hidden]right- I_Time
+I_Time -[hidden]right- I_Interrupt
+I_Interrupt -[hidden]right- I_GpioDriver
+I_GpioDriver -[hidden]right- I_PiezoAdcDriver
+I_PiezoAdcDriver -[hidden]right- I_Dma
+I_Dma -[hidden]right- I_UsbSerialDriver
+I_UsbSerialDriver -[hidden]right- I_DisplayDriver
+
+' SDK: align dependencies with their corresponding abstraction components.
+I_SdkCyw43 -[hidden]right- I_SdkMulticore
+I_SdkMulticore -[hidden]right- I_SdkQueue
+I_SdkQueue -[hidden]right- I_SdkTimer
+I_SdkTimer -[hidden]right- I_SdkWatchdog
+I_SdkWatchdog -[hidden]right- I_SdkSync
+I_SdkSync -[hidden]right- I_SdkGpio
+I_SdkGpio -[hidden]right- I_SdkAdc
+I_SdkAdc -[hidden]right- I_SdkDma
+I_SdkDma -[hidden]right- I_SdkSpi
+I_SdkSpi -[hidden]right- I_SdkStdlib
+
+@enduml
