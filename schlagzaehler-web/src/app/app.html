@@ -1,3 +1,49 @@
-<main class="min-h-screen bg-slate-900 text-slate-100 antialiased">
-  <router-outlet />
-</main>
+<div class="min-h-screen bg-slate-900 text-slate-100 antialiased">
+  <nav class="border-b border-slate-800 bg-slate-950/60 backdrop-blur-xs">
+    <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+      <a routerLink="/" class="flex items-center gap-2.5 text-sm font-bold text-white">
+        <span
+          class="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600/30 text-indigo-400 ring-1 ring-indigo-500/30"
+        >
+          <svg
+            class="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M13 10V3L4 14h7v7l9-11h-7z"
+            />
+          </svg>
+        </span>
+        <span>Schlagzähler</span>
+      </a>
+
+      <div class="flex items-center gap-2">
+        <a
+          routerLink="/"
+          routerLinkActive="bg-slate-800 text-white"
+          [routerLinkActiveOptions]="{ exact: true }"
+          class="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-800/60 hover:text-white"
+        >
+          Home
+        </a>
+        <a
+          routerLink="/settings"
+          routerLinkActive="bg-slate-800 text-white"
+          class="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-800/60 hover:text-white"
+        >
+          Settings
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <router-outlet />
+  </main>
+</div>

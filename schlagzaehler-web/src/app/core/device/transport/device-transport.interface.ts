@@ -41,4 +41,9 @@ export interface DeviceTransport {
    * Gracefully disconnects, stops reading, and frees all underlying resources.
    */
   disconnect(): Promise<void>;
+
+  /**
+   * Sends a raw string command/event line to the connected device.
+   */
+  send(data: string): Promise<void>;
 }

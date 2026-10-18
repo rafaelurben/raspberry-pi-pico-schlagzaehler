@@ -1,0 +1,183 @@
+<div class="rounded-xl border border-slate-700/80 bg-slate-800/60 p-5 shadow-sm backdrop-blur-xs">
+  <div class="mb-4 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <h2 class="text-lg font-semibold text-white">Live Events</h2>
+      <span class="rounded-full bg-slate-700 px-2 py-0.5 text-xs font-medium text-slate-300">
+        {{ filteredEvents().length }}
+      </span>
+    </div>
+    @if (events().length > 0) {
+      <button
+        type="button"
+        (click)="clear.emit()"
+        data-testid="clear-events-button"
+        class="rounded-lg bg-slate-700/60 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 cursor-pointer"
+        aria-label="Clear events"
+      >
+        Clear events
+      </button>
+    }
+  </div>
+
+  <!-- Send Raw Event / Command Section -->
+  <div class="mb-4 rounded-lg border border-slate-700/70 bg-slate-900/50 p-3.5">
+    <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+      <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">
+        Send Raw Event / Command
+      </span>
+      @if (connectedDevices().length > 0) {
+        <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Target devices">
+          <button
+            type="button"
+            (click)="selectAllConnectedTargets()"
+            data-testid="target-all-connected"
+            class="rounded px-2 py-0.5 text-xs font-medium transition-colors cursor-pointer"
+            [class]="
+              selectedTargetDeviceIds().size === 0 ||
+              selectedTargetDeviceIds().size === connectedDevices().length
+                ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40'
+                : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-slate-200'
+            "
+          >
+            All connected
+          </button>
+          @for (device of connectedDevices(); track device.id) {
+            <button
+              type="button"
+              (click)="toggleTargetDevice(device.id)"
+              [attr.data-testid]="'target-device-' + device.id"
+              [attr.aria-label]="'Target ' + device.name"
+              [attr.aria-pressed]="isTargetSelected(device.id)"
+              class="rounded px-2 py-0.5 text-xs font-medium transition-colors cursor-pointer"
+              [class]="
+                isTargetSelected(device.id)
+                  ? 'bg-indigo-600 text-white border border-indigo-500'
+                  : 'bg-slate-800 text-slate-300 border border-slate-700 hover:border-slate-500'
+              "
+            >
+              {{ device.name }}
+            </button>
+          }
+        </div>
+      }
+    </div>
+    <div class="flex gap-2">
+      <input
+        type="text"
+        [ngModel]="rawCommandInput()"
+        (ngModelChange)="rawCommandInput.set($event)"
+        (keydown.enter)="onSendRawCommand()"
+        placeholder="e.g. STATUS, START, RESET, MODE:TIMED, PARAM:30"
+        aria-label="Raw event or command payload"
+        data-testid="raw-command-input"
+        [disabled]="connectedDevices().length === 0"
+        class="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 font-mono text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+      />
+      <button
+        type="button"
+        (click)="onSendRawCommand()"
+        [disabled]="connectedDevices().length === 0 || !rawCommandInput().trim()"
+        aria-label="Send raw event"
+        data-testid="send-raw-button"
+        class="rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+      >
+        Send
+      </button>
+    </div>
+  </div>
+
+  <!-- Filter by Device(s) -->
+  @if (devices().length > 0) {
+    <div
+      class="mb-4 flex flex-wrap items-center gap-1.5"
+      role="group"
+      aria-label="Filter events by device"
+    >
+      <span class="mr-1 text-xs font-medium text-slate-400">Filter:</span>
+      <button
+        type="button"
+        (click)="clearFilter()"
+        aria-label="Show events from all devices"
+        data-testid="filter-all-devices"
+        class="rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer"
+        [class]="
+          selectedFilterDeviceIds().size === 0
+            ? 'bg-indigo-600 text-white'
+            : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+        "
+      >
+        All
+      </button>
+      @for (device of devices(); track device.id) {
+        <button
+          type="button"
+          (click)="toggleFilterDevice(device.id)"
+          [attr.data-testid]="'filter-device-' + device.id"
+          [attr.aria-label]="'Filter by ' + device.name"
+          [attr.aria-pressed]="isFilterSelected(device.id)"
+          class="rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer"
+          [class]="
+            isFilterSelected(device.id)
+              ? 'bg-indigo-600 text-white'
+              : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+          "
+        >
+          {{ device.name }}
+        </button>
+      }
+    </div>
+  }
+
+  @if (filteredEvents().length === 0) {
+    <div
+      class="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-700 p-8 text-center text-slate-400"
+    >
+      <svg
+        class="mb-3 h-10 w-10 text-slate-500"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        aria-hidden="true"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.5"
+          d="M13 10V3L4 14h7v7l9-11h-7z"
+        />
+      </svg>
+      <p class="text-sm font-medium text-slate-300">No events received</p>
+      <p class="mt-1 text-xs text-slate-400">
+        Events from connected devices will stream here in real time.
+      </p>
+    </div>
+  } @else {
+    <div
+      class="max-h-[500px] overflow-y-auto rounded-lg border border-slate-700/70 bg-slate-900/60 font-mono text-xs"
+    >
+      <div class="divide-y divide-slate-800">
+        @for (event of filteredEvents(); track event.id) {
+          <div class="flex items-start gap-3 px-4 py-2.5 transition-colors hover:bg-slate-800/40">
+            <span class="shrink-0 text-slate-500 select-none">
+              {{ event.timestamp | date: 'HH:mm:ss.SSS' }}
+            </span>
+            <span
+              class="shrink-0 rounded px-2 py-0.5 text-xs font-sans font-medium border"
+              [class]="
+                event.direction === 'sent'
+                  ? 'bg-amber-900/60 text-amber-200 border-amber-700/70'
+                  : 'bg-slate-800 text-indigo-300 border-slate-700'
+              "
+              [attr.data-direction]="event.direction ?? 'received'"
+            >
+              {{ resolveDeviceName(event.deviceId) }}
+            </span>
+            <span class="break-all font-mono text-slate-100">
+              {{ event.payload }}
+            </span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

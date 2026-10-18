@@ -24,20 +24,26 @@
         <div>
           <h1 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">Schlagzähler</h1>
           <p class="text-xs text-slate-400 sm:text-sm">
-            Real-time Web Serial interface for Raspberry Pi Pico
+            Live device overview, scores, timers, and game mode controls
           </p>
         </div>
       </div>
     </div>
 
-    <!-- Connect Button -->
+    <!-- Actions -->
     <div class="flex items-center gap-3">
+      <a
+        routerLink="/settings"
+        class="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 px-4 py-2.5 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700 hover:text-white"
+      >
+        <span>Settings &amp; Events</span>
+      </a>
       <button
         type="button"
         (click)="onConnectDevice()"
         [disabled]="deviceManager.isConnecting() || !deviceManager.isSupported()"
+        data-testid="connect-device-button"
         class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-indigo-500 hover:shadow-indigo-600/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-        aria-label="Connect serial device"
       >
         @if (deviceManager.isConnecting()) {
           <svg
@@ -133,26 +139,47 @@
     </div>
   }
 
-  <!-- Main Grid: Devices & Events -->
-  <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-    <!-- Devices Section -->
-    <section aria-labelledby="devices-heading">
-      <h2 id="devices-heading" class="sr-only">Connected Devices</h2>
-      <app-device-list
-        [devices]="deviceManager.devices()"
-        (disconnect)="onDisconnectDevice($event)"
-        (remove)="onRemoveDevice($event)"
-      />
-    </section>
+  <!-- Device Blocks Grid -->
+  <section aria-labelledby="devices-overview-heading">
+    <h2 id="devices-overview-heading" class="sr-only">Devices Overview</h2>
 
-    <!-- Events Section -->
-    <section aria-labelledby="events-heading">
-      <h2 id="events-heading" class="sr-only">Live Events</h2>
-      <app-event-list
-        [events]="deviceManager.events()"
-        [devices]="deviceManager.devices()"
-        (clear)="onClearEvents()"
-      />
-    </section>
-  </div>
+    @if (deviceManager.devices().length === 0) {
+      <div
+        class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-800/30 p-12 text-center text-slate-400"
+      >
+        <svg
+          class="mb-4 h-12 w-12 text-slate-500"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
+          />
+        </svg>
+        <p class="text-base font-semibold text-slate-200">No devices connected</p>
+        <p class="mt-1 max-w-md text-xs text-slate-400">
+          Connect a Raspberry Pi Pico device above or manage connections and raw events on the
+          settings page.
+        </p>
+      </div>
+    } @else {
+      <div class="grid grid-cols-1 gap-6 md:grid-cols-2 2xl:grid-cols-2">
+        @for (device of deviceManager.devices(); track device.id) {
+          <app-device-card
+            [device]="device"
+            (modeChange)="onModeChange($event)"
+            (parameterChange)="onParameterChange($event)"
+            (resetGame)="onResetGame($event)"
+            (reconnect)="onReconnectDevice($event)"
+            (rename)="onRenameDevice($event)"
+          />
+        }
+      </div>
+    }
+  </section>
 </div>

@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { describe, expect, it } from 'vitest';
 import { DeviceManagerService } from '../../core/device/services/device-manager.service';
 import { WebSerialTransportFactory } from '../../core/device/transport/web-serial-transport-factory.service';
@@ -27,6 +28,7 @@ describe('DashboardComponent', () => {
     TestBed.configureTestingModule({
       imports: [DashboardComponent],
       providers: [
+        provideRouter([]),
         DeviceManagerService,
         { provide: WebSerialTransportFactory, useValue: mockFactory },
       ],
@@ -49,7 +51,7 @@ describe('DashboardComponent', () => {
     expect(compiled.querySelector('h1')?.textContent).toContain('Schlagzähler');
 
     const connectBtn = compiled.querySelector(
-      'button[aria-label="Connect serial device"]',
+      '[data-testid="connect-device-button"]',
     ) as HTMLButtonElement;
     expect(connectBtn).toBeTruthy();
     expect(connectBtn.disabled).toBe(false);
@@ -61,7 +63,7 @@ describe('DashboardComponent', () => {
     expect(compiled.textContent).toContain('Web Serial not supported');
 
     const connectBtn = compiled.querySelector(
-      'button[aria-label="Connect serial device"]',
+      '[data-testid="connect-device-button"]',
     ) as HTMLButtonElement;
     expect(connectBtn.disabled).toBe(true);
   });
@@ -75,7 +77,7 @@ describe('DashboardComponent', () => {
     };
 
     const connectBtn = fixture.nativeElement.querySelector(
-      'button[aria-label="Connect serial device"]',
+      '[data-testid="connect-device-button"]',
     ) as HTMLButtonElement;
     connectBtn.click();
 

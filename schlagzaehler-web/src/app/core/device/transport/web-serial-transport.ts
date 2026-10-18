@@ -21,6 +21,7 @@ export class WebSerialTransport implements DeviceTransport {
   readonly errors$: Observable<Error> = this.errorsSubject.asObservable();
 
   private readonly parser = new NewlineEventParser();
+  private readonly textEncoder = new TextEncoder();
   private reader: ReadableStreamDefaultReader<string> | null = null;
   private readableClosed: Promise<void> | null = null;
   private isDisconnecting = false;
@@ -54,6 +55,9 @@ export class WebSerialTransport implements DeviceTransport {
       return;
     }
 
+    // Ensure any previous broken connection resources are cleaned up before reopening
+    await this.cleanupBeforeReconnect();
+
     this.stateSubject.next('connecting');
     this.isDisconnecting = false;
 
@@ -74,6 +78,64 @@ export class WebSerialTransport implements DeviceTransport {
       this.errorsSubject.next(error);
       throw error;
     }
+  }
+
+  /**
+   * Writes a newline-delimited command/event string to the serial port.
+   */
+  async send(data: string): Promise<void> {
+    if (this.stateSubject.value !== 'connected') {
+      throw new Error('Cannot send data: device is not connected.');
+    }
+    if (!this.port.writable) {
+      throw new Error('Serial port writable stream is not available.');
+    }
+
+    const line = data.endsWith('\n') ? data : `${data}\n`;
+    const encoded = this.textEncoder.encode(line);
+    const writer = this.port.writable.getWriter();
+
+    try {
+      await writer.write(encoded);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.errorsSubject.next(error);
+      throw error;
+    } finally {
+      try {
+        writer.releaseLock();
+      } catch {
+        // Lock might already be released
+      }
+    }
+  }
+
+  private async cleanupBeforeReconnect(): Promise<void> {
+    if (this.reader) {
+      try {
+        await this.reader.cancel();
+      } catch {
+        // Ignore cancellation errors
+      }
+      this.cleanupReader();
+    }
+
+    if (this.readableClosed) {
+      try {
+        await this.readableClosed;
+      } catch {
+        // Ignore pipe closure rejection
+      }
+      this.readableClosed = null;
+    }
+
+    try {
+      await this.port.close();
+    } catch {
+      // Port may already be closed
+    }
+
+    this.parser.reset();
   }
 
   private startReading(): void {
@@ -149,31 +211,7 @@ export class WebSerialTransport implements DeviceTransport {
     this.isReading = false;
 
     try {
-      if (this.reader) {
-        try {
-          await this.reader.cancel();
-        } catch {
-          // Ignore cancellation errors
-        }
-        this.cleanupReader();
-      }
-
-      if (this.readableClosed) {
-        try {
-          await this.readableClosed;
-        } catch {
-          // Ignore pipe closure rejection
-        }
-        this.readableClosed = null;
-      }
-
-      try {
-        await this.port.close();
-      } catch {
-        // If already closed or detached, ignore
-      }
-
-      this.parser.reset();
+      await this.cleanupBeforeReconnect();
       this.stateSubject.next('disconnected');
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));

@@ -1,0 +1,209 @@
+<div class="rounded-xl border border-slate-700/80 bg-slate-800/60 p-5 shadow-sm backdrop-blur-xs">
+  <div class="mb-4 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <h2 class="text-lg font-semibold text-white">Connected Devices</h2>
+      <span class="rounded-full bg-slate-700 px-2 py-0.5 text-xs font-medium text-slate-300">
+        {{ devices().length }}
+      </span>
+    </div>
+  </div>
+
+  @if (devices().length === 0) {
+    <div
+      class="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-700 p-8 text-center text-slate-400"
+    >
+      <svg
+        class="mb-3 h-10 w-10 text-slate-500"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        aria-hidden="true"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.5"
+          d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
+        />
+      </svg>
+      <p class="text-sm font-medium text-slate-300">No devices connected</p>
+      <p class="mt-1 text-xs text-slate-400">
+        Click &ldquo;Connect device&rdquo; above to select and connect a Raspberry Pi Pico or other
+        serial device.
+      </p>
+    </div>
+  } @else {
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm text-slate-200">
+        <thead
+          class="border-b border-slate-700 text-xs font-semibold uppercase tracking-wider text-slate-400"
+        >
+          <tr>
+            <th scope="col" class="pb-3 pr-4">Device&nbsp;&amp;&nbsp;Transport</th>
+            <th scope="col" class="pb-3 pl-4 text-right">Status&nbsp;&amp;&nbsp;Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-700/60">
+          @for (device of devices(); track device.id) {
+            <tr class="transition-colors hover:bg-slate-700/20">
+              <!-- Shared Column 1: Device & Transport -->
+              <td class="py-3 pr-4 align-middle">
+                @if (editingDeviceId() === device.id) {
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="text"
+                      [ngModel]="editingName()"
+                      (ngModelChange)="editingName.set($event)"
+                      (keydown.enter)="saveEditing(device.id)"
+                      (keydown.escape)="cancelEditing()"
+                      [attr.data-testid]="'device-name-input-' + device.id"
+                      [attr.aria-label]="'Device name for ' + device.id"
+                      class="w-40 rounded-lg border border-indigo-500/60 bg-slate-900 px-2.5 py-1 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      (click)="saveEditing(device.id)"
+                      class="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 cursor-pointer"
+                      [attr.data-testid]="'save-name-' + device.id"
+                      [attr.aria-label]="'Save name for ' + device.id"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      (click)="cancelEditing()"
+                      class="rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-600 cursor-pointer"
+                      [attr.data-testid]="'cancel-name-' + device.id"
+                      [attr.aria-label]="'Cancel editing ' + device.id"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                } @else {
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="font-medium text-white">{{ device.name }}</span>
+                    <button
+                      type="button"
+                      (click)="startEditing(device)"
+                      class="rounded p-1 text-slate-400 transition-colors hover:bg-slate-700/60 hover:text-slate-200 cursor-pointer"
+                      [attr.data-testid]="'edit-name-' + device.id"
+                      [attr.aria-label]="'Edit name of ' + device.name"
+                      title="Rename device"
+                    >
+                      <svg
+                        class="h-3.5 w-3.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                }
+
+                <div class="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                  <span
+                    class="inline-flex items-center rounded bg-slate-700/60 px-1.5 py-0.5 text-[11px] font-medium text-slate-300"
+                  >
+                    {{ device.transportType }}
+                  </span>
+                  @if (formatMetadata(device); as meta) {
+                    <span class="font-mono text-slate-400">{{ meta }}</span>
+                  }
+                  <span class="font-mono text-slate-500">&bull; {{ device.id }}</span>
+                </div>
+
+                @if (device.errorMessage) {
+                  <div class="mt-1 text-xs text-rose-400">{{ device.errorMessage }}</div>
+                }
+              </td>
+
+              <!-- Shared Column 2: Status & Action -->
+              <td class="py-3 pl-4 text-right align-middle whitespace-nowrap">
+                <div class="flex flex-col items-end justify-end gap-2">
+                  @switch (device.state.connectionState) {
+                    @case ('connected') {
+                      <span
+                        class="inline-flex items-center gap-1.5 rounded-full bg-emerald-950/70 px-2.5 py-1 text-xs font-medium text-emerald-300 border border-emerald-800/60"
+                      >
+                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                        Connected
+                      </span>
+                    }
+                    @case ('connecting') {
+                      <span
+                        class="inline-flex items-center gap-1.5 rounded-full bg-sky-950/70 px-2.5 py-1 text-xs font-medium text-sky-300 border border-sky-800/60"
+                      >
+                        <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-400"></span>
+                        Connecting
+                      </span>
+                    }
+                    @case ('error') {
+                      <span
+                        class="inline-flex items-center gap-1.5 rounded-full bg-rose-950/70 px-2.5 py-1 text-xs font-medium text-rose-300 border border-rose-800/60"
+                      >
+                        <span class="h-1.5 w-1.5 rounded-full bg-rose-400"></span>
+                        Error
+                      </span>
+                    }
+                    @case ('disconnected') {
+                      <span
+                        class="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-400 border border-slate-700"
+                      >
+                        <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
+                        Disconnected
+                      </span>
+                    }
+                  }
+
+                  @if (
+                    device.state.connectionState === 'connected' ||
+                    device.state.connectionState === 'connecting'
+                  ) {
+                    <button
+                      type="button"
+                      (click)="disconnect.emit(device.id)"
+                      class="rounded-lg bg-rose-600/20 px-3 py-1.5 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-600/30 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 cursor-pointer"
+                      [attr.data-testid]="'disconnect-' + device.id"
+                      [attr.aria-label]="'Disconnect ' + device.name"
+                    >
+                      Disconnect
+                    </button>
+                  } @else {
+                    <div class="inline-flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        (click)="reconnect.emit(device.id)"
+                        class="rounded-lg bg-indigo-600/25 px-2.5 py-1.5 text-xs font-medium text-indigo-300 transition-colors hover:bg-indigo-600/40 hover:text-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer"
+                        [attr.data-testid]="'reconnect-' + device.id"
+                        [attr.aria-label]="'Reconnect ' + device.name"
+                      >
+                        Reconnect
+                      </button>
+                      <button
+                        type="button"
+                        (click)="remove.emit(device.id)"
+                        class="rounded-lg bg-slate-700/60 px-2.5 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 cursor-pointer"
+                        [attr.data-testid]="'remove-' + device.id"
+                        [attr.aria-label]="'Remove ' + device.name"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
