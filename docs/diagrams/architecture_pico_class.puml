@@ -20,11 +20,10 @@ skinparam class {
 ' ============================================================================
 ' 1. APPLICATIONS LAYER (bg=LIGHT_GRAY)
 ' ============================================================================
-package "Applications" as LayerApp #LightGray {
+package "Application" as LayerApp #LightGray {
 
     class "App" as App
     class "ConfigService" as ConfigService
-    class "WatchdogService" as WatchdogService
     class "HitDetector" as HitDetector
     class "ButtonController" as ButtonController
     class "DisplayPresenter" as DisplayPresenter
@@ -44,7 +43,6 @@ package "Applications" as LayerApp #LightGray {
 
     ' Top row to second row composition inside Applications
     App *-down- ConfigService
-    App *-down- WatchdogService
     App *-down- HitDetector
     App *-down- ButtonController
     App *-down- GameController
@@ -65,6 +63,11 @@ package "Applications" as LayerApp #LightGray {
 ' 2. ABSTRACTION LAYER: DRIVERS, OSAL & PLATFORM (bg=CYAN)
 ' ============================================================================
 package "Abstraction Layer" as LayerAbstraction #Cyan {
+    together {
+        class "WatchdogService\n<<interface>>" as I_WatchdogService
+        class "WatchdogService" as Impl_WatchdogService
+    }
+
     together {
         class "PicoBoard\n<<interface>>" as I_PicoBoard
         class "PicoBoard" as Impl_PicoBoard
@@ -107,6 +110,7 @@ package "Abstraction Layer" as LayerAbstraction #Cyan {
     }
 
     ' Realization (Implementation directly below Interface)
+    I_WatchdogService <|.down. Impl_WatchdogService
     I_PicoBoard <|.down. Impl_PicoBoard
     I_CoreStartup <|.down. Impl_CoreStartup
     I_Queue <|.down. Impl_Queue
@@ -210,13 +214,13 @@ App -down-> I_GpioDriver
 App -down-> I_PiezoAdcDriver
 App -down-> I_DisplayDriver
 App -down-> I_UsbSerialDriver
+App -down-> I_WatchdogService
 
 GameController -down-> I_Queue
 GameController -down-> I_Time
 CommandHandler -down-> I_Queue
 
 HitDetector -down-> I_Time
-WatchdogService -down-> I_Time
 
 ButtonController -down-> I_GpioDriver
 ButtonController -down-> I_Time
@@ -228,6 +232,7 @@ CompanionProtocol -down-> I_UsbSerialDriver
 ' Internal Abstraction Layer dependencies & callbacks
 Impl_PiezoAdcDriver --> I_Dma
 I_Dma .[#Red].> Impl_PiezoAdcDriver : <color:Red>callback</color>
+Impl_WatchdogService --> I_Time
 
 ' Callbacks from Abstraction Layer to Applications (fg=RED)
 I_GpioDriver .[#Red]up.> ButtonController : <color:Red>callback</color>
@@ -250,7 +255,7 @@ Impl_PicoBoard -down-> I_SdkStdlib
 Impl_CoreStartup -down-> I_SdkMulticore
 Impl_Queue -down-> I_SdkQueue
 Impl_Time -down-> I_SdkTimer
-Impl_Time -down-> I_SdkWatchdog
+Impl_WatchdogService -down-> I_SdkWatchdog
 Impl_Interrupt -down-> I_SdkSync
 Impl_GpioDriver -down-> I_SdkGpio
 Impl_PiezoAdcDriver -down-> I_SdkAdc
@@ -263,13 +268,12 @@ Impl_UsbSerialDriver -down-> I_SdkStdlib
 
 ' Applications: keep App at the top, with its collaborators in a stable row.
 App -[hidden]down- ConfigService
-ConfigService -[hidden]right- WatchdogService
-WatchdogService -[hidden]right- HitDetector
-HitDetector -[hidden]right- ButtonController
-ButtonController -[hidden]right- GameController
-GameController -[hidden]right- DisplayPresenter
-DisplayPresenter -[hidden]right- CompanionProtocol
-CompanionProtocol -[hidden]right- CommandHandler
+ConfigService -[hidden]down- HitDetector
+HitDetector -[hidden]down- ButtonController
+ButtonController -[hidden]down- GameController
+GameController -[hidden]down- DisplayPresenter
+DisplayPresenter -[hidden]down- CompanionProtocol
+CompanionProtocol -[hidden]down- CommandHandler
 
 ' Game logic below GameController.
 GameState -[hidden]right- CountMode
