@@ -47,6 +47,15 @@ static inline const char* GameMode_to_string(GameMode mode) {
     }
 }
 
+static inline const char* GameMode_to_UI_string(GameMode mode) {
+    switch (mode) {
+        case GAME_MODE_COUNT: return "Zaehlen";
+        case GAME_MODE_TIMED: return "Zeit";
+        case GAME_MODE_RACE:  return "Rennen";
+        default:              return "???";
+    }
+}
+
 static inline const char* GameState_to_string(GameState state) {
     switch (state) {
         case GAME_STATE_BOOT:     return "BOOT";

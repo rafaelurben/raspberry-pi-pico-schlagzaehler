@@ -37,6 +37,11 @@ extern "C" void DisplayDriver_draw_line(int16_t x0, int16_t y0, int16_t x1, int1
     s_tft.drawLine(x0, y0, x1, y1, color);
 }
 
+extern "C" void DisplayDriver_draw_hline(int16_t y, uint16_t color) {
+    if (!s_initialized) return;
+    s_tft.drawFastHLine(0, y, DISPLAY_WIDTH, color);
+}
+
 extern "C" void DisplayDriver_draw_string(int16_t x, int16_t y, const char* str, uint16_t fg_color, uint16_t bg_color, DisplayFontId font_id) {
     if (!s_initialized || !str) return;
 

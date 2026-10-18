@@ -3,6 +3,14 @@
 #include <stdio.h>
 #include <string.h>
 
+#define DISP_X_TITLE 10
+#define DISP_Y_TITLE 10
+#define DISP_Y_TITLE_LINE 28
+#define DISP_Y_INFO_LINE 130
+#define DISP_X_INFO_TEXT 5
+#define DISP_Y_INFO_TEXT1 135
+#define DISP_Y_INFO_TEXT2 147
+
 void DisplayPresenter_init(DisplayPresenter* presenter) {
     if (!presenter) return;
 
@@ -86,8 +94,8 @@ void DisplayPresenter_handle_message(DisplayPresenter* presenter, const Core0ToC
 static void render_boot(DisplayPresenter* presenter) {
     if (presenter->needs_full_redraw) {
         DisplayDriver_clear(DISPLAY_COLOR_BLACK);
-        DisplayDriver_draw_string(10, 15, "SCHLAGZAEHLER", DISPLAY_COLOR_CYAN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
-        DisplayDriver_draw_line(0, 35, 127, 35, DISPLAY_COLOR_GRAY);
+        DisplayDriver_draw_string(DISP_X_TITLE, DISP_Y_TITLE, "Schlagzaehler", DISPLAY_COLOR_CYAN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
+        DisplayDriver_draw_hline(DISP_Y_TITLE_LINE, DISPLAY_COLOR_GRAY);
 
         if (presenter->sensor_state == SENSOR_STATE_ERROR) {
             DisplayDriver_draw_string(10, 50, "SENSOR FEHLER!", DISPLAY_COLOR_RED, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
@@ -117,14 +125,14 @@ static void render_boot(DisplayPresenter* presenter) {
 
 static void render_menu(DisplayPresenter* presenter) {
     DisplayDriver_clear(DISPLAY_COLOR_BLACK);
-    DisplayDriver_draw_string(15, 10, "SPIELMODUS", DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
-    DisplayDriver_draw_line(0, 28, 127, 28, DISPLAY_COLOR_GRAY);
+    DisplayDriver_draw_string(DISP_X_TITLE, DISP_Y_TITLE, "Spielmodus", DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
+    DisplayDriver_draw_hline(DISP_Y_TITLE_LINE, DISPLAY_COLOR_GRAY);
 
     const char* modes[] = { "1. Zaehlen", "2. Zeit", "3. Rennen" };
     for (int i = 0; i < 3; ++i) {
-        int y = 40 + i * 22;
+        int y = 44 + i * 22;
         if ((GameMode)i == presenter->menu_selected_mode) {
-            DisplayDriver_fill_rect(4, y - 2, 120, 18, DISPLAY_COLOR_BLUE);
+            DisplayDriver_fill_rect(4, y - 6, 120, 18, DISPLAY_COLOR_BLUE);
             DisplayDriver_draw_string(10, y, modes[i], DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLUE, DISPLAY_FONT_DEFAULT);
             DisplayDriver_draw_string(105, y, ">", DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLUE, DISPLAY_FONT_DEFAULT);
         } else {
@@ -132,77 +140,96 @@ static void render_menu(DisplayPresenter* presenter) {
         }
     }
 
-    DisplayDriver_draw_line(0, 110, 127, 110, DISPLAY_COLOR_DARKGRAY);
-    DisplayDriver_draw_string(5, 115, "UP/DOWN   OK:RECHTS", DISPLAY_COLOR_CYAN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    DisplayDriver_draw_hline(DISP_Y_INFO_LINE, DISPLAY_COLOR_DARKGRAY);
+    DisplayDriver_draw_string(DISP_X_INFO_TEXT, DISP_Y_INFO_TEXT1, "Auf/Ab: Wahl", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    DisplayDriver_draw_string(DISP_X_INFO_TEXT, DISP_Y_INFO_TEXT2, "R: Bestaetigen", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
 }
 
 static void render_ready(DisplayPresenter* presenter) {
     DisplayDriver_clear(DISPLAY_COLOR_BLACK);
 
-    const char* mode_title = GameMode_to_string(presenter->active_mode);
-    DisplayDriver_draw_string(10, 10, mode_title, DISPLAY_COLOR_CYAN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
-    DisplayDriver_draw_line(0, 28, 127, 28, DISPLAY_COLOR_GRAY);
+    const char *mode_title = GameMode_to_UI_string(presenter->active_mode);
+    DisplayDriver_draw_string(DISP_X_TITLE, DISP_Y_TITLE, mode_title, DISPLAY_COLOR_CYAN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
+    DisplayDriver_draw_hline(DISP_Y_TITLE_LINE, DISPLAY_COLOR_GRAY);
 
     char param_str[32];
     if (presenter->active_mode == GAME_MODE_TIMED) {
-        snprintf(param_str, sizeof(param_str), "Zeit: %lus (+/-)", (unsigned long)presenter->parameter);
+        snprintf(param_str, sizeof(param_str), "Zeit: %lus", (unsigned long)presenter->parameter);
         DisplayDriver_draw_string(10, 40, param_str, DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
     } else if (presenter->active_mode == GAME_MODE_RACE) {
-        snprintf(param_str, sizeof(param_str), "Ziel: %lu Hits", (unsigned long)presenter->parameter);
+        snprintf(param_str, sizeof(param_str), "Ziel: %lu", (unsigned long)presenter->parameter);
         DisplayDriver_draw_string(10, 40, param_str, DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
     }
 
-    DisplayDriver_draw_string(25, 65, "BEREIT!", DISPLAY_COLOR_GREEN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
-    DisplayDriver_draw_string(15, 88, "Schlag = Start", DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
-
-    DisplayDriver_draw_line(0, 110, 127, 110, DISPLAY_COLOR_DARKGRAY);
-    DisplayDriver_draw_string(5, 115, "L:Menue  R:Reset", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    DisplayDriver_draw_string(35, 65, "BEREIT!", DISPLAY_COLOR_GREEN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
+    DisplayDriver_draw_string(5, 95, "Schlag = Start", DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    DisplayDriver_draw_hline(DISP_Y_INFO_LINE, DISPLAY_COLOR_DARKGRAY);
+    DisplayDriver_draw_string(DISP_X_INFO_TEXT, DISP_Y_INFO_TEXT1, "L:Menu/R:Reset", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    if (presenter->active_mode == GAME_MODE_TIMED)
+    {
+        DisplayDriver_draw_string(DISP_X_INFO_TEXT, DISP_Y_INFO_TEXT2, "Auf/Ab: +/-5s", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    } else if (presenter->active_mode == GAME_MODE_RACE)
+    {
+        DisplayDriver_draw_string(DISP_X_INFO_TEXT, DISP_Y_INFO_TEXT2, "Auf/Ab: +/-10", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    }
 }
 
 static void render_running(DisplayPresenter* presenter) {
     if (presenter->needs_full_redraw) {
         DisplayDriver_clear(DISPLAY_COLOR_BLACK);
-        const char* mode_title = GameMode_to_string(presenter->active_mode);
-        DisplayDriver_draw_string(10, 8, mode_title, DISPLAY_COLOR_CYAN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
-        DisplayDriver_draw_line(0, 22, 127, 22, DISPLAY_COLOR_GRAY);
-        DisplayDriver_draw_line(0, 110, 127, 110, DISPLAY_COLOR_DARKGRAY);
-        DisplayDriver_draw_string(5, 115, "L:Menue  R:Reset", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+        const char* mode_title = GameMode_to_UI_string(presenter->active_mode);
+        DisplayDriver_draw_string(DISP_X_TITLE, DISP_Y_TITLE, mode_title, DISPLAY_COLOR_CYAN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
+        DisplayDriver_draw_hline(DISP_Y_TITLE_LINE, DISPLAY_COLOR_GRAY);
+        char param_str[32];
+        if (presenter->active_mode == GAME_MODE_TIMED)
+        {
+            snprintf(param_str, sizeof(param_str), "Zeit: %lus", (unsigned long)presenter->parameter);
+            DisplayDriver_draw_string(10, 40, param_str, DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+        }
+        else if (presenter->active_mode == GAME_MODE_RACE)
+        {
+            snprintf(param_str, sizeof(param_str), "Ziel: %lu", (unsigned long)presenter->parameter);
+            DisplayDriver_draw_string(10, 40, param_str, DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+        }
+        DisplayDriver_draw_hline(DISP_Y_INFO_LINE, DISPLAY_COLOR_DARKGRAY);
+        DisplayDriver_draw_string(DISP_X_INFO_TEXT, DISP_Y_INFO_TEXT1, "L:Menu/R:Reset", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
     }
 
     /* Redraw score area */
     if (presenter->needs_full_redraw || presenter->needs_score_redraw) {
-        DisplayDriver_fill_rect(10, 32, 108, 30, DISPLAY_COLOR_BLACK);
+        DisplayDriver_fill_rect(10, 65, 108, 16, DISPLAY_COLOR_BLACK);
         char score_str[32];
         snprintf(score_str, sizeof(score_str), "%lu", (unsigned long)presenter->score);
-        DisplayDriver_draw_string(45, 36, score_str, DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_BIG);
+        DisplayDriver_draw_string(45, 65, score_str, DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_BIG);
     }
 
     /* Redraw timer area */
     if (presenter->needs_full_redraw || presenter->needs_timer_redraw) {
-        DisplayDriver_fill_rect(10, 72, 108, 25, DISPLAY_COLOR_BLACK);
+        DisplayDriver_fill_rect(10, 95, 108, 8, DISPLAY_COLOR_BLACK);
         char time_str[32];
         if (presenter->active_mode == GAME_MODE_TIMED) {
             snprintf(time_str, sizeof(time_str), "Rest: %lu.%1lus",
                      (unsigned long)(presenter->remaining_ms / 1000),
                      (unsigned long)((presenter->remaining_ms % 1000) / 100));
-            DisplayDriver_draw_string(15, 75, time_str, DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+            DisplayDriver_draw_string(15, 95, time_str, DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
         } else {
             snprintf(time_str, sizeof(time_str), "Zeit: %lu.%1lus",
                      (unsigned long)(presenter->elapsed_ms / 1000),
                      (unsigned long)((presenter->elapsed_ms % 1000) / 100));
-            DisplayDriver_draw_string(15, 75, time_str, DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+            DisplayDriver_draw_string(15, 95, time_str, DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
         }
     }
 }
 
 static void render_finished(DisplayPresenter* presenter) {
     DisplayDriver_clear(DISPLAY_COLOR_BLACK);
-    DisplayDriver_draw_string(25, 10, "FERTIG!", DISPLAY_COLOR_GREEN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
-    DisplayDriver_draw_line(0, 30, 127, 30, DISPLAY_COLOR_GRAY);
+    const char *mode_title = GameMode_to_UI_string(presenter->active_mode);
+    DisplayDriver_draw_string(DISP_X_TITLE, DISP_Y_TITLE, mode_title, DISPLAY_COLOR_CYAN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
+    DisplayDriver_draw_hline(DISP_Y_TITLE_LINE, DISPLAY_COLOR_GRAY);
 
     char score_str[32];
     snprintf(score_str, sizeof(score_str), "Hits: %lu", (unsigned long)presenter->score);
-    DisplayDriver_draw_string(20, 45, score_str, DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
+    DisplayDriver_draw_string(15, 45, score_str, DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
 
     char time_str[32];
     snprintf(time_str, sizeof(time_str), "Zeit: %lu.%1lus",
@@ -210,11 +237,11 @@ static void render_finished(DisplayPresenter* presenter) {
              (unsigned long)((presenter->elapsed_ms % 1000) / 100));
     DisplayDriver_draw_string(15, 70, time_str, DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
 
-    const char* reason = GameEndReason_to_string(presenter->end_reason);
-    DisplayDriver_draw_string(15, 90, reason, DISPLAY_COLOR_CYAN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    DisplayDriver_draw_string(15, 90, "Ende", DISPLAY_COLOR_GREEN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
 
-    DisplayDriver_draw_line(0, 110, 127, 110, DISPLAY_COLOR_DARKGRAY);
-    DisplayDriver_draw_string(5, 115, "R:Neu   L:Menue", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    DisplayDriver_draw_hline(DISP_Y_INFO_LINE, DISPLAY_COLOR_DARKGRAY);
+    DisplayDriver_draw_string(DISP_X_INFO_TEXT, DISP_Y_INFO_TEXT1, "L:Menu", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    DisplayDriver_draw_string(DISP_X_INFO_TEXT, DISP_Y_INFO_TEXT2, "R:Neustarten", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
 }
 
 void DisplayPresenter_render(DisplayPresenter* presenter) {
