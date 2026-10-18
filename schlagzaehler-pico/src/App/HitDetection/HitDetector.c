@@ -1,5 +1,5 @@
 #include "HitDetector.h"
-#include "../../OSAL/Time.h"
+#include "../../OSAL/inc/Time.h"
 #include <math.h>
 
 void HitDetector_init(HitDetector* detector, const Config* config) {

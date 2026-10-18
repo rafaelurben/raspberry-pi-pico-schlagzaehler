@@ -1,5 +1,5 @@
-#include "PiezoAdcDriver.h"
-#include "../OSAL/Dma.h"
+#include "../../inc/PiezoAdcDriver.h"
+#include "../../inc/Dma.h"
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
 

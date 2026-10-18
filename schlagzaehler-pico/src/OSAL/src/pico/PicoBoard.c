@@ -1,4 +1,4 @@
-#include "PicoBoard.h"
+#include "../../inc/Board.h"
 #include "pico/stdlib.h"
 
 #ifdef CYW43_WL_GPIO_LED_PIN
@@ -7,7 +7,7 @@
 
 static bool s_led_state = false;
 
-void PicoBoard_init(void) {
+void Board_init(void) {
     stdio_init_all();
 #if defined(PICO_DEFAULT_LED_PIN)
     gpio_init(PICO_DEFAULT_LED_PIN);
@@ -19,7 +19,7 @@ void PicoBoard_init(void) {
 #endif
 }
 
-void PicoBoard_set_led(bool on) {
+void Board_set_led(bool on) {
     s_led_state = on;
 #if defined(PICO_DEFAULT_LED_PIN)
     gpio_put(PICO_DEFAULT_LED_PIN, on);
@@ -28,6 +28,6 @@ void PicoBoard_set_led(bool on) {
 #endif
 }
 
-void PicoBoard_toggle_led(void) {
-    PicoBoard_set_led(!s_led_state);
+void Board_toggle_led(void) {
+    Board_set_led(!s_led_state);
 }

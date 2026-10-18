@@ -21,4 +21,4 @@ void Interrupt_restore(uint32_t status);
 }
 #endif
 
-#endif /* COMMON_INTERRUPT_H */
+#endif /* OSAL_INTERRUPT_H */

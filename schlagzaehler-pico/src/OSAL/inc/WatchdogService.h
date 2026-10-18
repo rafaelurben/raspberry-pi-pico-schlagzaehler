@@ -1,5 +1,5 @@
-#ifndef SERVICES_WATCHDOG_SERVICE_H
-#define SERVICES_WATCHDOG_SERVICE_H
+#ifndef OSAL_WATCHDOG_SERVICE_H
+#define OSAL_WATCHDOG_SERVICE_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -24,4 +24,4 @@ bool WatchdogService_tick(WatchdogService* service);
 }
 #endif
 
-#endif /* SERVICES_WATCHDOG_SERVICE_H */
+#endif /* OSAL_WATCHDOG_SERVICE_H */

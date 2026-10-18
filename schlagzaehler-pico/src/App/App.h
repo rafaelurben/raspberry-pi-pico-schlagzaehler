@@ -3,15 +3,15 @@
 
 #include "../Common/Config.h"
 #include "../Common/Messages.h"
-#include "../OSAL/Queue.h"
+#include "../OSAL/inc/Queue.h"
+#include "../OSAL/inc/WatchdogService.h"
+#include "ConfigService.h"
 #include "HitDetection/HitDetector.h"
 #include "Input/ButtonController.h"
 #include "Game/GameController.h"
 #include "Display/DisplayPresenter.h"
 #include "Companion/CompanionProtocol.h"
 #include "Companion/CommandHandler.h"
-#include "../Services/ConfigService.h"
-#include "../Services/WatchdogService.h"
 
 #ifdef __cplusplus
 extern "C" {

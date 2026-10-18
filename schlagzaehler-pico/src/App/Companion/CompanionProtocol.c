@@ -1,5 +1,5 @@
 #include "CompanionProtocol.h"
-#include "../../Drivers/UsbSerialDriver.h"
+#include "../../OSAL/inc/UsbSerialDriver.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>

@@ -1,5 +1,5 @@
-#ifndef SERVICES_CONFIG_SERVICE_H
-#define SERVICES_CONFIG_SERVICE_H
+#ifndef APP_CONFIG_SERVICE_H
+#define APP_CONFIG_SERVICE_H
 
 #include "../Common/Config.h"
 
@@ -22,4 +22,4 @@ bool ConfigService_set_sensitivity(ConfigService* service, float noise_factor);
 }
 #endif
 
-#endif /* SERVICES_CONFIG_SERVICE_H */
+#endif /* APP_CONFIG_SERVICE_H */

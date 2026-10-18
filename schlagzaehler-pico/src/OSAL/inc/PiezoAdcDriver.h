@@ -1,10 +1,10 @@
-#ifndef DRIVERS_PIEZO_ADC_DRIVER_H
-#define DRIVERS_PIEZO_ADC_DRIVER_H
+#ifndef OSAL_PIEZO_ADC_DRIVER_H
+#define OSAL_PIEZO_ADC_DRIVER_H
 
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include "../Common/Config.h"
+#include "../../Common/Config.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,4 +52,4 @@ uint32_t PiezoAdcDriver_get_overrun_count(void);
 }
 #endif
 
-#endif /* DRIVERS_PIEZO_ADC_DRIVER_H */
+#endif /* OSAL_PIEZO_ADC_DRIVER_H */

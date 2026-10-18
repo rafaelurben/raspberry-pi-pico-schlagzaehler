@@ -1,4 +1,4 @@
-#include "PicoDma.h"
+#include "../../inc/Dma.h"
 #include "hardware/dma.h"
 #include "hardware/adc.h"
 #include "hardware/irq.h"

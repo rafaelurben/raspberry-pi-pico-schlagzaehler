@@ -1,5 +1,5 @@
-#ifndef PLATFORM_PICO_CORE_STARTUP_H
-#define PLATFORM_PICO_CORE_STARTUP_H
+#ifndef OSAL_CORE_STARTUP_H
+#define OSAL_CORE_STARTUP_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,4 +21,4 @@ void CoreStartup_reset_core1(void);
 }
 #endif
 
-#endif /* PLATFORM_PICO_CORE_STARTUP_H */
+#endif /* OSAL_CORE_STARTUP_H */

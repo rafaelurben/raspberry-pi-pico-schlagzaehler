@@ -1,5 +1,5 @@
-#include "WatchdogService.h"
-#include "../OSAL/Time.h"
+#include "../../inc/WatchdogService.h"
+#include "../../inc/Time.h"
 #include "hardware/watchdog.h"
 
 void WatchdogService_init(WatchdogService* service, uint32_t timeout_ms) {

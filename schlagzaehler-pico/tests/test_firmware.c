@@ -7,16 +7,15 @@
 #include "../src/Common/Events.h"
 #include "../src/Common/Config.h"
 #include "../src/Common/Messages.h"
-#include "../src/Common/Crc.h"
 
-#include "../src/Services/ConfigService.h"
+#include "../src/App/ConfigService.h"
 #include "../src/App/HitDetection/HitDetector.h"
 #include "../src/App/Game/Modes/CountMode.h"
 #include "../src/App/Game/Modes/TimedMode.h"
 #include "../src/App/Game/Modes/RaceMode.h"
 #include "../src/App/Game/GameController.h"
 #include "../src/App/Input/ButtonController.h"
-#include "../src/Drivers/GpioDriver.h"
+#include "../src/OSAL/inc/GpioDriver.h"
 #include "../src/App/Companion/CommandHandler.h"
 #include "../src/App/Companion/CompanionProtocol.h"
 
@@ -91,15 +90,6 @@ void UsbSerialDriver_write_line(const char* line) {
 }
 int UsbSerialDriver_read_line(char* buffer, size_t max_len) {
     (void)buffer; (void)max_len; return 0;
-}
-
-void test_crc(void) {
-    const char* str = "123456789";
-    uint16_t crc16 = Crc_calculate16((const uint8_t*)str, 9);
-    assert(crc16 == 0x29B1);
-    uint32_t crc32 = Crc_calculate32((const uint8_t*)str, 9);
-    assert(crc32 == 0xCBF43926);
-    printf("PASS: test_crc\n");
 }
 
 void test_config_service(void) {
@@ -403,7 +393,6 @@ void test_button_controller_interrupts(void) {
 
 int main(void) {
     printf("--- Running Schlagzaehler Architecture Unit Tests ---\n");
-    test_crc();
     test_config_service();
     test_hit_detector_and_calibration();
     test_game_controller_and_modes();

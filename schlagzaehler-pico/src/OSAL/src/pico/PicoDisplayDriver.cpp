@@ -1,5 +1,5 @@
-#include "DisplayDriver.h"
-#include "../Common/Config.h"
+#include "../../inc/DisplayDriver.h"
+#include "../../../Common/Config.h"
 #include "displaylib_16/st7735.hpp"
 #include "displaylib_16/displaylib_16_Font.hpp"
 

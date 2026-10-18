@@ -1,10 +1,10 @@
-#include "Platform/Pico/PicoBoard.h"
+#include "OSAL/inc/Board.h"
 #include "Common/Config.h"
 #include "App/App.h"
 
 int main(void) {
     /* Initialize hardware board, stdio, and LEDs */
-    PicoBoard_init();
+    Board_init();
 
     /* Load default configuration */
     Config config;

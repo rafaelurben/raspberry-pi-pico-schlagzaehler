@@ -1,7 +1,7 @@
 #include "ButtonController.h"
-#include "../../Drivers/GpioDriver.h"
-#include "../../OSAL/Time.h"
-#include "../../OSAL/Interrupt.h"
+#include "../../OSAL/inc/GpioDriver.h"
+#include "../../OSAL/inc/Time.h"
+#include "../../OSAL/inc/Interrupt.h"
 
 static void button_irq_trampoline(ButtonId button, bool is_press_edge, void* user_data) {
     ButtonController* ctrl = (ButtonController*)user_data;

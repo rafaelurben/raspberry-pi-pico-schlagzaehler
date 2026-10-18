@@ -1,4 +1,4 @@
-#include "GpioDriver.h"
+#include "../../inc/GpioDriver.h"
 #include "hardware/gpio.h"
 #include <stddef.h>
 
@@ -39,7 +39,7 @@ void GpioDriver_init(void) {
     }
     gpio_init(PIN_DISPLAY_BL);
     gpio_set_dir(PIN_DISPLAY_BL, GPIO_OUT);
-    gpio_put(PIN_DISPLAY_BL, 1); // Turn on backlight
+    gpio_put(PIN_DISPLAY_BL, 1); /* Turn on backlight */
 }
 
 void GpioDriver_enable_button_irqs(GpioButtonIrqCallback callback, void* user_data) {

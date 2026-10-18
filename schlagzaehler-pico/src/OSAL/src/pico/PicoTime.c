@@ -1,4 +1,4 @@
-#include "../../OSAL/Time.h"
+#include "../../inc/Time.h"
 #include "pico/stdlib.h"
 #include "hardware/timer.h"
 

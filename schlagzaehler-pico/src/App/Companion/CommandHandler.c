@@ -1,5 +1,5 @@
 #include "CommandHandler.h"
-#include "../../OSAL/Time.h"
+#include "../../OSAL/inc/Time.h"
 
 void CommandHandler_init(CommandHandler* handler, OsalQueue* queue_to_core0) {
     if (!handler) return;

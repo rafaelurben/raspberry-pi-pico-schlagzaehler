@@ -1,9 +1,9 @@
-#ifndef DRIVERS_GPIO_DRIVER_H
-#define DRIVERS_GPIO_DRIVER_H
+#ifndef OSAL_GPIO_DRIVER_H
+#define OSAL_GPIO_DRIVER_H
 
 #include <stdbool.h>
-#include "../Common/Events.h"
-#include "../Common/Config.h"
+#include "../../Common/Events.h"
+#include "../../Common/Config.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,4 +32,4 @@ void GpioDriver_enable_button_irqs(GpioButtonIrqCallback callback, void* user_da
 }
 #endif
 
-#endif /* DRIVERS_GPIO_DRIVER_H */
+#endif /* OSAL_GPIO_DRIVER_H */

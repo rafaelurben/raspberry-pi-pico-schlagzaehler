@@ -1,4 +1,4 @@
-#include "CoreStartup.h"
+#include "../../inc/CoreStartup.h"
 #include "pico/multicore.h"
 
 void CoreStartup_launch_core1(Core1EntryFunc entry) {

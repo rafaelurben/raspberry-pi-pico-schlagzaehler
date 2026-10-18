@@ -1,5 +1,5 @@
-#ifndef DRIVERS_DISPLAY_DRIVER_H
-#define DRIVERS_DISPLAY_DRIVER_H
+#ifndef OSAL_DISPLAY_DRIVER_H
+#define OSAL_DISPLAY_DRIVER_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -73,4 +73,4 @@ uint16_t DisplayDriver_get_height(void);
 }
 #endif
 
-#endif /* DRIVERS_DISPLAY_DRIVER_H */
+#endif /* OSAL_DISPLAY_DRIVER_H */

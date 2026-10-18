@@ -1,4 +1,4 @@
-#include "PicoUsbSerial.h"
+#include "../../inc/UsbSerialDriver.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
 #include <string.h>
@@ -8,12 +8,12 @@
 static char s_rx_buffer[USB_RX_BUF_SIZE];
 static size_t s_rx_pos = 0;
 
-void PicoUsbSerial_init(void) {
+void UsbSerialDriver_init(void) {
     s_rx_pos = 0;
     memset(s_rx_buffer, 0, sizeof(s_rx_buffer));
 }
 
-int PicoUsbSerial_read_line(char* buffer, size_t max_len) {
+int UsbSerialDriver_read_line(char* buffer, size_t max_len) {
     if (!buffer || max_len == 0) return -1;
 
     /* Read all currently pending characters without blocking */
@@ -43,13 +43,13 @@ int PicoUsbSerial_read_line(char* buffer, size_t max_len) {
     return 0; /* No complete line ready */
 }
 
-void PicoUsbSerial_write_string(const char* str) {
+void UsbSerialDriver_write_string(const char* str) {
     if (!str) return;
     fputs(str, stdout);
     fflush(stdout);
 }
 
-void PicoUsbSerial_write_line(const char* line) {
+void UsbSerialDriver_write_line(const char* line) {
     if (!line) return;
     fputs(line, stdout);
     fputc('\n', stdout);

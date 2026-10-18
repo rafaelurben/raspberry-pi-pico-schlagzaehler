@@ -42,20 +42,18 @@ add_compile_options(-Wall -Wextra)
 # Add executable with all architectural components
 add_executable(schlagzaehler
     src/main.c
-    src/Common/Crc.c
-    src/Platform/Pico/PicoBoard.c
-    src/Platform/Pico/PicoInterrupt.c
-    src/Platform/Pico/PicoTime.c
-    src/Platform/Pico/PicoQueue.c
-    src/Platform/Pico/PicoDma.c
-    src/Platform/Pico/PicoUsbSerial.c
-    src/Platform/Pico/CoreStartup.c
-    src/Drivers/PiezoAdcDriver.c
-    src/Drivers/GpioDriver.c
-    src/Drivers/UsbSerialDriver.c
-    src/Drivers/DisplayDriverAdapter.cpp
-    src/Services/ConfigService.c
-    src/Services/WatchdogService.c
+    src/OSAL/src/pico/PicoBoard.c
+    src/OSAL/src/pico/PicoCoreStartup.c
+    src/OSAL/src/pico/PicoDisplayDriver.cpp
+    src/OSAL/src/pico/PicoDma.c
+    src/OSAL/src/pico/PicoGpioDriver.c
+    src/OSAL/src/pico/PicoInterrupt.c
+    src/OSAL/src/pico/PicoPiezoAdcDriver.c
+    src/OSAL/src/pico/PicoQueue.c
+    src/OSAL/src/pico/PicoTime.c
+    src/OSAL/src/pico/PicoUsbSerialDriver.c
+    src/OSAL/src/pico/PicoWatchdogService.c
+    src/App/ConfigService.c
     src/App/HitDetection/HitDetector.c
     src/App/Input/ButtonController.c
     src/App/Game/GameState.c

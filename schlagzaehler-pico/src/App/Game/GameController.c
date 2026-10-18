@@ -1,5 +1,5 @@
 #include "GameController.h"
-#include "../../OSAL/Time.h"
+#include "../../OSAL/inc/Time.h"
 #include <string.h>
 
 static void send_msg(GameController* gc, const Core0ToCore1Message* msg) {

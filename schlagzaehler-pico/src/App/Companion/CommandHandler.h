@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "../../Common/Messages.h"
-#include "../../OSAL/Queue.h"
+#include "../../OSAL/inc/Queue.h"
 
 #ifdef __cplusplus
 extern "C" {

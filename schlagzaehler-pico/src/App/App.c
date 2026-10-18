@@ -1,11 +1,11 @@
 #include "App.h"
-#include "../Drivers/PiezoAdcDriver.h"
-#include "../Drivers/GpioDriver.h"
-#include "../Drivers/UsbSerialDriver.h"
-#include "../Drivers/DisplayDriver.h"
-#include "../Platform/Pico/CoreStartup.h"
-#include "../Platform/Pico/PicoBoard.h"
-#include "../OSAL/Time.h"
+#include "../OSAL/inc/PiezoAdcDriver.h"
+#include "../OSAL/inc/GpioDriver.h"
+#include "../OSAL/inc/UsbSerialDriver.h"
+#include "../OSAL/inc/DisplayDriver.h"
+#include "../OSAL/inc/CoreStartup.h"
+#include "../OSAL/inc/Board.h"
+#include "../OSAL/inc/Time.h"
 #include <stddef.h>
 
 static App* s_app_instance = NULL;
@@ -145,10 +145,10 @@ void App_run_core0(App* app) {
         }
 
         if (hit_occurred) {
-            PicoBoard_set_led(true);
+            Board_set_led(true);
             GameController_on_hit(&app->game_controller, &hit_event);
         } else if (new_sensor_state == SENSOR_STATE_ARMED) {
-            PicoBoard_set_led(false);
+            Board_set_led(false);
         }
 
         PiezoAdcDriver_release_buffer();
@@ -190,7 +190,7 @@ void App_run_core0(App* app) {
     if (current_game_state == GAME_STATE_MENU && HitDetector_get_state(&app->hit_detector) != SENSOR_STATE_CALIBRATING) {
         if (PiezoAdcDriver_is_running()) {
             PiezoAdcDriver_stop();
-            PicoBoard_set_led(false);
+            Board_set_led(false);
             if (HitDetector_get_state(&app->hit_detector) == SENSOR_STATE_HIT_LOCKOUT) {
                 HitDetector_reset_to_armed(&app->hit_detector);
                 GameController_on_sensor_state(

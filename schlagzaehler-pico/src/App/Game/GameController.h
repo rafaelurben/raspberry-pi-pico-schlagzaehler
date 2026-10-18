@@ -10,7 +10,7 @@
 #include "../../Common/Events.h"
 #include "../../Common/Messages.h"
 #include "../../Common/Config.h"
-#include "../../OSAL/Queue.h"
+#include "../../OSAL/inc/Queue.h"
 
 #ifdef __cplusplus
 extern "C" {
