@@ -1,0 +1,133 @@
+@startuml
+title Schlagzähler Pico – Initial Setup Sequence (Core 0 & Core 1)
+
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+autonumber
+
+actor "Boot / Reset" as Boot
+participant "main" as Main #White
+
+box "Applications Layer" #LightGray
+    participant "App" as App
+    participant "ConfigService" as ConfigService
+    participant "HitDetector" as HitDetector
+    participant "ButtonController" as ButtonController
+    participant "GameController" as GameController
+    participant "DisplayPresenter" as DisplayPresenter
+    participant "CommandHandler" as CommandHandler
+    participant "CompanionProtocol" as CompanionProtocol
+    participant "WatchdogService" as WatchdogService
+end box
+
+box "Abstraction Layer (Drivers & OSAL)" #Cyan
+    participant "PicoBoard" as PicoBoard
+    participant "Queue" as Queue
+    participant "CoreStartup" as CoreStartup
+    participant "GpioDriver" as GpioDriver
+    participant "PiezoAdcDriver" as PiezoAdcDriver
+    participant "Dma" as Dma
+    participant "UsbSerialDriver" as UsbSerialDriver
+    participant "DisplayDriver" as DisplayDriver
+    participant "Time" as Time
+end box
+
+Boot -> Main : main()
+activate Main
+
+Main -> PicoBoard : PicoBoard_init()
+Main -> ConfigService : Config_set_defaults(&config)
+Main -> App : App_init(&app, &config)
+activate App
+
+App -> ConfigService : ConfigService_init(&config_service, &config)
+App -> Queue : OsalQueue_init(&queue_core0_to_core1, ...)
+App -> Queue : OsalQueue_init(&queue_core1_to_core0, ...)
+
+== Launch Core 1 & Parallel Core Initialization ==
+
+App -> CoreStartup : CoreStartup_launch_core1(core1_entry)
+CoreStartup --[#Red]> App : <color:Red><b>callback: core1_entry()</b></color>
+
+par Core 0 Initialization (App_init_core0)
+    App -> GpioDriver : GpioDriver_init()
+    App -> PiezoAdcDriver : PiezoAdcDriver_init(&config)
+    activate PiezoAdcDriver
+    PiezoAdcDriver -> Dma : Dma_init_adc_double_buffer(&dma_cfg)
+    note right of Dma #FFEEEE
+        <color:Red>Configures DMA_IRQ_0 & registers</color>
+        <color:Red>callback: on_dma_buffer_complete()</color>
+    end note
+    deactivate PiezoAdcDriver
+
+    App -> HitDetector : HitDetector_init(&hit_detector, &config)
+    App -> ButtonController : ButtonController_init(&button_controller)
+    activate ButtonController
+    ButtonController -> GpioDriver : GpioDriver_enable_button_irqs(button_irq_trampoline, ctrl)
+    note right of GpioDriver #FFEEEE
+        <color:Red>Enables GPIO_IRQ_EDGE_FALL | RISE</color>
+        <color:Red>callback: button_irq_trampoline()</color>
+    end note
+    deactivate ButtonController
+
+    App -> GameController : GameController_init(&game_controller, &config, &queue_core0_to_core1)
+    App -> CompanionProtocol : CompanionProtocol_init(&companion_protocol, &command_handler)
+
+else Core 1 Initialization (App_init_core1)
+    App -> UsbSerialDriver : UsbSerialDriver_init()
+    App -> DisplayDriver : DisplayDriver_init()
+    App -> DisplayPresenter : DisplayPresenter_init(&display_presenter)
+    App -> CommandHandler : CommandHandler_init(&command_handler, &queue_core1_to_core0)
+    App -> CompanionProtocol : CompanionProtocol_init(&companion_protocol, &command_handler)
+
+    App -> DisplayPresenter : DisplayPresenter_render(&display_presenter)
+    activate DisplayPresenter
+    DisplayPresenter -> DisplayDriver : DisplayDriver_clear(COLOR_BLACK)
+    DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string("SCHLAGZAEHLER / CALIBRATING 0%")
+    DisplayPresenter -> DisplayDriver : DisplayDriver_draw_rect(...)
+    deactivate DisplayPresenter
+
+    App -> App : core1_ready = true
+end
+
+== Synchronization & Sensor Pipeline Start ==
+
+loop while (!app->core1_ready)
+    App -> Time : Time_delay_us(100)
+end
+
+App -> WatchdogService : WatchdogService_init(&watchdog_service, watchdog_timeout_ms)
+activate WatchdogService
+WatchdogService -> Time : Time_now_us()
+deactivate WatchdogService
+
+App -> Time : Time_now_us()
+App -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_BOOT_STATUS)
+
+App -> GameController : GameController_on_sensor_state(SENSOR_STATE_INIT, 0, 0, 100)
+activate GameController
+GameController -> Time : Time_now_us()
+GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_SENSOR_STATE_CHANGED)
+deactivate GameController
+
+App -> PiezoAdcDriver : PiezoAdcDriver_start()
+activate PiezoAdcDriver
+PiezoAdcDriver -> Dma : Dma_start_adc()
+deactivate PiezoAdcDriver
+
+deactivate App
+
+== Enter Main Execution Loops ==
+
+par Core 0 Loop
+    loop forever
+        Main -> App : App_run_core0(&app)
+    end
+else Core 1 Loop
+    loop while (app->is_running)
+        App -> App : App_run_core1(&app)
+    end
+end
+
+@enduml

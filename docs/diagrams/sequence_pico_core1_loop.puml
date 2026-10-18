@@ -1,0 +1,116 @@
+@startuml
+title Schlagzähler Pico – Core 1 Loop
+
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+autonumber
+
+box "Applications Layer (Core 1)" #LightGray
+    participant "App\n(Core 1)" as App
+    participant "DisplayPresenter" as DisplayPresenter
+    participant "CompanionProtocol" as CompanionProtocol
+    participant "CommandHandler" as CommandHandler
+    participant "WatchdogService" as WatchdogService
+end box
+
+box "Abstraction Layer (Drivers & OSAL)" #Cyan
+    participant "Queue" as Queue
+    participant "DisplayDriver" as DisplayDriver
+    participant "UsbSerialDriver" as UsbSerialDriver
+    participant "Time" as Time
+end box
+
+== Core 1 Entry Point (Launched via Inter-Core Interrupt from Core 0) ==
+
+[-[#Red]> App : <color:Red><b>IRQ / Multicore FIFO Launch: core1_entry()</b></color>
+activate App #FFCCCC
+App -> App : App_init_core1(&app)
+deactivate App
+
+== Synchronous Core 1 Main Loop: App_run_core1(&app) ==
+
+[-> App : App_run_core1(&app)
+activate App
+
+group 1. Drain Messages from Core 0 (queue_core0_to_core1)
+    loop while OsalQueue_pop(&queue_core0_to_core1, &msg) == true
+        App -> Queue : OsalQueue_pop(&queue_core0_to_core1, &msg)
+        Queue --> App : msg (Core0ToCore1Message)
+
+        App -> DisplayPresenter : DisplayPresenter_handle_message(&msg)
+        activate DisplayPresenter
+        DisplayPresenter -> DisplayPresenter : Update local DisplayCache\n(state, score, elapsed_ms, progress, mode)\ndirty = true
+        deactivate DisplayPresenter
+
+        App -> CompanionProtocol : CompanionProtocol_send_message(&msg)
+        activate CompanionProtocol
+        CompanionProtocol -> CompanionProtocol : Format protocol frame\n(BOOT / CALIB / SENSOR / STATE / MODE / HIT / SCORE / TIMER / END)
+        CompanionProtocol -> UsbSerialDriver : UsbSerialDriver_write_line(buf)
+        deactivate CompanionProtocol
+    end
+end
+
+group 2. Poll Incoming Serial Commands from Companion
+    App -> CompanionProtocol : CompanionProtocol_poll_input()
+    activate CompanionProtocol
+    CompanionProtocol -> UsbSerialDriver : UsbSerialDriver_read_line(line_buf, sizeof(line_buf))
+    UsbSerialDriver --> CompanionProtocol : len (> 0 if full line received)
+
+    opt Data received
+        CompanionProtocol -> CompanionProtocol : CompanionProtocol_parse_line
+        opt Valid command received
+            CompanionProtocol -> CommandHandler : CommandHandler_handle_*(...)
+            activate CommandHandler
+            CommandHandler -> Time : Time_now_us()
+            CommandHandler -> Queue : OsalQueue_push(&queue_core1_to_core0, &cmd)
+            CommandHandler --> CompanionProtocol : true / false
+            deactivate CommandHandler
+            CompanionProtocol -> UsbSerialDriver : UsbSerialDriver_write_line("ACK <cmd>" / "ERR <reason>")
+        end
+    end
+    deactivate CompanionProtocol
+end
+
+group 3. Render Dirty UI Components on ST7735 Display
+    App -> DisplayPresenter : DisplayPresenter_render()
+    activate DisplayPresenter
+    opt presenter->dirty == true
+        opt presenter->full_redraw == true
+            DisplayPresenter -> DisplayDriver : DisplayDriver_clear(COLOR_BLACK)
+            DisplayPresenter -> DisplayDriver : DisplayDriver_fill_rect(header)
+            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_line(separator)
+        end
+
+        alt cache.game_state == GAME_STATE_BOOT
+            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string("CALIBRATING...")
+            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_rect(progress_bar_outline)
+            DisplayPresenter -> DisplayDriver : DisplayDriver_fill_rect(progress_bar_fill)
+        else cache.game_state == GAME_STATE_MENU
+            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string("SELECT MODE")
+            DisplayPresenter -> DisplayDriver : DisplayDriver_fill_rect(selected_item_highlight)
+            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string("COUNT / TIMED / RACE")
+        else cache.game_state == GAME_STATE_READY || RUNNING || FINISHED
+            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string(header_mode_and_state)
+            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string(big_score_counter)
+            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string(timer_or_target_info)
+            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string(footer_controls)
+        end
+
+        DisplayPresenter -> DisplayPresenter : dirty = false\nfull_redraw = false
+    end
+    deactivate DisplayPresenter
+end
+
+group 4. Feed Core 1 Watchdog & Yield
+    App -> WatchdogService : WatchdogService_feed_core1()
+    activate WatchdogService
+    WatchdogService -> Time : Time_now_us()
+    deactivate WatchdogService
+
+    App -> Time : Time_delay_us(500)
+end
+
+deactivate App
+
+@enduml

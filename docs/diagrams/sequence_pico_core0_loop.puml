@@ -1,0 +1,198 @@
+@startuml
+title Schlagzähler Pico – Core 0 Loop & Asynchronous Interrupts
+
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+autonumber
+
+box "Applications Layer (Core 0)" #LightGray
+    participant "App\n(Core 0)" as App
+    participant "HitDetector" as HitDetector
+    participant "ButtonController" as ButtonController
+    participant "GameController" as GameController
+    participant "GameModes\n(Count/Timed/Race)" as Modes
+    participant "ConfigService" as ConfigService
+    participant "WatchdogService" as WatchdogService
+end box
+
+box "Abstraction Layer (Drivers & OSAL)" #Cyan
+    participant "PiezoAdcDriver" as PiezoAdcDriver
+    participant "Dma" as Dma
+    participant "GpioDriver" as GpioDriver
+    participant "Interrupt" as Interrupt
+    participant "Time" as Time
+    participant "Queue" as Queue
+    participant "PicoBoard" as PicoBoard
+end box
+
+== Asynchronous Hardware Interrupts (Preempt Core 0 at any time) ==
+
+group #FFEEEE <color:Red>DMA Buffer Complete Interrupt (DMA_IRQ_0)</color>
+    [-[#Red]> Dma : <color:Red><b>IRQ: dma_irq_handler()</b></color>
+    activate Dma #FFCCCC
+    Dma -> Dma : <color:Red>Re-arm completed channel (0 or 1)</color>\n<color:Red>s_transfer_count++</color>
+    Dma -[#Red]> PiezoAdcDriver : <color:Red><b>callback: on_dma_buffer_complete(buffer_index)</b></color>
+    activate PiezoAdcDriver #FFCCCC
+    alt warmup buffers remaining (s_warmup_buffers_to_skip > 0)
+        PiezoAdcDriver -> PiezoAdcDriver : <color:Red>s_warmup_buffers_to_skip--</color>
+    else ready for processing
+        PiezoAdcDriver -> PiezoAdcDriver : <color:Red>s_completed_index = buffer_index</color>\n<color:Red>s_has_new_buffer = true</color>
+    end
+    deactivate PiezoAdcDriver
+    deactivate Dma
+end
+
+group #FFEEEE <color:Red>GPIO Button Edge Interrupt (IO_IRQ_BANK0: FALL | RISE)</color>
+    [-[#Red]> GpioDriver : <color:Red><b>IRQ: gpio_irq_handler(gpio, events)</b></color>
+    activate GpioDriver #FFCCCC
+    GpioDriver -[#Red]> ButtonController : <color:Red><b>callback: button_irq_trampoline(button, is_press_edge)</b></color>
+    activate ButtonController #FFCCCC
+    ButtonController -> ButtonController : <color:Red>ButtonController_on_irq(button, is_press_edge)</color>
+    ButtonController -> Time : <color:Red>Time_now_us()</color>
+    ButtonController -> ButtonController : <color:Red>Update last_edge_time_us & is_button_down[button]</color>
+    opt is_press_edge && (now - prev_time >= 25ms debounce)
+        ButtonController -> Interrupt : <color:Red>Interrupt_disable()</color>
+        ButtonController -> ButtonController : <color:Red>Push ButtonEvent to event_queue[]</color>
+        ButtonController -> Interrupt : <color:Red>Interrupt_restore(irq_state)</color>
+    end
+    deactivate ButtonController
+    deactivate GpioDriver
+end
+
+== Synchronous Core 0 Main Loop: App_run_core0(&app) ==
+
+[-> App : App_run_core0(&app)
+activate App
+
+group 1. Process Completed ADC DMA Buffer
+    App -> PiezoAdcDriver : PiezoAdcDriver_poll_buffer(&samples, &sample_count)
+    PiezoAdcDriver --> App : true (if s_has_new_buffer)
+
+    opt Completed DMA buffer available
+        App -> HitDetector : HitDetector_process_buffer(samples, sample_count, &hit_event)
+        activate HitDetector
+        HitDetector -> Time : Time_now_us()
+        HitDetector --> App : hit_occurred (bool)
+        deactivate HitDetector
+
+        opt SensorState changed (e.g. CALIBRATING -> ARMED -> HIT_LOCKOUT)
+            App -> GameController : GameController_on_sensor_state(new_state, baseline, noise, threshold)
+            activate GameController
+            GameController -> Time : Time_now_us()
+            GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_SENSOR_STATE_CHANGED)
+            opt Transitioned from CALIBRATING to ARMED/ERROR
+                GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_CALIBRATION_RESULT)
+                GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_GAME_STATE_CHANGED)
+            end
+            deactivate GameController
+        end
+
+        opt SensorState == SENSOR_STATE_CALIBRATING (every +5% progress)
+            App -> HitDetector : HitDetector_get_calibration_progress()
+            App -> Time : Time_now_us()
+            App -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_CALIBRATION_PROGRESS)
+        end
+
+        alt hit_occurred == true
+            App -> PicoBoard : PicoBoard_set_led(true)
+            App -> GameController : GameController_on_hit(&hit_event)
+            activate GameController
+            GameController -> Time : Time_now_us()
+            GameController -> Modes : CountMode / TimedMode / RaceMode_on_hit()
+            GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_HIT_DETECTED)
+            GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_SCORE_UPDATED)
+            deactivate GameController
+        else new_sensor_state == SENSOR_STATE_ARMED
+            App -> PicoBoard : PicoBoard_set_led(false)
+        end
+
+        App -> PiezoAdcDriver : PiezoAdcDriver_release_buffer()
+    end
+end
+
+group 2. Process Interrupt-Queued Button Events
+    loop while ButtonController_pop_event(&btn_event) == true
+        App -> ButtonController : ButtonController_pop_event(&btn_event)
+        activate ButtonController
+        ButtonController -> Interrupt : Interrupt_disable()
+        ButtonController -> Interrupt : Interrupt_restore(irq_state)
+        ButtonController --> App : btn_event
+        deactivate ButtonController
+
+        App -> HitDetector : HitDetector_suppress_hits(200)
+        HitDetector -> Time : Time_now_us()
+
+        App -> GameController : GameController_on_button(&btn_event)
+        activate GameController
+        GameController -> Time : Time_now_us()
+        GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_GAME_STATE_CHANGED / MSG_GAME_MODE_CHANGED)
+        deactivate GameController
+    end
+
+    App -> ButtonController : ButtonController_is_active_or_settling(150)
+    ButtonController -> Time : Time_now_us()
+    opt Button held or within 150ms post-release settling window
+        App -> HitDetector : HitDetector_suppress_hits(150)
+        HitDetector -> Time : Time_now_us()
+    end
+end
+
+group 3. Process Commands from Core 1
+    loop while OsalQueue_pop(&queue_core1_to_core0, &cmd) == true
+        App -> Queue : OsalQueue_pop(&queue_core1_to_core0, &cmd)
+        alt cmd.type == MSG_REQUEST_CALIBRATION
+            App -> HitDetector : HitDetector_start_calibration()
+            HitDetector -> Time : Time_now_us()
+            App -> GameController : GameController_on_sensor_state(SENSOR_STATE_CALIBRATING, ...)
+        else cmd.type == MSG_SET_SENSITIVITY
+            App -> ConfigService : ConfigService_set_sensitivity(noise_factor)
+        end
+        App -> GameController : GameController_on_command(&cmd)
+    end
+end
+
+group 4. Manage ADC Power & Menu State
+    alt GameState == GAME_STATE_MENU && SensorState != SENSOR_STATE_CALIBRATING
+        opt PiezoAdcDriver_is_running() == true
+            App -> PiezoAdcDriver : PiezoAdcDriver_stop()
+            PiezoAdcDriver -> Dma : Dma_stop_adc()
+            App -> PicoBoard : PicoBoard_set_led(false)
+            opt SensorState == SENSOR_STATE_HIT_LOCKOUT
+                App -> HitDetector : HitDetector_reset_to_armed()
+                App -> GameController : GameController_on_sensor_state(SENSOR_STATE_ARMED, ...)
+            end
+        end
+    else GameState != GAME_STATE_MENU || SensorState == SENSOR_STATE_CALIBRATING
+        opt PiezoAdcDriver_is_running() == false
+            App -> HitDetector : HitDetector_suppress_hits(250)
+            HitDetector -> Time : Time_now_us()
+            App -> PiezoAdcDriver : PiezoAdcDriver_start()
+            PiezoAdcDriver -> Dma : Dma_start_adc()
+        end
+    end
+end
+
+group 5. Update GameController Timer Tick
+    App -> GameController : GameController_tick()
+    activate GameController
+    opt GameState == GAME_STATE_RUNNING
+        GameController -> Time : Time_now_us()
+        GameController -> Modes : TimedMode_tick() / RaceMode_tick()
+        opt Every 100ms or on game completion
+            GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_TIMER_UPDATED / MSG_GAME_FINISHED)
+        end
+    end
+    deactivate GameController
+end
+
+group 6. Watchdog Check & Feed
+    App -> WatchdogService : WatchdogService_feed_core0()
+    WatchdogService -> Time : Time_now_us()
+    App -> WatchdogService : WatchdogService_tick()
+    WatchdogService -> Time : Time_now_us()
+end
+
+deactivate App
+
+@enduml

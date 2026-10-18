@@ -1,0 +1,84 @@
+@startuml
+title
+  <size:16><b>Schlagzähler Pico – ADC, FIFO, Ping-Pong DMA & Application Dataflow</b></size>
+  <size:14><color:#555555>Version with only one (1) piezo</color></size>
+end title
+
+top to bottom direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam nodesep 35
+skinparam ranksep 45
+
+' ============================================================================
+' 1. HARDWARE PERIPHERALS (RP2040)
+' ============================================================================
+package "RP2040 Hardware Peripherals" as HwLayer #Pink {
+    component "Piezo Sensor\n(GPIO 26 / ADC0)" as Piezo #White
+    component "RP2040 ADC\nFree-Running @ 50 kHz\n(12-bit: 0..4095)" as AdcHw #White
+    queue "ADC Hardware FIFO\n(4x 16-bit words)\nDREQ_ADC asserted at >= 1 sample" as AdcFifo #White
+
+    package "DMA Controller (Ping-Pong Chained)" as DmaHw #FFD6E0 {
+        component "DMA Channel 0\n256 transfers x 16-bit" as DmaChan0 #White
+        component "DMA Channel 1\n256 transfers x 16-bit" as DmaChan1 #White
+    }
+}
+
+' ============================================================================
+' 2. ABSTRACTION LAYER (DMA RAM BUFFERS & DRIVER)
+' ============================================================================
+package "Abstraction Layer (PicoDma & PiezoAdcDriver)" as AbsLayer #Cyan {
+    database "s_buffer0[256]\n(5.12 ms window @ 50 kHz)" as Buf0 #White
+    database "s_buffer1[256]\n(5.12 ms window @ 50 kHz)" as Buf1 #White
+
+    component "PicoDma ISR\ndma_irq_handler()\nRe-arms completed channel" as PicoDmaIsr #FFEEEE
+    component "PiezoAdcDriver Callback\non_dma_buffer_complete()\ns_completed_index = 0 | 1\ns_has_new_buffer = true" as AdcDriverCb #FFEEEE
+    component "PiezoAdcDriver_poll_buffer()\nReturns pointer to completed\ns_buffer0 or s_buffer1" as PollBuffer #White
+}
+
+' ============================================================================
+' 3. APPLICATION LAYER (CORE 0 & CORE 1)
+' ============================================================================
+package "Applications Layer (Core 0 & Core 1)" as AppLayer #LightGray {
+    component "HitDetector_process_buffer()\n1. CALIBRATING: mean (baseline) & std dev (noise)\n2. ARMED: dynamic_threshold *= decay_factor\n3. Peak detection & HIT_LOCKOUT (dead time)" as HitDetector #White
+    component "GameController_on_hit()\nUpdates GameState & Active Mode\n(CountMode / TimedMode / RaceMode)" as GameController #White
+    queue "OsalQueue\nqueue_core0_to_core1\n(Core0ToCore1Message)" as InterCoreQueue #White
+    component "Core 1 Consumers\nDisplayPresenter (ST7735)\nCompanionProtocol (USB Serial)" as Core1Consumers #White
+}
+
+' ============================================================================
+' DATAFLOW CONNECTIONS
+' ============================================================================
+
+' Analog to ADC to FIFO
+Piezo -down-> AdcHw : Analog voltage\n(Piezo vibration)
+AdcHw -down-> AdcFifo : 12-bit sample\nevery 20 µs (50 kHz)
+
+' FIFO to DMA via DREQ_ADC
+AdcFifo -down-> DmaChan0 : DREQ_ADC\n(&adc_hw->fifo)
+AdcFifo -down-> DmaChan1 : DREQ_ADC\n(&adc_hw->fifo)
+
+' Ping-Pong Chaining between DMA Channel 0 and Channel 1
+DmaChan0 -right-> DmaChan1 : CHAIN_TO\n(when 256 samples done)
+DmaChan1 -left-> DmaChan0 : CHAIN_TO\n(when 256 samples done)
+
+' DMA writes to RAM buffers
+DmaChan0 -down-> Buf0 : DMA Write\n(256 x uint16_t)
+DmaChan1 -down-> Buf1 : DMA Write\n(256 x uint16_t)
+
+' Hardware Interrupt Path in RED
+DmaChan0 .[#Red]down.> PicoDmaIsr : <color:Red><b>DMA_IRQ_0</b>\n<color:Red>(Buffer 0 full)</color>
+DmaChan1 .[#Red]down.> PicoDmaIsr : <color:Red><b>DMA_IRQ_0</b>\n<color:Red>(Buffer 1 full)</color>
+PicoDmaIsr -[#Red]down-> AdcDriverCb : <color:Red><b>callback(buffer_index)</b></color>
+AdcDriverCb .[#Red]down.> PollBuffer : <color:Red>Sets s_has_new_buffer = true\n<color:Red>s_completed_index = 0 | 1</color>
+
+' Zero-copy buffer pointer handoff to Core 0 loop
+Buf0 -down-> PollBuffer : Zero-copy pointer\n(when index == 0)
+Buf1 -down-> PollBuffer : Zero-copy pointer\n(when index == 1)
+
+PollBuffer -down-> HitDetector : uint16_t* samples\nsample_count = 256
+HitDetector -down-> GameController : HitEvent\n(hit_id, peak, intensity, timestamp_us)
+GameController -down-> InterCoreQueue : MSG_HIT_DETECTED\nMSG_SCORE_UPDATED
+InterCoreQueue -down-> Core1Consumers : Non-blocking pop\non Core 1
+
+@enduml
