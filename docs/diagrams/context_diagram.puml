@@ -1,0 +1,45 @@
+@startuml
+title Kontextdiagramm – Schlagzähler
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+
+actor "Spieler" as player
+
+rectangle "Schlagzähler" {
+    component "Raspberry Pi Pico W/H" as pico
+    component "Display\n(ST7735)" as display
+    component "4 Buttons\n(UP, RIGHT, DOWN, LEFT)" as buttons
+}
+
+rectangle "Böckli" as boeckli {
+    component "Piezo-Sensor(en)" as piezo
+}
+
+rectangle "Host-System" as host {
+    component "Companion\n(Webanwendung)" as companion
+}
+
+player --> buttons : Bedienung
+player --> display : Anzeige ablesen
+player --> boeckli : Schläge mit Schlägel
+
+buttons --> pico : Eingaben
+piezo --> pico : Analoges Sensorsignal
+pico --> display : Bilddaten über SPI\nSteuersignale
+pico <--> companion : USB-Serial\nZustände und Befehle
+
+host --> pico : Stromversorgung (USB)
+
+note left of pico
+  Lokale Spielausführung
+  Schlagerkennung
+  Spielzustand
+end note
+
+note bottom of companion
+  Punktestand und Status anzeigen
+  Spielmodus und Parameter setzen
+end note
+
+@enduml
