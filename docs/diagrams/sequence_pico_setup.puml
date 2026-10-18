@@ -9,7 +9,7 @@ autonumber
 actor "Boot / Reset" as Boot
 participant "main" as Main #White
 
-box "Applications Layer" #LightGray
+box "Application Layer" #LightGray
     participant "App" as App
     participant "ConfigService" as ConfigService
     participant "HitDetector" as HitDetector
@@ -18,11 +18,10 @@ box "Applications Layer" #LightGray
     participant "DisplayPresenter" as DisplayPresenter
     participant "CommandHandler" as CommandHandler
     participant "CompanionProtocol" as CompanionProtocol
-    participant "WatchdogService" as WatchdogService
 end box
 
-box "Abstraction Layer (Drivers & OSAL)" #Cyan
-    participant "PicoBoard" as PicoBoard
+box "Abstraction Layer (OSAL)" #Cyan
+    participant "Board" as Board
     participant "Queue" as Queue
     participant "CoreStartup" as CoreStartup
     participant "GpioDriver" as GpioDriver
@@ -30,13 +29,14 @@ box "Abstraction Layer (Drivers & OSAL)" #Cyan
     participant "Dma" as Dma
     participant "UsbSerialDriver" as UsbSerialDriver
     participant "DisplayDriver" as DisplayDriver
+    participant "WatchdogService" as WatchdogService
     participant "Time" as Time
 end box
 
 Boot -> Main : main()
 activate Main
 
-Main -> PicoBoard : PicoBoard_init()
+Main -> Board : Board_init()
 Main -> ConfigService : Config_set_defaults(&config)
 Main -> App : App_init(&app, &config)
 activate App

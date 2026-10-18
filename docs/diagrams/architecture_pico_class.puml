@@ -62,19 +62,19 @@ package "Application" as LayerApp #LightGray {
 ' ============================================================================
 ' 2. ABSTRACTION LAYER: DRIVERS, OSAL & PLATFORM (bg=CYAN)
 ' ============================================================================
-package "Abstraction Layer" as LayerAbstraction #Cyan {
+package "Abstraction Layer (OSAL)" as LayerAbstraction #Cyan {
     together {
         class "WatchdogService\n<<interface>>" as I_WatchdogService
-        class "WatchdogService" as Impl_WatchdogService
+        class "PicoWatchdogService" as Impl_WatchdogService
     }
 
     together {
-        class "PicoBoard\n<<interface>>" as I_PicoBoard
+        class "Board\n<<interface>>" as I_PicoBoard
         class "PicoBoard" as Impl_PicoBoard
     }
     together {
         class "CoreStartup\n<<interface>>" as I_CoreStartup
-        class "CoreStartup" as Impl_CoreStartup
+        class "PicoCoreStartup" as Impl_CoreStartup
     }
     together {
         class "Queue\n<<interface>>" as I_Queue
@@ -90,11 +90,11 @@ package "Abstraction Layer" as LayerAbstraction #Cyan {
     }
     together {
         class "GpioDriver\n<<interface>>" as I_GpioDriver
-        class "GpioDriver" as Impl_GpioDriver
+        class "PicoGpioDriver" as Impl_GpioDriver
     }
     together {
         class "PiezoAdcDriver\n<<interface>>" as I_PiezoAdcDriver
-        class "PiezoAdcDriver" as Impl_PiezoAdcDriver
+        class "PicoPiezoAdcDriver" as Impl_PiezoAdcDriver
     }
     together {
         class "Dma\n<<interface>>" as I_Dma
@@ -102,11 +102,11 @@ package "Abstraction Layer" as LayerAbstraction #Cyan {
     }
     together {
         class "DisplayDriver\n<<interface>>" as I_DisplayDriver
-        class "DisplayDriverAdapter" as Impl_DisplayDriver
+        class "PicoDisplayDriver" as Impl_DisplayDriver
     }
     together {
         class "UsbSerialDriver\n<<interface>>" as I_UsbSerialDriver
-        class "PicoUsbSerial" as Impl_UsbSerialDriver
+        class "PicoUsbSerialDriver" as Impl_UsbSerialDriver
     }
 
     ' Realization (Implementation directly below Interface)

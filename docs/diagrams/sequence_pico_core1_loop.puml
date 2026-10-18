@@ -6,18 +6,18 @@ skinparam responseMessageBelowArrow true
 skinparam sequenceMessageAlign left
 autonumber
 
-box "Applications Layer (Core 1)" #LightGray
+box "Application Layer (Core 1)" #LightGray
     participant "App\n(Core 1)" as App
     participant "DisplayPresenter" as DisplayPresenter
     participant "CompanionProtocol" as CompanionProtocol
     participant "CommandHandler" as CommandHandler
-    participant "WatchdogService" as WatchdogService
 end box
 
-box "Abstraction Layer (Drivers & OSAL)" #Cyan
+box "Abstraction Layer (OSAL)" #Cyan
     participant "Queue" as Queue
     participant "DisplayDriver" as DisplayDriver
     participant "UsbSerialDriver" as UsbSerialDriver
+    participant "WatchdogService" as WatchdogService
     participant "Time" as Time
 end box
 

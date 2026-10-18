@@ -6,24 +6,24 @@ skinparam responseMessageBelowArrow true
 skinparam sequenceMessageAlign left
 autonumber
 
-box "Applications Layer (Core 0)" #LightGray
+box "Application Layer (Core 0)" #LightGray
     participant "App\n(Core 0)" as App
     participant "HitDetector" as HitDetector
     participant "ButtonController" as ButtonController
     participant "GameController" as GameController
     participant "GameModes\n(Count/Timed/Race)" as Modes
     participant "ConfigService" as ConfigService
-    participant "WatchdogService" as WatchdogService
 end box
 
-box "Abstraction Layer (Drivers & OSAL)" #Cyan
+box "Abstraction Layer (OSAL)" #Cyan
     participant "PiezoAdcDriver" as PiezoAdcDriver
     participant "Dma" as Dma
     participant "GpioDriver" as GpioDriver
     participant "Interrupt" as Interrupt
     participant "Time" as Time
     participant "Queue" as Queue
-    participant "PicoBoard" as PicoBoard
+    participant "Board" as Board
+    participant "WatchdogService" as WatchdogService
 end box
 
 == Asynchronous Hardware Interrupts (Preempt Core 0 at any time) ==
@@ -95,7 +95,7 @@ group 1. Process Completed ADC DMA Buffer
         end
 
         alt hit_occurred == true
-            App -> PicoBoard : PicoBoard_set_led(true)
+            App -> Board : Board_set_led(true)
             App -> GameController : GameController_on_hit(&hit_event)
             activate GameController
             GameController -> Time : Time_now_us()
@@ -104,7 +104,7 @@ group 1. Process Completed ADC DMA Buffer
             GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_SCORE_UPDATED)
             deactivate GameController
         else new_sensor_state == SENSOR_STATE_ARMED
-            App -> PicoBoard : PicoBoard_set_led(false)
+            App -> Board : Board_set_led(false)
         end
 
         App -> PiezoAdcDriver : PiezoAdcDriver_release_buffer()
@@ -157,7 +157,7 @@ group 4. Manage ADC Power & Menu State
         opt PiezoAdcDriver_is_running() == true
             App -> PiezoAdcDriver : PiezoAdcDriver_stop()
             PiezoAdcDriver -> Dma : Dma_stop_adc()
-            App -> PicoBoard : PicoBoard_set_led(false)
+            App -> Board : Board_set_led(false)
             opt SensorState == SENSOR_STATE_HIT_LOCKOUT
                 App -> HitDetector : HitDetector_reset_to_armed()
                 App -> GameController : GameController_on_sensor_state(SENSOR_STATE_ARMED, ...)

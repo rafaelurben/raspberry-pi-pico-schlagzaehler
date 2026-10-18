@@ -27,19 +27,19 @@ package "RP2040 Hardware Peripherals" as HwLayer #Pink {
 ' ============================================================================
 ' 2. ABSTRACTION LAYER (DMA RAM BUFFERS & DRIVER)
 ' ============================================================================
-package "Abstraction Layer (PicoDma & PiezoAdcDriver)" as AbsLayer #Cyan {
+package "Abstraction Layer (OSAL: PicoDma & PicoPiezoAdcDriver)" as AbsLayer #Cyan {
     database "s_buffer0[256]\n(5.12 ms window @ 50 kHz)" as Buf0 #White
     database "s_buffer1[256]\n(5.12 ms window @ 50 kHz)" as Buf1 #White
 
     component "PicoDma ISR\ndma_irq_handler()\nRe-arms completed channel" as PicoDmaIsr #FFEEEE
-    component "PiezoAdcDriver Callback\non_dma_buffer_complete()\ns_completed_index = 0 | 1\ns_has_new_buffer = true" as AdcDriverCb #FFEEEE
+    component "PicoPiezoAdcDriver Callback\non_dma_buffer_complete()\ns_completed_index = 0 | 1\ns_has_new_buffer = true" as AdcDriverCb #FFEEEE
     component "PiezoAdcDriver_poll_buffer()\nReturns pointer to completed\ns_buffer0 or s_buffer1" as PollBuffer #White
 }
 
 ' ============================================================================
 ' 3. APPLICATION LAYER (CORE 0 & CORE 1)
 ' ============================================================================
-package "Applications Layer (Core 0 & Core 1)" as AppLayer #LightGray {
+package "Application Layer (Core 0 & Core 1)" as AppLayer #LightGray {
     component "HitDetector_process_buffer()\n1. CALIBRATING: mean (baseline) & std dev (noise)\n2. ARMED: dynamic_threshold *= decay_factor\n3. Peak detection & HIT_LOCKOUT (dead time)" as HitDetector #White
     component "GameController_on_hit()\nUpdates GameState & Active Mode\n(CountMode / TimedMode / RaceMode)" as GameController #White
     queue "OsalQueue\nqueue_core0_to_core1\n(Core0ToCore1Message)" as InterCoreQueue #White
@@ -67,10 +67,10 @@ DmaChan0 -down-> Buf0 : DMA Write\n(256 x uint16_t)
 DmaChan1 -down-> Buf1 : DMA Write\n(256 x uint16_t)
 
 ' Hardware Interrupt Path in RED
-DmaChan0 .[#Red]down.> PicoDmaIsr : <color:Red><b>DMA_IRQ_0</b>\n<color:Red>(Buffer 0 full)</color>
-DmaChan1 .[#Red]down.> PicoDmaIsr : <color:Red><b>DMA_IRQ_0</b>\n<color:Red>(Buffer 1 full)</color>
+DmaChan0 .[#Red]down.> PicoDmaIsr : <color:Red><b>DMA_IRQ_0</b></color>\n<color:Red>(Buffer 0 full)</color>
+DmaChan1 .[#Red]down.> PicoDmaIsr : <color:Red><b>DMA_IRQ_0</b></color>\n<color:Red>(Buffer 1 full)</color>
 PicoDmaIsr -[#Red]down-> AdcDriverCb : <color:Red><b>callback(buffer_index)</b></color>
-AdcDriverCb .[#Red]down.> PollBuffer : <color:Red>Sets s_has_new_buffer = true\n<color:Red>s_completed_index = 0 | 1</color>
+AdcDriverCb .[#Red]down.> PollBuffer : <color:Red>Sets s_has_new_buffer = true</color>\n<color:Red>s_completed_index = 0 | 1</color>
 
 ' Zero-copy buffer pointer handoff to Core 0 loop
 Buf0 -down-> PollBuffer : Zero-copy pointer\n(when index == 0)
