@@ -228,7 +228,7 @@ void App_run_core1(App* app) {
     }
 
     /* 2. Poll incoming serial commands from Companion */
-    //CompanionProtocol_poll_input(&app->companion_protocol);
+    CompanionProtocol_poll_input(&app->companion_protocol);
 
     /* 3. Render any dirty UI components on Display */
     DisplayPresenter_render(&app->display_presenter);
