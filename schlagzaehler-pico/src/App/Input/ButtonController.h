@@ -14,6 +14,8 @@ extern "C" {
 typedef struct {
     uint64_t last_change_time_us[BTN_ID_COUNT];
     uint32_t debounce_time_us;
+    volatile bool is_button_down[BTN_ID_COUNT];
+    volatile uint64_t last_edge_time_us;
 
     /* Interrupt-safe ring buffer for detected button press events */
     ButtonEvent event_queue[BUTTON_EVENT_QUEUE_CAPACITY];
@@ -39,6 +41,14 @@ void ButtonController_on_irq(ButtonController* ctrl, ButtonId button, bool is_pr
  * @return true if an event was available and written to out_event.
  */
 bool ButtonController_pop_event(ButtonController* ctrl, ButtonEvent* out_event);
+
+/**
+ * @brief Check if any button is currently held down or recently had an interrupt edge.
+ * @param ctrl ButtonController instance
+ * @param settle_ms Settling duration after the last edge in milliseconds
+ * @return true if a button is held or within the post-edge settling window
+ */
+bool ButtonController_is_active_or_settling(const ButtonController* ctrl, uint32_t settle_ms);
 
 #ifdef __cplusplus
 }

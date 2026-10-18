@@ -26,6 +26,11 @@ void PiezoAdcDriver_start(void);
 void PiezoAdcDriver_stop(void);
 
 /**
+ * @brief Check if ADC sampling and DMA are currently active.
+ */
+bool PiezoAdcDriver_is_running(void);
+
+/**
  * @brief Retrieve next completed DMA buffer if ready.
  * @param out_buffer Filled with pointer to buffer samples.
  * @param out_count Filled with number of samples.

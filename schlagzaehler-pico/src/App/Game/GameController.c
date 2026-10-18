@@ -79,6 +79,7 @@ void GameController_init(GameController* gc, const Config* config, OsalQueue* qu
     }
 
     gc->queue_to_core1 = queue_to_core1;
+    gc->last_sensor_state = SENSOR_STATE_INIT;
     gc->last_timer_broadcast_us = 0;
 
     GameState_init(&gc->state_model, gc->config.default_mode);
@@ -98,6 +99,9 @@ void GameController_init(GameController* gc, const Config* config, OsalQueue* qu
 void GameController_on_sensor_state(GameController* gc, SensorState sensor_state, uint16_t baseline, uint16_t noise, uint16_t threshold) {
     if (!gc) return;
 
+    SensorState prev_sensor_state = gc->last_sensor_state;
+    gc->last_sensor_state = sensor_state;
+
     /* Notify Core 1 */
     Core0ToCore1Message s_msg = {
         .type = MSG_SENSOR_STATUS_CHANGED,
@@ -106,7 +110,10 @@ void GameController_on_sensor_state(GameController* gc, SensorState sensor_state
     };
     send_msg(gc, &s_msg);
 
-    if (sensor_state == SENSOR_STATE_ARMED) {
+    /* Only emit calibration result when transitioning out of calibration (not after every hit lockout) */
+    bool from_calibration = (prev_sensor_state == SENSOR_STATE_CALIBRATING || prev_sensor_state == SENSOR_STATE_INIT);
+
+    if (sensor_state == SENSOR_STATE_ARMED && from_calibration) {
         Core0ToCore1Message c_msg = {
             .type = MSG_CALIBRATION_RESULT,
             .timestamp_us = Time_now_us(),
@@ -125,7 +132,7 @@ void GameController_on_sensor_state(GameController* gc, SensorState sensor_state
             broadcast_state_change(gc, old_s, GAME_STATE_READY);
             broadcast_mode_change(gc);
         }
-    } else if (sensor_state == SENSOR_STATE_ERROR) {
+    } else if (sensor_state == SENSOR_STATE_ERROR && from_calibration) {
         Core0ToCore1Message c_msg = {
             .type = MSG_CALIBRATION_RESULT,
             .timestamp_us = Time_now_us(),

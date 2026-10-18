@@ -12,9 +12,15 @@ static size_t s_sample_count = 256;
 static volatile uint8_t s_completed_index = 0;
 static volatile bool s_has_new_buffer = false;
 static volatile uint32_t s_driver_overruns = 0;
+static volatile uint8_t s_warmup_buffers_to_skip = 0;
+static bool s_is_running = false;
 
 static void on_dma_buffer_complete(void* context, uint8_t buffer_index) {
     (void)context;
+    if (s_warmup_buffers_to_skip > 0) {
+        s_warmup_buffers_to_skip--;
+        return;
+    }
     if (s_has_new_buffer) {
         s_driver_overruns++;
     }
@@ -32,6 +38,8 @@ bool PiezoAdcDriver_init(const Config* config) {
 
     s_has_new_buffer = false;
     s_driver_overruns = 0;
+    s_warmup_buffers_to_skip = 0;
+    s_is_running = false;
 
     /* Initialize ADC hardware */
     adc_init();
@@ -68,17 +76,36 @@ bool PiezoAdcDriver_init(const Config* config) {
 }
 
 void PiezoAdcDriver_start(void) {
+    if (s_is_running) return;
+
+    s_has_new_buffer = false;
+    s_warmup_buffers_to_skip = 2;
+
     /* Drain any stale FIFO samples */
     adc_fifo_drain();
 
     /* Start DMA and ADC free-running mode */
     Dma_start_adc();
     adc_run(true);
+    s_is_running = true;
 }
 
 void PiezoAdcDriver_stop(void) {
+    if (!s_is_running) return;
+
     adc_run(false);
     Dma_stop_adc();
+    while (!(adc_hw->cs & ADC_CS_READY_BITS)) {
+        tight_loop_contents();
+    }
+    adc_fifo_drain();
+    s_has_new_buffer = false;
+    s_warmup_buffers_to_skip = 0;
+    s_is_running = false;
+}
+
+bool PiezoAdcDriver_is_running(void) {
+    return s_is_running;
 }
 
 bool PiezoAdcDriver_poll_buffer(uint16_t** out_buffer, size_t* out_count) {

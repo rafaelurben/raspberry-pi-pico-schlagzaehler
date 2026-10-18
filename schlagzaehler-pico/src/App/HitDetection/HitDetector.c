@@ -18,9 +18,14 @@ void HitDetector_init(HitDetector* detector, const Config* config) {
     detector->dynamic_threshold = 100.0f;
     detector->current_hit_id = 0;
     detector->lockout_start_us = 0;
+    detector->ignore_until_us = 0;
     detector->last_progress_percent = 0;
-
-    HitDetector_start_calibration(detector);
+    detector->calib_start_us = 0;
+    detector->calib_sample_sum = 0;
+    detector->calib_sample_sq_sum = 0;
+    detector->calib_sample_count = 0;
+    detector->calib_min = 65535;
+    detector->calib_max = 0;
 }
 
 void HitDetector_start_calibration(HitDetector* detector) {
@@ -34,6 +39,22 @@ void HitDetector_start_calibration(HitDetector* detector) {
     detector->calib_min = 65535;
     detector->calib_max = 0;
     detector->last_progress_percent = 0;
+}
+
+void HitDetector_reset_to_armed(HitDetector* detector) {
+    if (!detector) return;
+    if (detector->state == SENSOR_STATE_HIT_LOCKOUT) {
+        detector->state = SENSOR_STATE_ARMED;
+        detector->dynamic_threshold = (float)detector->base_threshold;
+    }
+}
+
+void HitDetector_suppress_hits(HitDetector* detector, uint32_t duration_ms) {
+    if (!detector) return;
+    uint64_t until = Time_now_us() + ((uint64_t)duration_ms * 1000ULL);
+    if (until > detector->ignore_until_us) {
+        detector->ignore_until_us = until;
+    }
 }
 
 SensorState HitDetector_get_state(const HitDetector* detector) {
@@ -59,12 +80,11 @@ uint8_t HitDetector_get_calibration_progress(const HitDetector* detector) {
 bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, size_t count, HitEvent* out_event) {
     if (!detector || !samples || count == 0) return false;
 
-    uint64_t now = Time_now_us();
-
     if (detector->state == SENSOR_STATE_INIT) {
         HitDetector_start_calibration(detector);
-        return false;
     }
+
+    uint64_t now = Time_now_us();
 
     if (detector->state == SENSOR_STATE_CALIBRATING) {
         for (size_t i = 0; i < count; ++i) {
@@ -76,7 +96,8 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
             if (val > detector->calib_max) detector->calib_max = val;
         }
 
-        uint32_t elapsed_ms = (uint32_t)((now - detector->calib_start_us) / 1000ULL);
+        uint64_t elapsed_us = (now >= detector->calib_start_us) ? (now - detector->calib_start_us) : 0;
+        uint32_t elapsed_ms = (uint32_t)(elapsed_us / 1000ULL);
         uint32_t duration_ms = detector->config.calibration_duration_ms;
         if (duration_ms > 0) {
             uint32_t pct = (elapsed_ms * 100) / duration_ms;
@@ -121,6 +142,20 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
     if (detector->state == SENSOR_STATE_ARMED) {
         float decay = detector->config.decay_factor;
         float base = (float)detector->base_threshold;
+
+        if (now < detector->ignore_until_us) {
+            for (size_t i = 0; i < count; ++i) {
+                uint16_t val = samples[i];
+                if ((float)val > detector->dynamic_threshold) {
+                    detector->dynamic_threshold = (float)val;
+                }
+                detector->dynamic_threshold *= decay;
+                if (detector->dynamic_threshold < base) {
+                    detector->dynamic_threshold = base;
+                }
+            }
+            return false;
+        }
 
         for (size_t i = 0; i < count; ++i) {
             uint16_t val = samples[i];

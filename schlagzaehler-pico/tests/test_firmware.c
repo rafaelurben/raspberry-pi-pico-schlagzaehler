@@ -132,7 +132,7 @@ void test_hit_detector_and_calibration(void) {
 
     HitDetector hd;
     HitDetector_init(&hd, &cfg);
-    assert(HitDetector_get_state(&hd) == SENSOR_STATE_CALIBRATING);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_INIT);
 
     /* Feed 600 quiet samples around baseline 1980 with +/-2 noise */
     uint16_t quiet_samples[256];
@@ -143,10 +143,12 @@ void test_hit_detector_and_calibration(void) {
     HitEvent ev;
     HitDetector_process_buffer(&hd, quiet_samples, 256, &ev);
     assert(HitDetector_get_state(&hd) == SENSOR_STATE_CALIBRATING);
+    assert(HitDetector_get_calibration_progress(&hd) == 0);
 
     s_mock_time_us += 120000; /* Advance time past 100 ms */
     HitDetector_process_buffer(&hd, quiet_samples, 256, &ev);
     assert(HitDetector_get_state(&hd) == SENSOR_STATE_ARMED);
+    assert(HitDetector_get_calibration_progress(&hd) == 100);
 
     uint16_t baseline = HitDetector_get_baseline(&hd);
     assert(baseline >= 1979 && baseline <= 1982);
@@ -174,6 +176,20 @@ void test_hit_detector_and_calibration(void) {
     assert(hit == false);
     assert(HitDetector_get_state(&hd) == SENSOR_STATE_ARMED);
 
+    /* Test hit suppression window (e.g. after ADC restart / button vibration) */
+    HitDetector_suppress_hits(&hd, 200);
+    hit = HitDetector_process_buffer(&hd, hit_samples, 256, &ev);
+    assert(hit == false);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_ARMED);
+
+    /* After suppression window expires, hits are detected again */
+    s_mock_time_us += 250000;
+    hit = HitDetector_process_buffer(&hd, quiet_samples, 256, &ev);
+    assert(hit == false);
+    hit = HitDetector_process_buffer(&hd, hit_samples, 256, &ev);
+    assert(hit == true);
+    assert(ev.hit_id == 2);
+
     printf("PASS: test_hit_detector_and_calibration\n");
 }
 
@@ -189,15 +205,33 @@ void test_game_controller_and_modes(void) {
 
     assert(gc.state_model.state == GAME_STATE_BOOT);
 
-    /* Sensor calibration completes */
+    /* Sensor enters calibration, then calibration completes */
+    GameController_on_sensor_state(&gc, SENSOR_STATE_CALIBRATING, 0, 0, 0);
     GameController_on_sensor_state(&gc, SENSOR_STATE_ARMED, 1980, 2, 2005);
     assert(gc.state_model.state == GAME_STATE_READY);
 
-    /* Hit starts game into RUNNING */
+    /* Verify MSG_CALIBRATION_RESULT was sent once upon calibration completion */
+    Core0ToCore1Message msg;
+    int calib_result_count = 0;
+    while (OsalQueue_pop(&q0_to_q1, &msg)) {
+        if (msg.type == MSG_CALIBRATION_RESULT) {
+            calib_result_count++;
+        }
+    }
+    assert(calib_result_count == 1);
+
+    /* Hit starts game into RUNNING, and sensor goes HIT_LOCKOUT -> ARMED */
+    GameController_on_sensor_state(&gc, SENSOR_STATE_HIT_LOCKOUT, 1980, 2, 2005);
     HitEvent hit1 = { .hit_id = 1, .peak_value = 2150, .timestamp_us = s_mock_time_us };
     GameController_on_hit(&gc, &hit1);
     assert(gc.state_model.state == GAME_STATE_RUNNING);
     assert(gc.state_model.score == 1);
+
+    /* Lockout ends -> returns to ARMED: must NOT emit MSG_CALIBRATION_RESULT */
+    GameController_on_sensor_state(&gc, SENSOR_STATE_ARMED, 1980, 2, 2005);
+    while (OsalQueue_pop(&q0_to_q1, &msg)) {
+        assert(msg.type != MSG_CALIBRATION_RESULT);
+    }
 
     /* More hits increment score */
     HitEvent hit2 = { .hit_id = 2, .peak_value = 2160, .timestamp_us = s_mock_time_us };
@@ -216,7 +250,6 @@ void test_game_controller_and_modes(void) {
     assert(gc.state_model.state == GAME_STATE_MENU);
 
     /* Drain queue from state change */
-    Core0ToCore1Message msg;
     while (OsalQueue_pop(&q0_to_q1, &msg));
 
     /* Menu navigation: DOWN cycles to TIMED */
@@ -354,6 +387,16 @@ void test_button_controller_interrupts(void) {
     assert(ButtonController_pop_event(&bc, &ev) == true && ev.button == BTN_ID_LEFT);
     assert(ButtonController_pop_event(&bc, &ev) == true && ev.button == BTN_ID_RIGHT);
     assert(ButtonController_pop_event(&bc, &ev) == false);
+
+    /* Release all buttons and verify settling window */
+    assert(ButtonController_is_active_or_settling(&bc, 150) == true);
+    s_mock_gpio_cb(BTN_ID_UP, false, s_mock_gpio_user_data);
+    s_mock_gpio_cb(BTN_ID_DOWN, false, s_mock_gpio_user_data);
+    s_mock_gpio_cb(BTN_ID_LEFT, false, s_mock_gpio_user_data);
+    s_mock_gpio_cb(BTN_ID_RIGHT, false, s_mock_gpio_user_data);
+    assert(ButtonController_is_active_or_settling(&bc, 150) == true);
+    s_mock_time_us += 200000;
+    assert(ButtonController_is_active_or_settling(&bc, 150) == false);
 
     printf("PASS: test_button_controller_interrupts\n");
 }

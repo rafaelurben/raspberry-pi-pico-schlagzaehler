@@ -55,36 +55,7 @@ static void dma_irq_handler(void) {
     }
 }
 
-bool Dma_init_adc_double_buffer(const DmaAdcConfig* config) {
-    if (!config || !config->buffer0 || !config->buffer1 || config->sample_count == 0) {
-        return false;
-    }
-
-    s_buffer0 = config->buffer0;
-    s_buffer1 = config->buffer1;
-    s_sample_count = config->sample_count;
-    s_callback = config->callback;
-    s_callback_context = config->user_data;
-
-    s_transfer_count = 0;
-    s_overrun_count = 0;
-    s_buf0_pending = false;
-    s_buf1_pending = false;
-
-    if (s_chan0 < 0) {
-        s_chan0 = dma_claim_unused_channel(false);
-        if (s_chan0 < 0) return false;
-    }
-
-    if (s_chan1 < 0) {
-        s_chan1 = dma_claim_unused_channel(false);
-        if (s_chan1 < 0) {
-            dma_channel_unclaim(s_chan0);
-            s_chan0 = -1;
-            return false;
-        }
-    }
-
+static void configure_dma_channels(void) {
     /* Channel 0 configuration */
     dma_channel_config c0 = dma_channel_get_default_config(s_chan0);
     channel_config_set_transfer_data_size(&c0, DMA_SIZE_16);
@@ -118,6 +89,39 @@ bool Dma_init_adc_double_buffer(const DmaAdcConfig* config) {
         s_sample_count,        /* count */
         false                  /* don't start yet */
     );
+}
+
+bool Dma_init_adc_double_buffer(const DmaAdcConfig* config) {
+    if (!config || !config->buffer0 || !config->buffer1 || config->sample_count == 0) {
+        return false;
+    }
+
+    s_buffer0 = config->buffer0;
+    s_buffer1 = config->buffer1;
+    s_sample_count = config->sample_count;
+    s_callback = config->callback;
+    s_callback_context = config->user_data;
+
+    s_transfer_count = 0;
+    s_overrun_count = 0;
+    s_buf0_pending = false;
+    s_buf1_pending = false;
+
+    if (s_chan0 < 0) {
+        s_chan0 = dma_claim_unused_channel(false);
+        if (s_chan0 < 0) return false;
+    }
+
+    if (s_chan1 < 0) {
+        s_chan1 = dma_claim_unused_channel(false);
+        if (s_chan1 < 0) {
+            dma_channel_unclaim(s_chan0);
+            s_chan0 = -1;
+            return false;
+        }
+    }
+
+    configure_dma_channels();
 
     /* IRQ setup */
     dma_channel_set_irq0_enabled(s_chan0, true);
@@ -129,17 +133,42 @@ bool Dma_init_adc_double_buffer(const DmaAdcConfig* config) {
 }
 
 void Dma_start_adc(void) {
-    if (s_chan0 >= 0) {
+    if (s_chan0 >= 0 && s_chan1 >= 0) {
+        s_buf0_pending = false;
+        s_buf1_pending = false;
+        configure_dma_channels();
+        dma_channel_acknowledge_irq0(s_chan0);
+        dma_channel_acknowledge_irq0(s_chan1);
+        dma_channel_set_irq0_enabled(s_chan0, true);
+        dma_channel_set_irq0_enabled(s_chan1, true);
         dma_channel_start(s_chan0);
     }
 }
 
 void Dma_stop_adc(void) {
-    if (s_chan0 >= 0) {
-        dma_channel_abort(s_chan0);
-    }
-    if (s_chan1 >= 0) {
-        dma_channel_abort(s_chan1);
+    if (s_chan0 >= 0 && s_chan1 >= 0) {
+        dma_channel_set_irq0_enabled(s_chan0, false);
+        dma_channel_set_irq0_enabled(s_chan1, false);
+
+        /* Disable chaining before aborting (prevents RP2040-E13 chain trigger during abort) */
+        dma_channel_config c0 = dma_get_channel_config(s_chan0);
+        channel_config_set_chain_to(&c0, s_chan0);
+        dma_channel_set_config(s_chan0, &c0, false);
+
+        dma_channel_config c1 = dma_get_channel_config(s_chan1);
+        channel_config_set_chain_to(&c1, s_chan1);
+        dma_channel_set_config(s_chan1, &c1, false);
+
+        uint32_t mask = (1u << (uint32_t)s_chan0) | (1u << (uint32_t)s_chan1);
+        dma_hw->abort = mask;
+        while (dma_hw->abort & mask) {
+            tight_loop_contents();
+        }
+
+        dma_channel_acknowledge_irq0(s_chan0);
+        dma_channel_acknowledge_irq0(s_chan1);
+        s_buf0_pending = false;
+        s_buf1_pending = false;
     }
 }
 

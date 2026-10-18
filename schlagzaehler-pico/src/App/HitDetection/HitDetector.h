@@ -31,6 +31,7 @@ typedef struct {
     /* Hit tracking */
     uint32_t current_hit_id;
     uint64_t lockout_start_us;
+    uint64_t ignore_until_us;
 
     /* Configuration */
     Config config;
@@ -38,6 +39,8 @@ typedef struct {
 
 void HitDetector_init(HitDetector* detector, const Config* config);
 void HitDetector_start_calibration(HitDetector* detector);
+void HitDetector_reset_to_armed(HitDetector* detector);
+void HitDetector_suppress_hits(HitDetector* detector, uint32_t duration_ms);
 SensorState HitDetector_get_state(const HitDetector* detector);
 uint16_t HitDetector_get_threshold(const HitDetector* detector);
 uint16_t HitDetector_get_baseline(const HitDetector* detector);

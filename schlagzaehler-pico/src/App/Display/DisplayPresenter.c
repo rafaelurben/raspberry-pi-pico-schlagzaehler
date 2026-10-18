@@ -67,8 +67,10 @@ void DisplayPresenter_handle_message(DisplayPresenter* presenter, const Core0ToC
             presenter->threshold = msg->data.calibration_result.threshold;
             if (!msg->data.calibration_result.success) {
                 presenter->sensor_state = SENSOR_STATE_ERROR;
+                presenter->needs_full_redraw = true;
+            } else if (presenter->state == GAME_STATE_BOOT) {
+                presenter->needs_full_redraw = true;
             }
-            presenter->needs_full_redraw = true;
             break;
         case MSG_SENSOR_STATUS_CHANGED:
             presenter->sensor_state = msg->data.sensor_status.state;
@@ -82,27 +84,35 @@ void DisplayPresenter_handle_message(DisplayPresenter* presenter, const Core0ToC
 }
 
 static void render_boot(DisplayPresenter* presenter) {
-    DisplayDriver_clear(DISPLAY_COLOR_BLACK);
-    DisplayDriver_draw_string(10, 15, "SCHLAGZAEHLER", DISPLAY_COLOR_CYAN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
-    DisplayDriver_draw_line(0, 35, 127, 35, DISPLAY_COLOR_GRAY);
+    if (presenter->needs_full_redraw) {
+        DisplayDriver_clear(DISPLAY_COLOR_BLACK);
+        DisplayDriver_draw_string(10, 15, "SCHLAGZAEHLER", DISPLAY_COLOR_CYAN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
+        DisplayDriver_draw_line(0, 35, 127, 35, DISPLAY_COLOR_GRAY);
+
+        if (presenter->sensor_state == SENSOR_STATE_ERROR) {
+            DisplayDriver_draw_string(10, 50, "SENSOR FEHLER!", DISPLAY_COLOR_RED, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+            DisplayDriver_draw_string(5, 70, "Piezo pruefen...", DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+            return;
+        }
+
+        DisplayDriver_draw_string(15, 55, "Kalibriere...", DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+        DisplayDriver_draw_rect(14, 75, 100, 12, DISPLAY_COLOR_WHITE);
+    }
 
     if (presenter->sensor_state == SENSOR_STATE_ERROR) {
-        DisplayDriver_draw_string(10, 50, "SENSOR FEHLER!", DISPLAY_COLOR_RED, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
-        DisplayDriver_draw_string(5, 70, "Piezo pruefen...", DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
         return;
     }
 
-    DisplayDriver_draw_string(15, 55, "Kalibriere...", DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
-
-    /* Progress bar */
-    DisplayDriver_draw_rect(14, 75, 100, 12, DISPLAY_COLOR_WHITE);
+    /* Progress bar fill and percentage */
     uint16_t fill_w = (presenter->calib_percent * 96) / 100;
     if (fill_w > 96) fill_w = 96;
-    DisplayDriver_fill_rect(16, 77, fill_w, 8, DISPLAY_COLOR_GREEN);
+    if (fill_w > 0) {
+        DisplayDriver_fill_rect(16, 77, fill_w, 8, DISPLAY_COLOR_GREEN);
+    }
 
     char buf[16];
-    snprintf(buf, sizeof(buf), "%d%%", presenter->calib_percent);
-    DisplayDriver_draw_string(50, 95, buf, DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    snprintf(buf, sizeof(buf), "%3d%%", presenter->calib_percent);
+    DisplayDriver_draw_string(48, 95, buf, DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
 }
 
 static void render_menu(DisplayPresenter* presenter) {

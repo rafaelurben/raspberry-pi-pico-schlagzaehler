@@ -36,6 +36,8 @@ typedef struct {
     CommandHandler command_handler;
     CompanionProtocol companion_protocol;
 
+    uint8_t last_calib_progress;
+    volatile bool core1_ready;
     volatile bool is_running;
 } App;
 

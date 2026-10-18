@@ -12,11 +12,13 @@ void ButtonController_init(ButtonController* ctrl) {
     if (!ctrl) return;
 
     ctrl->debounce_time_us = 25000; /* 25 ms debounce */
+    ctrl->last_edge_time_us = 0;
     ctrl->queue_head = 0;
     ctrl->queue_count = 0;
 
     for (int i = 0; i < BTN_ID_COUNT; ++i) {
         ctrl->last_change_time_us[i] = 0;
+        ctrl->is_button_down[i] = false;
     }
 
     GpioDriver_enable_button_irqs(button_irq_trampoline, ctrl);
@@ -28,6 +30,8 @@ void ButtonController_on_irq(ButtonController* ctrl, ButtonId button, bool is_pr
     uint64_t now = Time_now_us();
     uint64_t prev_time = ctrl->last_change_time_us[button];
     ctrl->last_change_time_us[button] = now;
+    ctrl->last_edge_time_us = now;
+    ctrl->is_button_down[button] = is_press_edge;
 
     if (is_press_edge && (prev_time == 0 || (now - prev_time) >= ctrl->debounce_time_us)) {
         uint32_t irq_state = Interrupt_disable();
@@ -58,4 +62,24 @@ bool ButtonController_pop_event(ButtonController* ctrl, ButtonEvent* out_event) 
     Interrupt_restore(irq_state);
 
     return has_event;
+}
+
+bool ButtonController_is_active_or_settling(const ButtonController* ctrl, uint32_t settle_ms) {
+    if (!ctrl) return false;
+
+    for (int i = 0; i < BTN_ID_COUNT; ++i) {
+        if (ctrl->is_button_down[i]) {
+            return true;
+        }
+    }
+
+    uint64_t last_edge = ctrl->last_edge_time_us;
+    if (last_edge > 0) {
+        uint64_t now = Time_now_us();
+        if (now >= last_edge && (now - last_edge) < ((uint64_t)settle_ms * 1000ULL)) {
+            return true;
+        }
+    }
+
+    return false;
 }
