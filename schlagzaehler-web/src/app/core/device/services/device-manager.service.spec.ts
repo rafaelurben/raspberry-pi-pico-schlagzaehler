@@ -296,4 +296,68 @@ describe('DeviceManagerService', () => {
       'The Web Serial API is not supported in this browser.',
     );
   });
+
+  it('should arm capture, assemble CAPTURE_START/DATA/END chunks, track progress, and support auto-rearm', async () => {
+    setupService();
+    const transport = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport];
+
+    const dev = await service.connectSerialDevice('Pico Target');
+    const deviceId = dev!.id;
+
+    service.setAutoRearm(deviceId, true);
+    await service.startCapture(deviceId);
+    expect(transport.sentPayloads).toContain('CAPTURE');
+
+    transport.eventsSubject.next('SENSOR status=CAPTURE_ARMED');
+    expect(service.getDevice(deviceId)?.state.sensorState).toBe('CAPTURE_ARMED');
+
+    transport.eventsSubject.next('SENSOR status=CAPTURING');
+    expect(service.getDevice(deviceId)?.state.sensorState).toBe('CAPTURING');
+
+    transport.eventsSubject.next(
+      'CAPTURE_START rate=10000 pre=2 count=6 baseline=1980 noise=3 threshold=2010',
+    );
+    expect(service.captureProgress()[deviceId]).toBe(0);
+
+    transport.eventsSubject.next('CAPTURE_DATA offset=0 values=1979,1981,2450');
+    expect(service.captureProgress()[deviceId]).toBe(50);
+
+    transport.eventsSubject.next('CAPTURE_DATA offset=3 values=2200,2050,1982');
+    expect(service.captureProgress()[deviceId]).toBe(100);
+
+    transport.eventsSubject.next('CAPTURE_END count=6');
+    expect(service.captureProgress()[deviceId]).toBeUndefined();
+
+    const captures = service.captures();
+    expect(captures).toHaveLength(1);
+    expect(captures[0].deviceId).toBe(deviceId);
+    expect(captures[0].sampleRateHz).toBe(10000);
+    expect(captures[0].preSamples).toBe(2);
+    expect(captures[0].totalSamples).toBe(6);
+    expect(captures[0].baseline).toBe(1980);
+    expect(captures[0].noise).toBe(3);
+    expect(captures[0].threshold).toBe(2010);
+    expect(captures[0].peak).toBe(2450);
+    expect(captures[0].samples).toEqual([1979, 1981, 2450, 2200, 2050, 1982]);
+
+    // Verify CAPTURE_DATA lines are excluded from the live events log
+    const receivedPayloads = service
+      .events()
+      .filter((e) => e.direction === 'received')
+      .map((e) => e.payload);
+    expect(receivedPayloads).toContain(
+      'CAPTURE_START rate=10000 pre=2 count=6 baseline=1980 noise=3 threshold=2010',
+    );
+    expect(receivedPayloads).toContain('CAPTURE_END count=6');
+    expect(receivedPayloads.some((p) => p.startsWith('CAPTURE_DATA'))).toBe(false);
+
+    // Auto-rearm should have sent another CAPTURE command
+    expect(transport.sentPayloads.filter((p) => p === 'CAPTURE')).toHaveLength(2);
+
+    // Stop capture should disable auto-rearm and send CAPTURE:STOP
+    await service.stopCapture(deviceId);
+    expect(service.autoRearmDevices()[deviceId]).toBe(false);
+    expect(transport.sentPayloads).toContain('CAPTURE:STOP');
+  });
 });

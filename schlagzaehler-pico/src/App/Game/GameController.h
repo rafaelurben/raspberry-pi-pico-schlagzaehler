@@ -26,6 +26,7 @@ typedef struct {
     OsalQueue* queue_to_core1;
 
     SensorState last_sensor_state;
+    GameState pre_capture_state;
     uint64_t last_timer_broadcast_us;
 } GameController;
 

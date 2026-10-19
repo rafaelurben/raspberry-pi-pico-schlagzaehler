@@ -113,6 +113,9 @@ The RP2040's two ARM Cortex-M0+ cores have strictly separated responsibilities a
 - `SENSOR_STATE_CALIBRATING`: Samples baseline mean and variance over `1500 ms` (min `10000` samples), computing `base_threshold = baseline + max(min_threshold_delta, noise_factor * noise)`. Fails to `ERROR` if signal span exceeds 1500 ADC counts.
 - `SENSOR_STATE_ARMED`: Ready to detect hits exceeding `base_threshold`.
 - `SENSOR_STATE_HIT_LOCKOUT`: Triggered upon a hit; tracks peak intensity with exponential decay (`decay_factor = 0.995`) during `lockout_duration_ms` (`100 ms`) to prevent double-counting ringdown oscillations.
+- `SENSOR_STATE_CAPTURE_ARMED`: Armed via companion `CAPTURE` command; continuously fills a `0.1 s` pre-trigger circular buffer (`1,000` samples at `10 kHz`, 5:1 max-pooled from `50 kHz` DMA) until a sample crosses `base_threshold`.
+- `SENSOR_STATE_CAPTURING`: Triggered; collects `2.0 s` post-trigger samples (`20,000` samples at `10 kHz`) into the `21,000`-sample buffer (`SignalCapture`)
+- `SENSOR_STATE_TRANSMITTING`: Streams chunks of samples non-blockingly over USB CDC via Core 1.
 - `SENSOR_STATE_ERROR`: Calibration or sensor fault.
 
 ### Game State (`GameState`)
@@ -122,6 +125,7 @@ The RP2040's two ARM Cortex-M0+ cores have strictly separated responsibilities a
 - `GAME_STATE_READY`: Pre-game screen (`LEFT` returns to `MENU`, `UP`/`DOWN` adjusts parameter in `TIMED` or `RACE` mode, `RIGHT` or companion `START` command transitions to `RUNNING`).
 - `GAME_STATE_RUNNING`: Active gameplay (`LEFT` aborts and resets to `READY`; hits increment score; timer ticks).
 - `GAME_STATE_FINISHED`: Game over screen (`LEFT` returns to `MENU`, `RIGHT` resets to `READY`).
+- `GAME_STATE_CAPTURING`: Dedicated screen shown while raw piezo signal capture is armed (`SENSOR_STATE_CAPTURE_ARMED`) or actively recording/streaming (`SENSOR_STATE_CAPTURING`).
 
 ### Game Modes (`GameMode`)
 
@@ -138,22 +142,27 @@ Communication with `schlagzaehler-web` uses newline-delimited (`\n`) ASCII messa
 ### Outgoing Events (Core 1 -> Companion Web App)
 
 - `BOOT success=<0|1> msg=<text>`
-- `SENSOR status=<INIT|CALIBRATING|ARMED|LOCKOUT|ERROR>`
+- `SENSOR status=<INIT|CALIBRATING|ARMED|LOCKOUT|CAPTURE_ARMED|CAPTURING|TRANSMITTING|ERROR>`
 - `CALIB success=<0|1> baseline=<u16> noise=<u16> threshold=<u16>`
 - `HIT id=<u32> peak=<u16> intensity=<u16>`
-- `STATE old=<BOOT|MENU|READY|RUNNING|FINISHED> new=<...>`
+- `STATE old=<BOOT|MENU|READY|RUNNING|FINISHED|CAPTURING> new=<...>`
 - `MODE active=<COUNT|TIMED|RACE> param=<u32>`
 - `SCORE value=<u32>`
 - `TIMER elapsed=<u32> remaining=<u32>`
 - `RESULT score=<u32> time_ms=<u32> reason=<NONE|TIME_LIMIT|TARGET_REACHED|ABORTED>`
+- `CAPTURE_START rate=<u32> pre=<u16> count=<u16> baseline=<u16> noise=<u16> threshold=<u16>`
+- `CAPTURE_DATA offset=<u16> values=<v0>,<v1>,...`
+- `CAPTURE_END count=<u16>`
 - `ERROR code=<u32> comp=<name> msg=<text>`
 
 ### Incoming Commands (Companion Web App -> Core 1)
 
 - `START`: Start game (if in `MENU` or `READY`) or restart (if `FINISHED`).
-- `RESET`: Abort/reset current game back to `READY` with score 0.
+- `RESET`: Abort/reset current game back to `READY` with score 0 (also cancels active capture).
 - `CALIB`: Trigger sensor recalibration.
 - `STATUS`: Broadcast a full state snapshot (`SENSOR`, `STATE`, `MODE`, `SCORE`, `TIMER`).
+- `CAPTURE` (or `CAPTURE:START`): Arm single-shot raw piezo waveform capture (`1,000` pre + `20,000` post samples at `10 kHz`).
+- `CAPTURE:STOP`: Cancel armed or ongoing raw piezo waveform capture.
 - `MODE:<COUNT|TIMED|RACE|0|1|2>`: Switch active game mode.
 - `PARAM:<u32>`: Set mode parameter (seconds for `TIMED`, target hits for `RACE`).
 - `SENS:<float>`: Set piezo sensitivity (`noise_factor`, clamped to `1.0`–`20.0`).
@@ -203,6 +212,7 @@ cc -std=c23 -Wall -Wextra -Isrc \
   tests/test_firmware.c \
   src/App/ConfigService.c \
   src/App/HitDetection/HitDetector.c \
+  src/App/HitDetection/SignalCapture.c \
   src/App/Game/GameState.c \
   src/App/Game/Modes/CountMode.c \
   src/App/Game/Modes/TimedMode.c \

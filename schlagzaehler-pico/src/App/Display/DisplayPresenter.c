@@ -80,12 +80,20 @@ void DisplayPresenter_handle_message(DisplayPresenter* presenter, const Core0ToC
                 presenter->needs_full_redraw = true;
             }
             break;
-        case MSG_SENSOR_STATUS_CHANGED:
+        case MSG_SENSOR_STATUS_CHANGED: {
+            SensorState old_s = presenter->sensor_state;
             presenter->sensor_state = msg->data.sensor_status.state;
-            if (presenter->sensor_state == SENSOR_STATE_ERROR) {
+            if (presenter->sensor_state == SENSOR_STATE_ERROR ||
+                presenter->sensor_state == SENSOR_STATE_CAPTURE_ARMED ||
+                presenter->sensor_state == SENSOR_STATE_CAPTURING ||
+                presenter->sensor_state == SENSOR_STATE_TRANSMITTING ||
+                old_s == SENSOR_STATE_CAPTURE_ARMED ||
+                old_s == SENSOR_STATE_CAPTURING ||
+                old_s == SENSOR_STATE_TRANSMITTING) {
                 presenter->needs_full_redraw = true;
             }
             break;
+        }
         default:
             break;
     }
@@ -244,6 +252,27 @@ static void render_finished(DisplayPresenter* presenter) {
     DisplayDriver_draw_string(DISP_X_INFO_TEXT, DISP_Y_INFO_TEXT2, "R:Neustarten", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
 }
 
+static void render_capturing(DisplayPresenter* presenter) {
+    DisplayDriver_clear(DISPLAY_COLOR_BLACK);
+    DisplayDriver_draw_string(DISP_X_TITLE, DISP_Y_TITLE, "Analyse", DISPLAY_COLOR_RED, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
+    DisplayDriver_draw_hline(DISP_Y_TITLE_LINE, DISPLAY_COLOR_GRAY);
+
+    char thresh_str[32];
+    snprintf(thresh_str, sizeof(thresh_str), "Schwelle: %u", presenter->threshold);
+    DisplayDriver_draw_string(10, 40, thresh_str, DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+
+    if (presenter->sensor_state == SENSOR_STATE_CAPTURE_ARMED) {
+        DisplayDriver_draw_string(35, 65, "BEREIT!", DISPLAY_COLOR_GREEN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
+        DisplayDriver_draw_string(5, 95, "Schlag = Start", DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    } else if (presenter->sensor_state == SENSOR_STATE_CAPTURING) {
+        DisplayDriver_draw_string(20, 65, "AUFNAHME", DISPLAY_COLOR_RED, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
+        DisplayDriver_draw_string(10, 95, "2s Messung...", DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    } else if (presenter->sensor_state == SENSOR_STATE_TRANSMITTING) {
+        DisplayDriver_draw_string(15, 65, "TRANSFER", DISPLAY_COLOR_CYAN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
+        DisplayDriver_draw_string(10, 95, "Sende Daten...", DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    }
+}
+
 void DisplayPresenter_render(DisplayPresenter* presenter) {
     if (!presenter) return;
 
@@ -266,6 +295,9 @@ void DisplayPresenter_render(DisplayPresenter* presenter) {
             break;
         case GAME_STATE_FINISHED:
             render_finished(presenter);
+            break;
+        case GAME_STATE_CAPTURING:
+            render_capturing(presenter);
             break;
     }
 

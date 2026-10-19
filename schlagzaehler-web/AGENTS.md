@@ -13,6 +13,7 @@ The application is structured in strict conceptual layers to isolate the UI from
 ```text
 Angular UI
   ├── Dashboard (/, DeviceCardComponent, synchronized multi-device controls)
+  ├── Analyzer (/analyzer, AnalyzerComponent, WaveformChartComponent, CSV/PNG export)
   └── Settings (/settings, DeviceListComponent, EventListComponent)
     │
     ▼
@@ -36,22 +37,26 @@ Browser Web Serial API (navigator.serial, SerialPort, TextDecoderStream)
   - `MAX_RETAINED_EVENTS`: Maximum number of recent events retained in UI memory (default: `500`).
 - **`src/app/core/device/models/`**:
   - `connection-state.type.ts`: Connection lifecycle union type (`'disconnected' | 'connecting' | 'connected' | 'error'`).
-  - `device.model.ts`: Domain `Device` and `DeviceState` models tracking connection state, `gameState` (`BOOT`, `MENU`, `READY`, `RUNNING`, `FINISHED`), `mode` (`COUNT`, `TIMED`, `RACE`), `sensorState` (`INIT`, `CALIBRATING`, `ARMED`, `LOCKOUT`, `ERROR`), `score`, `parameter`, `elapsedMs`, `remainingMs`, and USB metadata.
+  - `device.model.ts`: Domain `Device` and `DeviceState` models tracking connection state, `gameState` (`BOOT`, `MENU`, `READY`, `RUNNING`, `FINISHED`, `CAPTURING`), `mode` (`COUNT`, `TIMED`, `RACE`), `sensorState` (`INIT`, `CALIBRATING`, `ARMED`, `LOCKOUT`, `CAPTURE_ARMED`, `CAPTURING`, `ERROR`), `score`, `parameter`, `elapsedMs`, `remainingMs`, and USB metadata.
   - `device-event.model.ts`: Domain `DeviceEvent` model with unique ID, originating `deviceId`, direction (`'received' | 'sent'`), timestamp, and raw payload text.
+  - `piezo-capture.model.ts`: `PiezoCaptureResult` and `CaptureProtocolMessage` types representing 2.1s raw ADC piezo waveform captures (`10 kHz`, `1,000` pre-trigger + `20,000` post-trigger samples).
 - **`src/app/core/device/protocol/`**:
-  - `companion-protocol.ts`: Bidirectional protocol implementation with `CompanionCommands` (`START`, `RESET`, `CALIB`, `STATUS`, `MODE:...`, `PARAM:...`, `SENS:...`) and `parseCompanionMessage()` to reduce incoming serial lines into immutable `DeviceState` updates.
+  - `companion-protocol.ts`: Bidirectional protocol implementation with `CompanionCommands` (`START`, `RESET`, `CALIB`, `STATUS`, `CAPTURE`, `CAPTURE:STOP`, `MODE:...`, `PARAM:...`, `SENS:...`), `parseCompanionMessage()`, and `parseCaptureMessage()`.
 - **`src/app/core/device/transport/`**:
   - `device-transport.interface.ts`: Generic `DeviceTransport` contract (`state$`, `events$`, `errors$`, `getMetadata()`, `connect()`, `disconnect()`, `send()`). UI and Device Manager never depend directly on Web Serial types.
   - `newline-event-parser.ts`: `NewlineEventParser` handles chunk buffering across arbitrary read boundaries, supports LF (`\n`) and CRLF (`\r\n`), ignores empty lines, and preserves trailing partial lines.
   - `web-serial-transport.ts`: Native `SerialPort` integration using `TextDecoderStream` and `pipeTo` for reading and a UTF-8 writer for sending newline-terminated commands.
   - `web-serial-transport-factory.service.ts`: Angular service wrapping `navigator.serial.requestPort()` and capability checks (`isSupported()`) for full mockability in tests.
 - **`src/app/core/device/services/device-manager.service.ts`**:
-  - Central manager using Angular Signals (`devices`, `events`, `isConnecting`, `isSupported`, `lastError`).
+  - Central manager using Angular Signals (`devices`, `events`, `captures`, `captureProgress`, `autoRearmDevices`, `isConnecting`, `isSupported`, `lastError`).
   - Supports multiple concurrent connections independently with fault isolation.
-  - Exposes connection lifecycle methods (`connectSerialDevice()`, `attachDevice()`, `reconnectDevice()`, `disconnectDevice()`, `removeDevice()`) and game/device control methods (`sendCommand()`, `sendCommandToDevices()`, `setGameMode()`, `setGameParameter()`, `startGame()`, `resetGame()`, `calibrateDevice()`, `requestStatus()`).
+  - Exposes connection lifecycle methods (`connectSerialDevice()`, `attachDevice()`, `reconnectDevice()`, `disconnectDevice()`, `removeDevice()`) and game/device control methods (`sendCommand()`, `sendCommandToDevices()`, `setGameMode()`, `setGameParameter()`, `startGame()`, `resetGame()`, `startCapture()`, `stopCapture()`, `setAutoRearm()`).
 - **`src/app/features/dashboard/`**:
   - `dashboard.component`: Main game dashboard for controlling one or multiple connected devices simultaneously and viewing live scores/timers.
   - `components/device-card/`: Per-device card displaying live score, smooth interpolated countdown/elapsed timer, game mode selector, parameter controls, and start/reset/calibrate actions.
+- **`src/app/features/analyzer/`**:
+  - `analyzer.component`: Interactive piezo signal analyzer for arming raw captures, toggling auto-rearm, browsing session captures, and exporting CSV/PNG files.
+  - `components/waveform-chart/`: High-DPI HTML5 canvas waveform plotter with zoom presets, baseline/threshold/trigger markers, and hover crosshair inspection.
 - **`src/app/features/settings/`**:
   - `settings.component`: Device management and raw serial diagnostics page.
   - `components/device-list/`: Manages connected devices, custom device names, connection state badges, USB metadata, and manual command sending.

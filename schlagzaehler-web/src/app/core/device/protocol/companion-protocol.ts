@@ -6,6 +6,7 @@ import {
   SelectableGameMode,
   SensorState,
 } from '../models/device.model';
+import { CaptureProtocolMessage } from '../models/piezo-capture.model';
 
 const VALID_GAME_MODES = new Set<GameMode>(['COUNT', 'TIMED', 'RACE', 'UNKNOWN']);
 const VALID_GAME_STATES = new Set<GameState>([
@@ -14,6 +15,7 @@ const VALID_GAME_STATES = new Set<GameState>([
   'READY',
   'RUNNING',
   'FINISHED',
+  'CAPTURING',
   'UNKNOWN',
 ]);
 const VALID_SENSOR_STATES = new Set<SensorState>([
@@ -21,6 +23,9 @@ const VALID_SENSOR_STATES = new Set<SensorState>([
   'CALIBRATING',
   'ARMED',
   'LOCKOUT',
+  'CAPTURE_ARMED',
+  'CAPTURING',
+  'TRANSMITTING',
   'ERROR',
   'UNKNOWN',
 ]);
@@ -36,6 +41,8 @@ export const CompanionCommands = {
   reset: (): string => 'RESET',
   calibrate: (): string => 'CALIB',
   status: (): string => 'STATUS',
+  captureStart: (): string => 'CAPTURE',
+  captureStop: (): string => 'CAPTURE:STOP',
   setMode: (mode: SelectableGameMode): string => `MODE:${mode}`,
   setParameter: (param: number): string => `PARAM:${Math.max(1, Math.floor(param))}`,
   setSensitivity: (sensitivity: number): string => `SENS:${sensitivity}`,
@@ -63,6 +70,73 @@ function parseKeyValuePairs(tokens: readonly string[]): Record<string, string> {
     }
   }
   return result;
+}
+
+/**
+ * Parses CAPTURE_START, CAPTURE_DATA, or CAPTURE_END messages if matched.
+ */
+export function parseCaptureMessage(rawLine: string): CaptureProtocolMessage | null {
+  const trimmed = rawLine.trim();
+  if (!trimmed.startsWith('CAPTURE_')) {
+    return null;
+  }
+
+  const parts = trimmed.split(/\s+/);
+  const type = parts[0];
+  const kv = parseKeyValuePairs(parts.slice(1));
+
+  if (type === 'CAPTURE_START') {
+    const sampleRateHz = Number.parseInt(kv['rate'] ?? '10000', 10);
+    const preSamples = Number.parseInt(kv['pre'] ?? '1000', 10);
+    const totalSamples = Number.parseInt(kv['count'] ?? '21000', 10);
+    const baseline = Number.parseInt(kv['baseline'] ?? '0', 10);
+    const noise = Number.parseInt(kv['noise'] ?? '0', 10);
+    const threshold = Number.parseInt(kv['threshold'] ?? '0', 10);
+
+    if (Number.isNaN(totalSamples) || totalSamples <= 0) {
+      return null;
+    }
+
+    return {
+      type: 'CAPTURE_START',
+      sampleRateHz: Number.isNaN(sampleRateHz) ? 10000 : sampleRateHz,
+      preSamples: Number.isNaN(preSamples) ? 0 : preSamples,
+      totalSamples,
+      baseline: Number.isNaN(baseline) ? 0 : baseline,
+      noise: Number.isNaN(noise) ? 0 : noise,
+      threshold: Number.isNaN(threshold) ? 0 : threshold,
+    };
+  }
+
+  if (type === 'CAPTURE_DATA') {
+    const offset = Number.parseInt(kv['offset'] ?? '0', 10);
+    const rawValues = kv['values'] ?? '';
+    if (Number.isNaN(offset) || offset < 0 || !rawValues) {
+      return null;
+    }
+    const values: number[] = [];
+    for (const part of rawValues.split(',')) {
+      const n = Number.parseInt(part, 10);
+      if (!Number.isNaN(n)) {
+        values.push(n);
+      }
+    }
+    return {
+      type: 'CAPTURE_DATA',
+      offset,
+      values,
+    };
+  }
+
+  if (type === 'CAPTURE_END') {
+    const totalSamples = Number.parseInt(kv['count'] ?? '0', 10);
+    return {
+      type: 'CAPTURE_END',
+      totalSamples: Number.isNaN(totalSamples) ? 0 : totalSamples,
+    };
+  }
+
+  return null;
 }
 
 /**

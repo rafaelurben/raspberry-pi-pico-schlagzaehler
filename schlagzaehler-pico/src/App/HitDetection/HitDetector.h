@@ -7,6 +7,8 @@
 #include "../../Common/GameTypes.h"
 #include "../../Common/Events.h"
 #include "../../Common/Config.h"
+#include "../../Common/Messages.h"
+#include "SignalCapture.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,12 +35,18 @@ typedef struct {
     uint64_t lockout_start_us;
     uint64_t ignore_until_us;
 
+    /* Raw signal capture sub-component */
+    SignalCapture capture;
+
     /* Configuration */
     Config config;
 } HitDetector;
 
 void HitDetector_init(HitDetector* detector, const Config* config);
 void HitDetector_start_calibration(HitDetector* detector);
+bool HitDetector_start_capture(HitDetector* detector);
+void HitDetector_stop_capture(HitDetector* detector);
+bool HitDetector_take_completed_capture(HitDetector* detector, MsgCaptureReady* out_ready);
 void HitDetector_reset_to_armed(HitDetector* detector);
 void HitDetector_suppress_hits(HitDetector* detector, uint32_t duration_ms);
 SensorState HitDetector_get_state(const HitDetector* detector);

@@ -1,0 +1,314 @@
+<div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+  <!-- Header -->
+  <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+        Piezo Signal Analyzer
+      </h1>
+      <p class="mt-1 text-xs text-slate-400 sm:text-sm">
+        Capture, inspect, and export 2.1s raw ADC piezo waveforms (0.1s pre-trigger + 2.0s ringdown
+        at 10 kHz)
+      </p>
+    </div>
+
+    <!-- Capture Controls -->
+    @if (activeDevice(); as dev) {
+      <div class="flex flex-wrap items-center gap-3">
+        @if (connectedDevices().length > 1) {
+          <select
+            [ngModel]="dev.id"
+            (ngModelChange)="onSelectDevice($event)"
+            aria-label="Select target device"
+            class="rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+          >
+            @for (d of connectedDevices(); track d.id) {
+              <option [value]="d.id">{{ d.name }}</option>
+            }
+          </select>
+        }
+
+        <label
+          class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/60 px-3.5 py-2 text-xs font-medium text-slate-200 select-none"
+        >
+          <input
+            type="checkbox"
+            [ngModel]="isAutoRearmEnabled()"
+            (ngModelChange)="onToggleAutoRearm($event)"
+            class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-indigo-600 focus:ring-indigo-500"
+          />
+          <span>Auto-Rearm</span>
+        </label>
+
+        @if (isDeviceCapturingOrArmed()) {
+          <button
+            type="button"
+            (click)="onStopCapture()"
+            class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-rose-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+          >
+            <span>Cancel Capture</span>
+          </button>
+        } @else {
+          <button
+            type="button"
+            (click)="onArmCapture()"
+            [disabled]="
+              dev.state.sensorState === 'CALIBRATING' || dev.state.sensorState === 'ERROR'
+            "
+            class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span>Arm Capture</span>
+          </button>
+        }
+      </div>
+    }
+  </header>
+
+  @if (!activeDevice()) {
+    <!-- No Connected Device Empty State -->
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-10 text-center shadow-lg">
+      <h2 class="text-lg font-semibold text-white">No connected Pico device</h2>
+      <p class="mx-auto mt-2 max-w-md text-xs text-slate-400 sm:text-sm">
+        Connect a Schlagzähler Raspberry Pi Pico over USB Serial first to arm raw piezo signal
+        captures.
+      </p>
+      <div class="mt-6">
+        <a
+          routerLink="/settings"
+          class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-indigo-500"
+        >
+          Go to Settings to Connect
+        </a>
+      </div>
+    </div>
+  } @else {
+    <!-- Live Capture Status Banner -->
+    @if (activeDevice(); as dev) {
+      <div
+        class="mb-6 flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div class="flex items-center gap-3">
+          <span
+            class="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold"
+            [class.bg-indigo-500/20]="dev.state.sensorState === 'CAPTURE_ARMED'"
+            [class.text-indigo-300]="dev.state.sensorState === 'CAPTURE_ARMED'"
+            [class.bg-amber-500/20]="dev.state.sensorState === 'CAPTURING'"
+            [class.text-amber-300]="dev.state.sensorState === 'CAPTURING'"
+            [class.bg-cyan-500/20]="dev.state.sensorState === 'TRANSMITTING'"
+            [class.text-cyan-300]="dev.state.sensorState === 'TRANSMITTING'"
+            [class.bg-emerald-500/20]="dev.state.sensorState === 'ARMED'"
+            [class.text-emerald-300]="dev.state.sensorState === 'ARMED'"
+            [class.bg-slate-700/60]="
+              dev.state.sensorState !== 'CAPTURE_ARMED' &&
+              dev.state.sensorState !== 'CAPTURING' &&
+              dev.state.sensorState !== 'TRANSMITTING' &&
+              dev.state.sensorState !== 'ARMED'
+            "
+            [class.text-slate-300]="
+              dev.state.sensorState !== 'CAPTURE_ARMED' &&
+              dev.state.sensorState !== 'CAPTURING' &&
+              dev.state.sensorState !== 'TRANSMITTING' &&
+              dev.state.sensorState !== 'ARMED'
+            "
+          >
+            {{ dev.state.sensorState }}
+          </span>
+          <span class="text-xs text-slate-300 sm:text-sm">
+            @if (dev.state.sensorState === 'CAPTURE_ARMED') {
+              Waiting for hit trigger on <strong class="text-white">{{ dev.name }}</strong
+              >...
+            } @else if (dev.state.sensorState === 'CAPTURING') {
+              Trigger detected! Recording 2.0s post-trigger waveform...
+            } @else if (
+              dev.state.sensorState === 'TRANSMITTING' || activeDeviceProgress() !== null
+            ) {
+              Recording complete. Transferring 21,000 samples over USB...
+            } @else {
+              Ready. Click <strong class="text-white">Arm Capture</strong> and strike the piezo
+              target to record a 2.1s waveform.
+            }
+          </span>
+        </div>
+
+        @if (activeDeviceProgress(); as pct) {
+          <div class="flex items-center gap-3 sm:w-64">
+            <div class="h-2 flex-1 overflow-hidden rounded-full bg-slate-800">
+              <div
+                class="h-full bg-indigo-500 transition-all duration-150"
+                [style.width.%]="pct"
+              ></div>
+            </div>
+            <span class="w-10 text-right font-mono text-xs text-indigo-300">{{ pct }}%</span>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <!-- Main Grid: Waveform Chart & Capture History -->
+  <div class="grid grid-cols-1 gap-6 lg:grid-cols-4">
+    <!-- Chart Panel (3 cols) -->
+    <section class="lg:col-span-3" aria-labelledby="waveform-heading">
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-lg">
+        @if (activeCapture(); as cap) {
+          <!-- Toolbar -->
+          <div
+            class="mb-4 flex flex-col gap-3 border-b border-slate-800 pb-4 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div>
+              <h2 id="waveform-heading" class="text-base font-semibold text-white">
+                {{ cap.deviceName }} &mdash; {{ cap.timestamp | date: 'HH:mm:ss.SSS' }}
+              </h2>
+              <p class="mt-0.5 text-xs text-slate-400">
+                Peak: <span class="font-semibold text-white">{{ cap.peak }}</span> | Threshold:
+                <span class="text-amber-300">{{ cap.threshold }}</span> | Baseline:
+                <span class="text-emerald-300">{{ cap.baseline }}</span> | Noise:
+                <span class="text-slate-300">&plusmn;{{ cap.noise }}</span> | Rate:
+                <span class="text-slate-300">{{ cap.sampleRateHz }} Hz</span>
+              </p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- Zoom Presets -->
+              <div
+                class="inline-flex rounded-xl border border-slate-700 bg-slate-950 p-0.5 text-xs"
+              >
+                <button
+                  type="button"
+                  (click)="zoomPreset.set('full')"
+                  class="cursor-pointer rounded-lg px-2.5 py-1 font-medium transition-colors"
+                  [class.bg-indigo-600]="zoomPreset() === 'full'"
+                  [class.text-white]="zoomPreset() === 'full'"
+                  [class.text-slate-400]="zoomPreset() !== 'full'"
+                >
+                  Full (2.1s)
+                </button>
+                <button
+                  type="button"
+                  (click)="zoomPreset.set('ringdown')"
+                  class="cursor-pointer rounded-lg px-2.5 py-1 font-medium transition-colors"
+                  [class.bg-indigo-600]="zoomPreset() === 'ringdown'"
+                  [class.text-white]="zoomPreset() === 'ringdown'"
+                  [class.text-slate-400]="zoomPreset() !== 'ringdown'"
+                >
+                  Ringdown (270ms)
+                </button>
+                <button
+                  type="button"
+                  (click)="zoomPreset.set('impact')"
+                  class="cursor-pointer rounded-lg px-2.5 py-1 font-medium transition-colors"
+                  [class.bg-indigo-600]="zoomPreset() === 'impact'"
+                  [class.text-white]="zoomPreset() === 'impact'"
+                  [class.text-slate-400]="zoomPreset() !== 'impact'"
+                >
+                  Impact (60ms)
+                </button>
+              </div>
+
+              <!-- Y Scale Toggle -->
+              <button
+                type="button"
+                (click)="yAxisScale.set(yAxisScale() === 'auto' ? 'full12bit' : 'auto')"
+                class="cursor-pointer rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700"
+              >
+                Y: {{ yAxisScale() === 'auto' ? 'Auto-Scale' : '0 - 4095' }}
+              </button>
+
+              <!-- Export Buttons -->
+              <button
+                type="button"
+                (click)="onExportCsv()"
+                class="cursor-pointer rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+              >
+                Export CSV
+              </button>
+              <button
+                type="button"
+                (click)="onExportPng()"
+                class="cursor-pointer rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+              >
+                Export PNG
+              </button>
+            </div>
+          </div>
+
+          <app-waveform-chart [capture]="cap" [zoom]="zoomPreset()" [yScale]="yAxisScale()" />
+        } @else {
+          <div class="flex h-80 flex-col items-center justify-center text-center">
+            <h2 id="waveform-heading" class="text-sm font-semibold text-slate-300">
+              No waveform captured yet
+            </h2>
+            <p class="mt-1 max-w-sm text-xs text-slate-400">
+              Arm a capture on a connected Pico and tap the piezo sensor to plot the raw ADC signal
+              and post-hit oscillation.
+            </p>
+          </div>
+        }
+      </div>
+    </section>
+
+    <!-- Session Capture History (1 col) -->
+    <section aria-labelledby="history-heading">
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-lg">
+        <div class="mb-4 flex items-center justify-between">
+          <h2 id="history-heading" class="text-sm font-semibold text-white">
+            Captured Runs ({{ deviceManager.captures().length }})
+          </h2>
+          @if (deviceManager.captures().length > 0) {
+            <button
+              type="button"
+              (click)="onClearCaptures()"
+              class="cursor-pointer text-xs text-slate-400 hover:text-rose-400"
+            >
+              Clear all
+            </button>
+          }
+        </div>
+
+        @if (deviceManager.captures().length === 0) {
+          <p class="py-8 text-center text-xs text-slate-400">
+            Completed captures will appear here during your session.
+          </p>
+        } @else {
+          <div class="flex max-h-96 flex-col gap-2 overflow-y-auto pr-1">
+            @for (item of deviceManager.captures(); track item.id; let idx = $index) {
+              <div
+                class="flex items-center justify-between rounded-xl border p-3 text-left transition-colors"
+                [class.border-indigo-500]="activeCapture()?.id === item.id"
+                [class.bg-indigo-950/40]="activeCapture()?.id === item.id"
+                [class.border-slate-800]="activeCapture()?.id !== item.id"
+                [class.bg-slate-950/50]="activeCapture()?.id !== item.id"
+              >
+                <button
+                  type="button"
+                  (click)="onSelectCapture(item)"
+                  class="flex-1 cursor-pointer text-left"
+                >
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-white">
+                      Run #{{ deviceManager.captures().length - idx }}
+                    </span>
+                    <span class="font-mono text-[11px] text-slate-400">
+                      {{ item.timestamp | date: 'HH:mm:ss' }}
+                    </span>
+                  </div>
+                  <div class="mt-1 text-[11px] text-slate-300">
+                    Peak: <span class="font-semibold text-indigo-300">{{ item.peak }}</span> |
+                    Thresh: {{ item.threshold }}
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  (click)="onDeleteCapture(item.id)"
+                  aria-label="Delete capture"
+                  class="ml-2 cursor-pointer rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-rose-400"
+                >
+                  &times;
+                </button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </section>
+  </div>
+</div>

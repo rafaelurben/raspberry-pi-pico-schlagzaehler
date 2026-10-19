@@ -55,6 +55,7 @@ add_executable(schlagzaehler
     src/OSAL/src/pico/PicoWatchdogService.c
     src/App/ConfigService.c
     src/App/HitDetection/HitDetector.c
+    src/App/HitDetection/SignalCapture.c
     src/App/Input/ButtonController.c
     src/App/Game/GameState.c
     src/App/Game/Modes/CountMode.c

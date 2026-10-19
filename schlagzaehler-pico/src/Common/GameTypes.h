@@ -16,11 +16,12 @@ typedef enum {
 } GameMode;
 
 typedef enum {
-    GAME_STATE_BOOT     = 0,
-    GAME_STATE_MENU     = 1,
-    GAME_STATE_READY    = 2,
-    GAME_STATE_RUNNING  = 3,
-    GAME_STATE_FINISHED = 4
+    GAME_STATE_BOOT      = 0,
+    GAME_STATE_MENU      = 1,
+    GAME_STATE_READY     = 2,
+    GAME_STATE_RUNNING   = 3,
+    GAME_STATE_FINISHED  = 4,
+    GAME_STATE_CAPTURING = 5
 } GameState;
 
 typedef enum {
@@ -31,11 +32,14 @@ typedef enum {
 } GameEndReason;
 
 typedef enum {
-    SENSOR_STATE_INIT        = 0,
-    SENSOR_STATE_CALIBRATING = 1,
-    SENSOR_STATE_ARMED       = 2,
-    SENSOR_STATE_HIT_LOCKOUT = 3,
-    SENSOR_STATE_ERROR       = 4
+    SENSOR_STATE_INIT          = 0,
+    SENSOR_STATE_CALIBRATING   = 1,
+    SENSOR_STATE_ARMED         = 2,
+    SENSOR_STATE_HIT_LOCKOUT   = 3,
+    SENSOR_STATE_ERROR         = 4,
+    SENSOR_STATE_CAPTURE_ARMED = 5,
+    SENSOR_STATE_CAPTURING     = 6,
+    SENSOR_STATE_TRANSMITTING  = 7
 } SensorState;
 
 static inline const char* GameMode_to_string(GameMode mode) {
@@ -58,23 +62,27 @@ static inline const char* GameMode_to_UI_string(GameMode mode) {
 
 static inline const char* GameState_to_string(GameState state) {
     switch (state) {
-        case GAME_STATE_BOOT:     return "BOOT";
-        case GAME_STATE_MENU:     return "MENU";
-        case GAME_STATE_READY:    return "READY";
-        case GAME_STATE_RUNNING:  return "RUNNING";
-        case GAME_STATE_FINISHED: return "FINISHED";
-        default:                  return "UNKNOWN";
+        case GAME_STATE_BOOT:      return "BOOT";
+        case GAME_STATE_MENU:      return "MENU";
+        case GAME_STATE_READY:     return "READY";
+        case GAME_STATE_RUNNING:   return "RUNNING";
+        case GAME_STATE_FINISHED:  return "FINISHED";
+        case GAME_STATE_CAPTURING: return "CAPTURING";
+        default:                   return "UNKNOWN";
     }
 }
 
 static inline const char* SensorState_to_string(SensorState state) {
     switch (state) {
-        case SENSOR_STATE_INIT:        return "INIT";
-        case SENSOR_STATE_CALIBRATING: return "CALIBRATING";
-        case SENSOR_STATE_ARMED:       return "ARMED";
-        case SENSOR_STATE_HIT_LOCKOUT: return "LOCKOUT";
-        case SENSOR_STATE_ERROR:       return "ERROR";
-        default:                       return "UNKNOWN";
+        case SENSOR_STATE_INIT:          return "INIT";
+        case SENSOR_STATE_CALIBRATING:   return "CALIBRATING";
+        case SENSOR_STATE_ARMED:         return "ARMED";
+        case SENSOR_STATE_HIT_LOCKOUT:   return "LOCKOUT";
+        case SENSOR_STATE_ERROR:         return "ERROR";
+        case SENSOR_STATE_CAPTURE_ARMED: return "CAPTURE_ARMED";
+        case SENSOR_STATE_CAPTURING:     return "CAPTURING";
+        case SENSOR_STATE_TRANSMITTING:  return "TRANSMITTING";
+        default:                         return "UNKNOWN";
     }
 }
 

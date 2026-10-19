@@ -10,6 +10,7 @@
 
 #include "../src/App/ConfigService.h"
 #include "../src/App/HitDetection/HitDetector.h"
+#include "../src/App/HitDetection/SignalCapture.h"
 #include "../src/App/Game/Modes/CountMode.h"
 #include "../src/App/Game/Modes/TimedMode.h"
 #include "../src/App/Game/Modes/RaceMode.h"
@@ -284,6 +285,16 @@ void test_game_controller_and_modes(void) {
     assert(gc.state_model.active_mode == GAME_MODE_RACE);
     assert(gc.state_model.parameter == cfg.race_target_hits);
 
+    /* Entering capture mode transitions GameState to GAME_STATE_CAPTURING and back to READY when ARMED */
+    GameController_on_sensor_state(&gc, SENSOR_STATE_CAPTURE_ARMED, 1980, 2, 2005);
+    assert(gc.state_model.state == GAME_STATE_CAPTURING);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_CAPTURING, 1980, 2, 2005);
+    assert(gc.state_model.state == GAME_STATE_CAPTURING);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_TRANSMITTING, 1980, 2, 2005);
+    assert(gc.state_model.state == GAME_STATE_CAPTURING);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_ARMED, 1980, 2, 2005);
+    assert(gc.state_model.state == GAME_STATE_READY);
+
     printf("PASS: test_game_controller_and_modes\n");
 }
 
@@ -330,7 +341,127 @@ void test_companion_protocol(void) {
     CompanionProtocol_send_message(&cp, &mode_msg);
     assert(strcmp(s_last_serial_line, "MODE active=TIMED param=30") == 0);
 
+    /* Capture start/stop commands */
+    CompanionProtocol_parse_line(&cp, "CAPTURE");
+    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_CAPTURE);
+    assert(msg.data.request_capture.enable == true);
+
+    CompanionProtocol_parse_line(&cp, "CAPTURE:STOP");
+    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_CAPTURE);
+    assert(msg.data.request_capture.enable == false);
+
+    /* Chunked capture transmission */
+    uint16_t dummy_samples[120];
+    for (int i = 0; i < 120; ++i) dummy_samples[i] = (uint16_t)(1900 + i);
+    Core0ToCore1Message cap_ready_msg = {
+        .type = MSG_CAPTURE_READY,
+        .timestamp_us = 2000,
+        .data.capture_ready = {
+            .sample_rate_hz = 10000,
+            .pre_samples = 20,
+            .total_samples = 120,
+            .baseline = 1900,
+            .noise = 3,
+            .threshold = 1925,
+            .samples = dummy_samples
+        }
+    };
+    CompanionProtocol_send_message(&cp, &cap_ready_msg);
+    assert(strcmp(s_last_serial_line, "CAPTURE_START rate=10000 pre=20 count=120 baseline=1900 noise=3 threshold=1925") == 0);
+    assert(cp.capture_tx_active == true);
+
+    /* Tick 1 sends line 1 (50 samples) */
+    assert(CompanionProtocol_tick_capture_tx(&cp) == false);
+    assert(strncmp(s_last_serial_line, "CAPTURE_DATA offset=0 values=1900,1901", 38) == 0);
+
+    /* Tick 2 sends line 2 (50 samples) */
+    assert(CompanionProtocol_tick_capture_tx(&cp) == false);
+    assert(strncmp(s_last_serial_line, "CAPTURE_DATA offset=50 values=1950,1951", 39) == 0);
+
+    /* Tick 3 sends final 20 samples + CAPTURE_END and notifies Core 0 */
+    assert(CompanionProtocol_tick_capture_tx(&cp) == true);
+    assert(strcmp(s_last_serial_line, "CAPTURE_END count=120") == 0);
+    assert(cp.capture_tx_active == false);
+    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_CAPTURE);
+    assert(msg.data.request_capture.enable == false);
+
     printf("PASS: test_companion_protocol\n");
+}
+
+void test_signal_capture(void) {
+    Config cfg;
+    Config_set_defaults(&cfg);
+    cfg.calibration_duration_ms = 100;
+    cfg.calibration_min_samples = 500;
+
+    static HitDetector hd;
+    HitDetector_init(&hd, &cfg);
+
+    /* Complete calibration first */
+    HitDetector_start_calibration(&hd);
+    uint16_t quiet_samples[256];
+    for (int i = 0; i < 256; ++i) quiet_samples[i] = (uint16_t)(1980 + (i % 3));
+    HitEvent ev;
+    HitDetector_process_buffer(&hd, quiet_samples, 256, &ev);
+    s_mock_time_us += 120000;
+    HitDetector_process_buffer(&hd, quiet_samples, 256, &ev);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_ARMED);
+
+    /* Start capture mode directly on HitDetector */
+    assert(HitDetector_start_capture(&hd) == true);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_CAPTURE_ARMED);
+    assert(hd.capture.effective_sample_rate_hz == 10000);
+
+    /* Feed 1200 decimated quiet samples (6000 raw 50 kHz samples) so pre-ring wraps around */
+    uint16_t raw_buf[250];
+    MsgCaptureReady ready;
+    for (int b = 0; b < 24; ++b) {
+        for (int i = 0; i < 250; ++i) {
+            raw_buf[i] = (uint16_t)(1980 + (b % 5));
+        }
+        assert(HitDetector_process_buffer(&hd, raw_buf, 250, &ev) == false);
+        assert(HitDetector_get_state(&hd) == SENSOR_STATE_CAPTURE_ARMED);
+        assert(HitDetector_take_completed_capture(&hd, &ready) == false);
+    }
+    assert(hd.capture.pre_ring_filled == SIGNAL_CAPTURE_PRE_SAMPLES);
+
+    /* Inject a hit spike of 2500 at raw sample index 2 (inside the first 5-sample window) */
+    for (int i = 0; i < 250; ++i) raw_buf[i] = 1985;
+    raw_buf[2] = 2500;
+    assert(HitDetector_process_buffer(&hd, raw_buf, 250, &ev) == false);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_CAPTURING);
+    assert(HitDetector_take_completed_capture(&hd, &ready) == false);
+
+    const uint16_t* captured = SignalCapture_get_samples(&hd.capture);
+    /* Trigger sample at index SIGNAL_CAPTURE_PRE_SAMPLES must equal max-pooled peak 2500 */
+    assert(captured[SIGNAL_CAPTURE_PRE_SAMPLES] == 2500);
+    assert(captured[SIGNAL_CAPTURE_PRE_SAMPLES + 1] == 1985);
+
+    /* Feed remaining post-trigger samples (20,000 total post-trigger; 50 already written in trigger buffer) */
+    for (int i = 0; i < 250; ++i) raw_buf[i] = 1982;
+    int buffers_needed = (SIGNAL_CAPTURE_POST_SAMPLES - 50) / 50;
+    for (int b = 0; b < buffers_needed; ++b) {
+        HitDetector_process_buffer(&hd, raw_buf, 250, &ev);
+        if (b < buffers_needed - 1) {
+            assert(HitDetector_take_completed_capture(&hd, &ready) == false);
+        } else {
+            assert(HitDetector_take_completed_capture(&hd, &ready) == true);
+            assert(ready.total_samples == SIGNAL_CAPTURE_TOTAL_SAMPLES);
+            assert(ready.samples == captured);
+            /* Taking the completed capture clears the one-shot flag while remaining in TRANSMITTING during TX */
+            assert(HitDetector_take_completed_capture(&hd, &ready) == false);
+            assert(HitDetector_get_state(&hd) == SENSOR_STATE_TRANSMITTING);
+        }
+    }
+
+    /* Stopping capture returns sensor to ARMED */
+    HitDetector_stop_capture(&hd);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_ARMED);
+
+    printf("PASS: test_signal_capture\n");
 }
 
 void test_button_controller_interrupts(void) {
@@ -397,6 +528,7 @@ int main(void) {
     test_hit_detector_and_calibration();
     test_game_controller_and_modes();
     test_companion_protocol();
+    test_signal_capture();
     test_button_controller_interrupts();
     printf("--- ALL 6 ARCHITECTURE TEST SUITES PASSED! ---\n");
     return 0;

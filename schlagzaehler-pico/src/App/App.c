@@ -108,6 +108,16 @@ void App_init_core1(App *app)
     app->core1_ready = true;
 }
 
+static void App_notify_sensor_state(App* app) {
+    GameController_on_sensor_state(
+        &app->game_controller,
+        HitDetector_get_state(&app->hit_detector),
+        HitDetector_get_baseline(&app->hit_detector),
+        HitDetector_get_noise(&app->hit_detector),
+        HitDetector_get_threshold(&app->hit_detector)
+    );
+}
+
 void App_run_core0(App* app) {
     if (!app) return;
 
@@ -122,13 +132,7 @@ void App_run_core0(App* app) {
         SensorState new_sensor_state = HitDetector_get_state(&app->hit_detector);
 
         if (old_sensor_state != new_sensor_state) {
-            GameController_on_sensor_state(
-                &app->game_controller,
-                new_sensor_state,
-                HitDetector_get_baseline(&app->hit_detector),
-                HitDetector_get_noise(&app->hit_detector),
-                HitDetector_get_threshold(&app->hit_detector)
-            );
+            App_notify_sensor_state(app);
         }
 
         if (new_sensor_state == SENSOR_STATE_CALIBRATING) {
@@ -144,10 +148,21 @@ void App_run_core0(App* app) {
             }
         }
 
-        if (hit_occurred) {
+        Core0ToCore1Message cap_msg = {
+            .type = MSG_CAPTURE_READY,
+            .timestamp_us = Time_now_us()
+        };
+        if (HitDetector_take_completed_capture(&app->hit_detector, &cap_msg.data.capture_ready)) {
+            Board_set_led(false);
+            OsalQueue_push(&app->queue_core0_to_core1, &cap_msg);
+        } else if (hit_occurred) {
             Board_set_led(true);
             GameController_on_hit(&app->game_controller, &hit_event);
-        } else if (new_sensor_state == SENSOR_STATE_ARMED) {
+        } else if (new_sensor_state == SENSOR_STATE_CAPTURING) {
+            Board_set_led(true);
+        } else if (new_sensor_state == SENSOR_STATE_ARMED ||
+                   new_sensor_state == SENSOR_STATE_CAPTURE_ARMED ||
+                   new_sensor_state == SENSOR_STATE_TRANSMITTING) {
             Board_set_led(false);
         }
 
@@ -157,6 +172,12 @@ void App_run_core0(App* app) {
     /* 2. Process interrupt-queued local button events */
     ButtonEvent btn_event;
     while (ButtonController_pop_event(&app->button_controller, &btn_event)) {
+        SensorState s = HitDetector_get_state(&app->hit_detector);
+        if (s == SENSOR_STATE_CAPTURE_ARMED || s == SENSOR_STATE_CAPTURING || s == SENSOR_STATE_TRANSMITTING) {
+            HitDetector_stop_capture(&app->hit_detector);
+            Board_set_led(false);
+            App_notify_sensor_state(app);
+        }
         HitDetector_suppress_hits(&app->hit_detector, 200);
         GameController_on_button(&app->game_controller, &btn_event);
     }
@@ -171,21 +192,35 @@ void App_run_core0(App* app) {
         if (cmd.type == MSG_REQUEST_CALIBRATION) {
             app->last_calib_progress = 255;
             HitDetector_start_calibration(&app->hit_detector);
-            GameController_on_sensor_state(
-                &app->game_controller,
-                HitDetector_get_state(&app->hit_detector),
-                HitDetector_get_baseline(&app->hit_detector),
-                HitDetector_get_noise(&app->hit_detector),
-                HitDetector_get_threshold(&app->hit_detector)
-            );
+            App_notify_sensor_state(app);
         } else if (cmd.type == MSG_SET_SENSITIVITY) {
             ConfigService_set_sensitivity(&app->config_service, cmd.data.set_sensitivity.noise_factor);
             app->hit_detector.config.noise_factor = cmd.data.set_sensitivity.noise_factor;
+        } else if (cmd.type == MSG_REQUEST_CAPTURE) {
+            SensorState old_s = HitDetector_get_state(&app->hit_detector);
+            if (cmd.data.request_capture.enable) {
+                HitDetector_start_capture(&app->hit_detector);
+            } else {
+                HitDetector_stop_capture(&app->hit_detector);
+            }
+            if (HitDetector_get_state(&app->hit_detector) != old_s) {
+                Board_set_led(false);
+                App_notify_sensor_state(app);
+            }
+        } else if (cmd.type == MSG_RESET_GAME) {
+            SensorState old_s = HitDetector_get_state(&app->hit_detector);
+            HitDetector_stop_capture(&app->hit_detector);
+            if (HitDetector_get_state(&app->hit_detector) != old_s) {
+                Board_set_led(false);
+                App_notify_sensor_state(app);
+            }
+        } else if (cmd.type == MSG_REQUEST_STATUS) {
+            App_notify_sensor_state(app);
         }
         GameController_on_command(&app->game_controller, &cmd);
     }
 
-    /* 4. Manage ADC state: disable ADC while in MENU (unless calibrating) to save resources and avoid hit interference */
+    /* 4. Manage ADC state: disable ADC while in MENU (unless calibrating) */
     GameState current_game_state = GameController_get_state(&app->game_controller)->state;
     if (current_game_state == GAME_STATE_MENU && HitDetector_get_state(&app->hit_detector) != SENSOR_STATE_CALIBRATING) {
         if (PiezoAdcDriver_is_running()) {
@@ -193,13 +228,7 @@ void App_run_core0(App* app) {
             Board_set_led(false);
             if (HitDetector_get_state(&app->hit_detector) == SENSOR_STATE_HIT_LOCKOUT) {
                 HitDetector_reset_to_armed(&app->hit_detector);
-                GameController_on_sensor_state(
-                    &app->game_controller,
-                    SENSOR_STATE_ARMED,
-                    HitDetector_get_baseline(&app->hit_detector),
-                    HitDetector_get_noise(&app->hit_detector),
-                    HitDetector_get_threshold(&app->hit_detector)
-                );
+                App_notify_sensor_state(app);
             }
         }
     } else {
@@ -227,13 +256,16 @@ void App_run_core1(App* app) {
         CompanionProtocol_send_message(&app->companion_protocol, &msg);
     }
 
-    /* 2. Poll incoming serial commands from Companion */
+    /* 2. Stream any pending raw capture data in non-blocking chunks */
+    CompanionProtocol_tick_capture_tx(&app->companion_protocol);
+
+    /* 3. Poll incoming serial commands from Companion */
     CompanionProtocol_poll_input(&app->companion_protocol);
 
-    /* 3. Render any dirty UI components on Display */
+    /* 4. Render any dirty UI components on Display */
     DisplayPresenter_render(&app->display_presenter);
 
-    /* 4. Feed Core 1 watchdog */
+    /* 5. Feed Core 1 watchdog */
     WatchdogService_feed_core1(&app->watchdog_service);
 
     /* Yield briefly to avoid hogging SPI/CPU */

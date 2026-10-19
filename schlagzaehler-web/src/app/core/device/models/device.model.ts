@@ -5,9 +5,19 @@ export type TransportType = 'serial' | 'bluetooth' | 'websocket';
 export type GameMode = 'COUNT' | 'TIMED' | 'RACE' | 'UNKNOWN';
 export type SelectableGameMode = 'COUNT' | 'TIMED' | 'RACE';
 
-export type GameState = 'BOOT' | 'MENU' | 'READY' | 'RUNNING' | 'FINISHED' | 'UNKNOWN';
+export type GameState =
+  'BOOT' | 'MENU' | 'READY' | 'RUNNING' | 'FINISHED' | 'CAPTURING' | 'UNKNOWN';
 
-export type SensorState = 'INIT' | 'CALIBRATING' | 'ARMED' | 'LOCKOUT' | 'ERROR' | 'UNKNOWN';
+export type SensorState =
+  | 'INIT'
+  | 'CALIBRATING'
+  | 'ARMED'
+  | 'LOCKOUT'
+  | 'CAPTURE_ARMED'
+  | 'CAPTURING'
+  | 'TRANSMITTING'
+  | 'ERROR'
+  | 'UNKNOWN';
 
 export type GameEndReason = 'NONE' | 'TIME_LIMIT' | 'TARGET_REACHED' | 'ABORTED';
 

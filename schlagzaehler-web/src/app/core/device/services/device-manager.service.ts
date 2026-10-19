@@ -4,13 +4,29 @@ import { MAX_RETAINED_EVENTS, SerialConfig } from '../../config/serial.config';
 import { ConnectionState } from '../models/connection-state.type';
 import { DeviceEvent, EventDirection } from '../models/device-event.model';
 import { Device, DeviceState, SelectableGameMode } from '../models/device.model';
-import { CompanionCommands, parseCompanionMessage } from '../protocol/companion-protocol';
+import { PiezoCaptureResult } from '../models/piezo-capture.model';
+import {
+  CompanionCommands,
+  parseCaptureMessage,
+  parseCompanionMessage,
+} from '../protocol/companion-protocol';
 import { DeviceTransport } from '../transport/device-transport.interface';
 import { WebSerialTransportFactory } from '../transport/web-serial-transport-factory.service';
 
 interface ActiveDeviceEntry {
   readonly transport: DeviceTransport;
   readonly subscriptions: Subscription;
+}
+
+interface InProgressCapture {
+  readonly sampleRateHz: number;
+  readonly preSamples: number;
+  readonly totalSamples: number;
+  readonly baseline: number;
+  readonly noise: number;
+  readonly threshold: number;
+  readonly samples: number[];
+  receivedCount: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -28,6 +44,21 @@ export class DeviceManagerService implements OnDestroy {
   readonly events = signal<readonly DeviceEvent[]>([]);
 
   /**
+   * Completed raw piezo waveform captures in reverse chronological order.
+   */
+  readonly captures = signal<readonly PiezoCaptureResult[]>([]);
+
+  /**
+   * Transfer progress (0..100) for devices currently streaming a raw capture.
+   */
+  readonly captureProgress = signal<Readonly<Record<string, number>>>({});
+
+  /**
+   * Per-device flag indicating whether capture mode should automatically re-arm after each capture completes.
+   */
+  readonly autoRearmDevices = signal<Readonly<Record<string, boolean>>>({});
+
+  /**
    * True while a connection attempt (e.g. device picker or serial port open) is in progress.
    */
   readonly isConnecting = signal<boolean>(false);
@@ -43,6 +74,7 @@ export class DeviceManagerService implements OnDestroy {
   readonly lastError = signal<string | null>(null);
 
   private readonly activeDevices = new Map<string, ActiveDeviceEntry>();
+  private readonly inProgressCaptures = new Map<string, InProgressCapture>();
   private deviceCounter = 0;
 
   /**
@@ -333,6 +365,49 @@ export class DeviceManagerService implements OnDestroy {
   }
 
   /**
+   * Arms raw piezo waveform capture on a device.
+   */
+  async startCapture(deviceId: string): Promise<void> {
+    this.inProgressCaptures.delete(deviceId);
+    this.setDeviceCaptureProgress(deviceId, null);
+    await this.sendCommand(deviceId, CompanionCommands.captureStart());
+  }
+
+  /**
+   * Stops/cancels raw piezo waveform capture on a device and disables auto-rearm.
+   */
+  async stopCapture(deviceId: string): Promise<void> {
+    this.setAutoRearm(deviceId, false);
+    this.inProgressCaptures.delete(deviceId);
+    this.setDeviceCaptureProgress(deviceId, null);
+    await this.sendCommand(deviceId, CompanionCommands.captureStop());
+  }
+
+  /**
+   * Enables or disables automatic re-arming after a capture completes for a device.
+   */
+  setAutoRearm(deviceId: string, enabled: boolean): void {
+    this.autoRearmDevices.update((current) => ({
+      ...current,
+      [deviceId]: enabled,
+    }));
+  }
+
+  /**
+   * Removes a single capture from the session history.
+   */
+  removeCapture(captureId: string): void {
+    this.captures.update((current) => current.filter((c) => c.id !== captureId));
+  }
+
+  /**
+   * Clears all recorded captures from the session history.
+   */
+  clearCaptures(): void {
+    this.captures.set([]);
+  }
+
+  /**
    * Clears all accumulated events from the live event stream.
    */
   clearEvents(): void {
@@ -355,6 +430,11 @@ export class DeviceManagerService implements OnDestroy {
   }
 
   private updateDeviceConnectionState(deviceId: string, connectionState: ConnectionState): void {
+    if (connectionState !== 'connected') {
+      this.inProgressCaptures.delete(deviceId);
+      this.setDeviceCaptureProgress(deviceId, null);
+    }
+
     this.devices.update((devices) =>
       devices.map((d) => {
         if (d.id !== deviceId) {
@@ -383,6 +463,13 @@ export class DeviceManagerService implements OnDestroy {
 
   private handleIncomingEvent(deviceId: string, payload: string): void {
     const now = Date.now();
+    const captureMsg = parseCaptureMessage(payload);
+
+    if (captureMsg) {
+      this.handleCaptureProtocolMessage(deviceId, captureMsg, payload, now);
+      return;
+    }
+
     this.devices.update((devices) =>
       devices.map((d) =>
         d.id === deviceId
@@ -395,6 +482,100 @@ export class DeviceManagerService implements OnDestroy {
     );
 
     this.appendEvent(deviceId, payload, 'received', now);
+  }
+
+  private handleCaptureProtocolMessage(
+    deviceId: string,
+    msg: NonNullable<ReturnType<typeof parseCaptureMessage>>,
+    rawPayload: string,
+    now: number,
+  ): void {
+    if (msg.type === 'CAPTURE_START') {
+      this.inProgressCaptures.set(deviceId, {
+        sampleRateHz: msg.sampleRateHz,
+        preSamples: msg.preSamples,
+        totalSamples: msg.totalSamples,
+        baseline: msg.baseline,
+        noise: msg.noise,
+        threshold: msg.threshold,
+        samples: new Array<number>(msg.totalSamples).fill(msg.baseline),
+        receivedCount: 0,
+      });
+      this.setDeviceCaptureProgress(deviceId, 0);
+      this.appendEvent(deviceId, rawPayload, 'received', now);
+      return;
+    }
+
+    if (msg.type === 'CAPTURE_DATA') {
+      const active = this.inProgressCaptures.get(deviceId);
+      if (!active) {
+        return;
+      }
+      for (let i = 0; i < msg.values.length; i++) {
+        const idx = msg.offset + i;
+        if (idx >= 0 && idx < active.totalSamples) {
+          active.samples[idx] = msg.values[i];
+        }
+      }
+      active.receivedCount = Math.min(
+        active.totalSamples,
+        Math.max(active.receivedCount, msg.offset + msg.values.length),
+      );
+      const pct = Math.min(100, Math.round((active.receivedCount * 100) / active.totalSamples));
+      this.setDeviceCaptureProgress(deviceId, pct);
+      return;
+    }
+
+    if (msg.type === 'CAPTURE_END') {
+      const active = this.inProgressCaptures.get(deviceId);
+      this.inProgressCaptures.delete(deviceId);
+      this.setDeviceCaptureProgress(deviceId, null);
+      this.appendEvent(deviceId, rawPayload, 'received', now);
+
+      if (active) {
+        let peak = 0;
+        for (const v of active.samples) {
+          if (v > peak) {
+            peak = v;
+          }
+        }
+
+        const result: PiezoCaptureResult = {
+          id: `capture-${this.generateId()}`,
+          deviceId,
+          deviceName: this.getDeviceName(deviceId),
+          timestamp: new Date(now),
+          sampleRateHz: active.sampleRateHz,
+          preSamples: active.preSamples,
+          totalSamples: active.totalSamples,
+          baseline: active.baseline,
+          noise: active.noise,
+          threshold: active.threshold,
+          peak,
+          samples: active.samples,
+        };
+
+        this.captures.update((current) => [result, ...current]);
+      }
+
+      if (this.autoRearmDevices()[deviceId]) {
+        void this.startCapture(deviceId).catch(() => {
+          // Ignore rearm errors if device disconnected
+        });
+      }
+    }
+  }
+
+  private setDeviceCaptureProgress(deviceId: string, progress: number | null): void {
+    this.captureProgress.update((current) => {
+      const next = { ...current };
+      if (progress === null) {
+        delete next[deviceId];
+      } else {
+        next[deviceId] = progress;
+      }
+      return next;
+    });
   }
 
   private appendEvent(

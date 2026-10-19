@@ -26,11 +26,14 @@ void HitDetector_init(HitDetector* detector, const Config* config) {
     detector->calib_sample_count = 0;
     detector->calib_min = 65535;
     detector->calib_max = 0;
+
+    SignalCapture_init(&detector->capture, &detector->config);
 }
 
 void HitDetector_start_calibration(HitDetector* detector) {
     if (!detector) return;
 
+    SignalCapture_reset(&detector->capture);
     detector->state = SENSOR_STATE_CALIBRATING;
     detector->calib_start_us = Time_now_us();
     detector->calib_sample_sum = 0;
@@ -41,9 +44,54 @@ void HitDetector_start_calibration(HitDetector* detector) {
     detector->last_progress_percent = 0;
 }
 
+bool HitDetector_start_capture(HitDetector* detector) {
+    if (!detector) return false;
+    if (detector->state == SENSOR_STATE_INIT ||
+        detector->state == SENSOR_STATE_CALIBRATING ||
+        detector->state == SENSOR_STATE_ERROR) {
+        return false;
+    }
+
+    detector->dynamic_threshold = (float)detector->base_threshold;
+    SignalCapture_arm(&detector->capture, detector->baseline, detector->noise, detector->base_threshold);
+    detector->state = SENSOR_STATE_CAPTURE_ARMED;
+    return true;
+}
+
+void HitDetector_stop_capture(HitDetector* detector) {
+    if (!detector) return;
+    if (detector->state == SENSOR_STATE_CAPTURE_ARMED ||
+        detector->state == SENSOR_STATE_CAPTURING ||
+        detector->state == SENSOR_STATE_TRANSMITTING) {
+        SignalCapture_reset(&detector->capture);
+        detector->dynamic_threshold = (float)detector->base_threshold;
+        detector->state = SENSOR_STATE_ARMED;
+    }
+}
+
+bool HitDetector_take_completed_capture(HitDetector* detector, MsgCaptureReady* out_ready) {
+    if (!detector || !detector->capture.buffer_ready) return false;
+
+    detector->capture.buffer_ready = false;
+    if (out_ready) {
+        out_ready->sample_rate_hz = detector->capture.effective_sample_rate_hz;
+        out_ready->pre_samples = SIGNAL_CAPTURE_PRE_SAMPLES;
+        out_ready->total_samples = SIGNAL_CAPTURE_TOTAL_SAMPLES;
+        out_ready->baseline = detector->capture.baseline;
+        out_ready->noise = detector->capture.noise;
+        out_ready->threshold = detector->capture.threshold;
+        out_ready->samples = SignalCapture_get_samples(&detector->capture);
+    }
+    return true;
+}
+
 void HitDetector_reset_to_armed(HitDetector* detector) {
     if (!detector) return;
-    if (detector->state == SENSOR_STATE_HIT_LOCKOUT) {
+    if (detector->state == SENSOR_STATE_HIT_LOCKOUT ||
+        detector->state == SENSOR_STATE_CAPTURE_ARMED ||
+        detector->state == SENSOR_STATE_CAPTURING ||
+        detector->state == SENSOR_STATE_TRANSMITTING) {
+        SignalCapture_reset(&detector->capture);
         detector->state = SENSOR_STATE_ARMED;
         detector->dynamic_threshold = (float)detector->base_threshold;
     }
@@ -82,6 +130,24 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
 
     if (detector->state == SENSOR_STATE_INIT) {
         HitDetector_start_calibration(detector);
+    }
+
+    if (detector->state == SENSOR_STATE_CAPTURE_ARMED ||
+        detector->state == SENSOR_STATE_CAPTURING) {
+        bool triggered = false;
+        bool completed = false;
+        SignalCapture_process_buffer(&detector->capture, samples, count, &triggered, &completed);
+        if (triggered) {
+            detector->state = SENSOR_STATE_CAPTURING;
+        }
+        if (completed) {
+            detector->state = SENSOR_STATE_TRANSMITTING;
+        }
+        return false;
+    }
+
+    if (detector->state == SENSOR_STATE_TRANSMITTING) {
+        return false;
     }
 
     uint64_t now = Time_now_us();

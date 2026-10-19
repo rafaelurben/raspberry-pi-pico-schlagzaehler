@@ -7,6 +7,18 @@
 void CompanionProtocol_init(CompanionProtocol* proto, CommandHandler* handler) {
     if (!proto) return;
     proto->command_handler = handler;
+    proto->capture_tx_active = false;
+    proto->capture_samples = NULL;
+    proto->capture_total_samples = 0;
+    proto->capture_tx_offset = 0;
+}
+
+void CompanionProtocol_cancel_capture_tx(CompanionProtocol* proto) {
+    if (!proto) return;
+    proto->capture_tx_active = false;
+    proto->capture_samples = NULL;
+    proto->capture_total_samples = 0;
+    proto->capture_tx_offset = 0;
 }
 
 void CompanionProtocol_parse_line(CompanionProtocol* proto, const char* line) {
@@ -19,11 +31,19 @@ void CompanionProtocol_parse_line(CompanionProtocol* proto, const char* line) {
     if (strcmp(line, "START") == 0) {
         CommandHandler_handle_start(proto->command_handler);
     } else if (strcmp(line, "RESET") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
         CommandHandler_handle_reset(proto->command_handler);
     } else if (strcmp(line, "CALIB") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
         CommandHandler_handle_request_calibration(proto->command_handler);
     } else if (strcmp(line, "STATUS") == 0) {
         CommandHandler_handle_request_status(proto->command_handler);
+    } else if (strcmp(line, "CAPTURE") == 0 || strcmp(line, "CAPTURE:START") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
+        CommandHandler_handle_request_capture(proto->command_handler, true);
+    } else if (strcmp(line, "CAPTURE:STOP") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
+        CommandHandler_handle_request_capture(proto->command_handler, false);
     } else if (strncmp(line, "MODE:", 5) == 0) {
         const char* val = line + 5;
         if (strcmp(val, "COUNT") == 0 || strcmp(val, "0") == 0) {
@@ -57,7 +77,6 @@ void CompanionProtocol_poll_input(CompanionProtocol* proto) {
 }
 
 void CompanionProtocol_send_message(CompanionProtocol* proto, const Core0ToCore1Message* msg) {
-    (void)proto;
     if (!msg) return;
 
     char out[128];
@@ -119,6 +138,29 @@ void CompanionProtocol_send_message(CompanionProtocol* proto, const Core0ToCore1
             snprintf(out, sizeof(out), "SENSOR status=%s",
                      SensorState_to_string(msg->data.sensor_status.state));
             UsbSerialDriver_write_line(out);
+            if (msg->data.sensor_status.state != SENSOR_STATE_CAPTURING &&
+                msg->data.sensor_status.state != SENSOR_STATE_CAPTURE_ARMED &&
+                msg->data.sensor_status.state != SENSOR_STATE_TRANSMITTING) {
+                CompanionProtocol_cancel_capture_tx(proto);
+            }
+            break;
+
+        case MSG_CAPTURE_READY:
+            snprintf(out, sizeof(out),
+                     "CAPTURE_START rate=%lu pre=%u count=%u baseline=%u noise=%u threshold=%u",
+                     (unsigned long)msg->data.capture_ready.sample_rate_hz,
+                     msg->data.capture_ready.pre_samples,
+                     msg->data.capture_ready.total_samples,
+                     msg->data.capture_ready.baseline,
+                     msg->data.capture_ready.noise,
+                     msg->data.capture_ready.threshold);
+            UsbSerialDriver_write_line(out);
+            if (proto && msg->data.capture_ready.samples && msg->data.capture_ready.total_samples > 0) {
+                proto->capture_samples = msg->data.capture_ready.samples;
+                proto->capture_total_samples = msg->data.capture_ready.total_samples;
+                proto->capture_tx_offset = 0;
+                proto->capture_tx_active = true;
+            }
             break;
 
         case MSG_BOOT_STATUS:
@@ -139,4 +181,54 @@ void CompanionProtocol_send_message(CompanionProtocol* proto, const Core0ToCore1
         default:
             break;
     }
+}
+
+bool CompanionProtocol_tick_capture_tx(CompanionProtocol* proto) {
+    if (!proto || !proto->capture_tx_active || !proto->capture_samples) {
+        return false;
+    }
+
+    static char line[512];
+
+    for (uint8_t l = 0; l < COMPANION_CAPTURE_LINES_PER_TICK; ++l) {
+        if (proto->capture_tx_offset >= proto->capture_total_samples) {
+            break;
+        }
+
+        uint16_t start = proto->capture_tx_offset;
+        uint16_t remaining = proto->capture_total_samples - start;
+        uint16_t chunk = (remaining > COMPANION_CAPTURE_SAMPLES_PER_LINE)
+            ? COMPANION_CAPTURE_SAMPLES_PER_LINE
+            : remaining;
+
+        int pos = snprintf(line, sizeof(line), "CAPTURE_DATA offset=%u values=", start);
+        for (uint16_t i = 0; i < chunk && pos > 0 && (size_t)pos < sizeof(line) - 8; ++i) {
+            int written = snprintf(
+                line + pos,
+                sizeof(line) - (size_t)pos,
+                (i == 0) ? "%u" : ",%u",
+                proto->capture_samples[start + i]
+            );
+            if (written > 0 && (size_t)written < sizeof(line) - (size_t)pos) {
+                pos += written;
+            } else {
+                break;
+            }
+        }
+
+        UsbSerialDriver_write_line(line);
+        proto->capture_tx_offset += chunk;
+    }
+
+    if (proto->capture_tx_offset >= proto->capture_total_samples) {
+        snprintf(line, sizeof(line), "CAPTURE_END count=%u", proto->capture_total_samples);
+        UsbSerialDriver_write_line(line);
+        CompanionProtocol_cancel_capture_tx(proto);
+        if (proto->command_handler) {
+            CommandHandler_handle_request_capture(proto->command_handler, false);
+        }
+        return true;
+    }
+
+    return false;
 }

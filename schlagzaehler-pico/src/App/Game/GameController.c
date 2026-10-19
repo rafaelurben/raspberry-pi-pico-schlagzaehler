@@ -80,6 +80,7 @@ void GameController_init(GameController* gc, const Config* config, OsalQueue* qu
 
     gc->queue_to_core1 = queue_to_core1;
     gc->last_sensor_state = SENSOR_STATE_INIT;
+    gc->pre_capture_state = GAME_STATE_READY;
     gc->last_timer_broadcast_us = 0;
 
     GameState_init(&gc->state_model, gc->config.default_mode);
@@ -109,6 +110,25 @@ void GameController_on_sensor_state(GameController* gc, SensorState sensor_state
         .data.sensor_status.state = sensor_state
     };
     send_msg(gc, &s_msg);
+
+    if (sensor_state == SENSOR_STATE_CAPTURE_ARMED ||
+        sensor_state == SENSOR_STATE_CAPTURING ||
+        sensor_state == SENSOR_STATE_TRANSMITTING) {
+        if (gc->state_model.state != GAME_STATE_CAPTURING) {
+            GameState old_s = gc->state_model.state;
+            gc->pre_capture_state = (old_s == GAME_STATE_MENU) ? GAME_STATE_MENU : GAME_STATE_READY;
+            gc->state_model.state = GAME_STATE_CAPTURING;
+            broadcast_state_change(gc, old_s, GAME_STATE_CAPTURING);
+        }
+        return;
+    }
+
+    if (gc->state_model.state == GAME_STATE_CAPTURING && sensor_state == SENSOR_STATE_ARMED) {
+        GameState target = (gc->pre_capture_state == GAME_STATE_MENU) ? GAME_STATE_MENU : GAME_STATE_READY;
+        gc->state_model.state = target;
+        broadcast_state_change(gc, GAME_STATE_CAPTURING, target);
+        return;
+    }
 
     /* Only emit calibration result when transitioning out of calibration (not after every hit lockout) */
     bool from_calibration = (prev_sensor_state == SENSOR_STATE_CALIBRATING || prev_sensor_state == SENSOR_STATE_INIT);
@@ -319,6 +339,21 @@ void GameController_on_button(GameController* gc, const ButtonEvent* btn) {
             GameState_reset_score(&gc->state_model);
             gc->state_model.state = GAME_STATE_READY;
             broadcast_state_change(gc, GAME_STATE_FINISHED, GAME_STATE_READY);
+            broadcast_score_change(gc);
+        }
+        return;
+    }
+
+    if (state == GAME_STATE_CAPTURING) {
+        if (btn->button == BTN_ID_LEFT) {
+            gc->state_model.menu_selected_mode = gc->state_model.active_mode;
+            gc->state_model.state = GAME_STATE_MENU;
+            broadcast_state_change(gc, GAME_STATE_CAPTURING, GAME_STATE_MENU);
+            broadcast_mode_change(gc);
+        } else {
+            GameState_reset_score(&gc->state_model);
+            gc->state_model.state = GAME_STATE_READY;
+            broadcast_state_change(gc, GAME_STATE_CAPTURING, GAME_STATE_READY);
             broadcast_score_change(gc);
         }
         return;
