@@ -215,7 +215,7 @@ void App_run_core0(App* app) {
                 App_notify_sensor_state(app);
             }
         } else if (cmd.type == MSG_REQUEST_STATUS) {
-            App_notify_sensor_state(app);
+            app->game_controller.last_sensor_state = HitDetector_get_state(&app->hit_detector);
         }
         GameController_on_command(&app->game_controller, &cmd);
     }

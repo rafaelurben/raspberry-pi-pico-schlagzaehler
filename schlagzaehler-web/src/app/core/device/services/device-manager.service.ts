@@ -430,6 +430,8 @@ export class DeviceManagerService implements OnDestroy {
   }
 
   private updateDeviceConnectionState(deviceId: string, connectionState: ConnectionState): void {
+    const prevConnectionState = this.getDevice(deviceId)?.state.connectionState;
+
     if (connectionState !== 'connected') {
       this.inProgressCaptures.delete(deviceId);
       this.setDeviceCaptureProgress(deviceId, null);
@@ -459,6 +461,10 @@ export class DeviceManagerService implements OnDestroy {
         });
       }),
     );
+
+    if (connectionState === 'connected' && prevConnectionState !== 'connected') {
+      void this.sendCommand(deviceId, CompanionCommands.status()).catch(e => console.error(`Failed to request status from device ${deviceId}:`, e));
+    }
   }
 
   private handleIncomingEvent(deviceId: string, payload: string): void {

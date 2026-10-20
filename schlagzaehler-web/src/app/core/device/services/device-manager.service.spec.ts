@@ -105,6 +105,7 @@ describe('DeviceManagerService', () => {
     expect(service.devices()).toHaveLength(1);
     expect(service.isConnecting()).toBe(false);
     expect(transport.connectCalls).toBe(1);
+    expect(transport.sentPayloads).toEqual(['STATUS']);
   });
 
   it('should allow specifying a custom device name on connect and modifying it later', async () => {
@@ -161,17 +162,17 @@ describe('DeviceManagerService', () => {
     transport2.eventsSubject.next('SCORE value=10');
     transport1.eventsSubject.next('SCORE value=7');
 
-    const events = service.events();
-    expect(events).toHaveLength(3);
+    const receivedEvents = service.events().filter((e) => e.direction === 'received');
+    expect(receivedEvents).toHaveLength(3);
 
-    expect(events[0].deviceId).toBe(device1?.id);
-    expect(events[0].payload).toBe('SCORE value=7');
+    expect(receivedEvents[0].deviceId).toBe(device1?.id);
+    expect(receivedEvents[0].payload).toBe('SCORE value=7');
 
-    expect(events[1].deviceId).toBe(device2?.id);
-    expect(events[1].payload).toBe('SCORE value=10');
+    expect(receivedEvents[1].deviceId).toBe(device2?.id);
+    expect(receivedEvents[1].payload).toBe('SCORE value=10');
 
-    expect(events[2].deviceId).toBe(device1?.id);
-    expect(events[2].payload).toBe('MODE active=TIMED param=45');
+    expect(receivedEvents[2].deviceId).toBe(device1?.id);
+    expect(receivedEvents[2].payload).toBe('MODE active=TIMED param=45');
 
     const d1 = service.getDevice(device1!.id);
     const d2 = service.getDevice(device2!.id);
@@ -237,6 +238,7 @@ describe('DeviceManagerService', () => {
 
     transport1.sentPayloads = [];
     transport2.sentPayloads = [];
+    service.clearEvents();
 
     await service.setGameMode(dev1!.id, 'RACE');
     expect(transport1.sentPayloads).toEqual(['MODE:RACE']);
@@ -279,11 +281,26 @@ describe('DeviceManagerService', () => {
     mockFactory.transportsToReturn = [transport];
 
     await service.connectSerialDevice();
+    service.clearEvents();
     transport.eventsSubject.next('EVENT_1');
     expect(service.events()).toHaveLength(1);
 
     service.clearEvents();
     expect(service.events()).toHaveLength(0);
+  });
+
+  it('should automatically send STATUS command upon device connection and reconnection', async () => {
+    setupService();
+    const transport = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport];
+
+    const device = await service.connectSerialDevice();
+    expect(transport.sentPayloads).toEqual(['STATUS']);
+
+    transport.sentPayloads = [];
+    await service.disconnectDevice(device!.id);
+    await service.reconnectDevice(device!.id);
+    expect(transport.sentPayloads).toEqual(['STATUS']);
   });
 
   it('should reject connection when Web Serial is not supported', async () => {

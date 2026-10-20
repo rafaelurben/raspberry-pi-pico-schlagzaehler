@@ -56,6 +56,17 @@ static void broadcast_timer_change(GameController* gc) {
     send_msg(gc, &msg);
 }
 
+static void broadcast_sensor_state(GameController* gc) {
+    Core0ToCore1Message msg = {
+        .type = MSG_SENSOR_STATUS_CHANGED,
+        .timestamp_us = Time_now_us(),
+        .data.sensor_status = {
+            .state = gc->last_sensor_state
+        }
+    };
+    send_msg(gc, &msg);
+}
+
 static void broadcast_game_finished(GameController* gc) {
     Core0ToCore1Message msg = {
         .type = MSG_GAME_FINISHED,
@@ -104,12 +115,7 @@ void GameController_on_sensor_state(GameController* gc, SensorState sensor_state
     gc->last_sensor_state = sensor_state;
 
     /* Notify Core 1 */
-    Core0ToCore1Message s_msg = {
-        .type = MSG_SENSOR_STATUS_CHANGED,
-        .timestamp_us = Time_now_us(),
-        .data.sensor_status.state = sensor_state
-    };
-    send_msg(gc, &s_msg);
+    broadcast_sensor_state(gc);
 
     if (sensor_state == SENSOR_STATE_CAPTURE_ARMED ||
         sensor_state == SENSOR_STATE_CAPTURING ||
@@ -393,6 +399,7 @@ void GameController_on_command(GameController* gc, const Core1ToCore0Message* cm
             broadcast_mode_change(gc);
             break;
         case MSG_REQUEST_STATUS:
+            broadcast_sensor_state(gc);
             broadcast_state_change(gc, gc->state_model.state, gc->state_model.state);
             broadcast_mode_change(gc);
             broadcast_score_change(gc);

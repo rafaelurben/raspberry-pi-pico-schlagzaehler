@@ -295,6 +295,36 @@ void test_game_controller_and_modes(void) {
     GameController_on_sensor_state(&gc, SENSOR_STATE_ARMED, 1980, 2, 2005);
     assert(gc.state_model.state == GAME_STATE_READY);
 
+    /* Test STATUS command handling in GameController: emits SENSOR, STATE, MODE, SCORE, TIMER */
+    gc.last_sensor_state = SENSOR_STATE_ARMED;
+    while (OsalQueue_pop(&q0_to_q1, &msg));
+    Core1ToCore0Message status_cmd = {
+        .type = MSG_REQUEST_STATUS,
+        .timestamp_us = s_mock_time_us
+    };
+    GameController_on_command(&gc, &status_cmd);
+
+    bool has_sensor_status = false;
+    bool has_state = false;
+    bool has_mode = false;
+    bool has_score = false;
+    bool has_timer = false;
+    while (OsalQueue_pop(&q0_to_q1, &msg)) {
+        if (msg.type == MSG_SENSOR_STATUS_CHANGED) {
+            assert(msg.data.sensor_status.state == SENSOR_STATE_ARMED);
+            has_sensor_status = true;
+        } else if (msg.type == MSG_GAME_STATE_CHANGED) {
+            has_state = true;
+        } else if (msg.type == MSG_GAME_MODE_CHANGED) {
+            has_mode = true;
+        } else if (msg.type == MSG_SCORE_CHANGED) {
+            has_score = true;
+        } else if (msg.type == MSG_TIMER_CHANGED) {
+            has_timer = true;
+        }
+    }
+    assert(has_sensor_status && has_state && has_mode && has_score && has_timer);
+
     printf("PASS: test_game_controller_and_modes\n");
 }
 
@@ -314,6 +344,11 @@ void test_companion_protocol(void) {
     Core1ToCore0Message msg;
     OsalQueue_pop(&q1_to_q0, &msg);
     assert(msg.type == MSG_START_GAME);
+
+    /* STATUS command parses and queues MSG_REQUEST_STATUS */
+    CompanionProtocol_parse_line(&cp, "STATUS");
+    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_STATUS);
 
     /* Outgoing formatting */
     Core0ToCore1Message out_msg = {
@@ -340,6 +375,17 @@ void test_companion_protocol(void) {
     };
     CompanionProtocol_send_message(&cp, &mode_msg);
     assert(strcmp(s_last_serial_line, "MODE active=TIMED param=30") == 0);
+
+    /* Outgoing sensor status formatting */
+    Core0ToCore1Message sensor_msg = {
+        .type = MSG_SENSOR_STATUS_CHANGED,
+        .timestamp_us = 1000,
+        .data.sensor_status = {
+            .state = SENSOR_STATE_ARMED
+        }
+    };
+    CompanionProtocol_send_message(&cp, &sensor_msg);
+    assert(strcmp(s_last_serial_line, "SENSOR status=ARMED") == 0);
 
     /* Capture start/stop commands */
     CompanionProtocol_parse_line(&cp, "CAPTURE");
