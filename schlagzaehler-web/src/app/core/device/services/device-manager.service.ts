@@ -463,7 +463,9 @@ export class DeviceManagerService implements OnDestroy {
     );
 
     if (connectionState === 'connected' && prevConnectionState !== 'connected') {
-      void this.sendCommand(deviceId, CompanionCommands.status()).catch(e => console.error(`Failed to request status from device ${deviceId}:`, e));
+      void this.sendCommand(deviceId, CompanionCommands.status()).catch((e) =>
+        console.error(`Failed to request status from device ${deviceId}:`, e),
+      );
     }
   }
 
