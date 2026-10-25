@@ -1,0 +1,4 @@
+﻿Nr.;Kategorie;Anforderung
+OFA-K01;Kommunikation;Die Kommunikation kann auch via Bluetooth erfolgen.
+OFA-C01;Companion;Auf dem Companion können erreichte Punktzahlen in ein lokales Leaderboard eingetragen werden.
+OFA-C02;Companion;Nach einem Wiederherstellen der Verbindung kann der Zustand wieder verlustfrei ermittelt werden.

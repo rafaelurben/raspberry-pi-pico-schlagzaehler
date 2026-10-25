@@ -1,0 +1,9 @@
+﻿Nr.;Kategorie;Anforderung
+NFA-H01;Montage;Der Schlagzähler kann nicht-invasiv an einem Böckli montiert und wieder demontiert werden.
+NFA-H02;Montage;Das Verhalten des Böckli darf sich durch den montierten Schlagzähler nicht spürbar verändern.
+NFA-S01;Schlagerkennung;Falsch-positive Schlagerkennungen durch Ereignisse neben dem Böckli (z. B. Vibrationen, andere Instrumente, etc.) dürfen höchstens 5% aller erkannten Schläge ausmachen.
+NFA-S02;Schlagerkennung;Schläge auf das Schlagfell ab mezzo-forte werden in mindestens 95% der Schläge erkannt.
+NFA-S03;Schlagerkennung;Schläge auf die Mitte des Schlagfells ab piano werden zu mindestens 80% erkannt.
+NFA-S04;Schlagerkennung;Schläge werden in mindestens 95% der Fälle höchstens einmal gezählt.
+NFA-S05;Bedienung;Zwischen einem Schlag und dessen Anzeige auf dem Display dürfen maximal 100ms vergehen.
+NFA-C01;Kommunikation;Zwischen einem Schlag und dessen Anzeige im Companion dürfen maximal 200ms vergehen.

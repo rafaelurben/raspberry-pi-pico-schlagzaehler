@@ -1,0 +1,23 @@
+﻿Nr.;Kategorie;Anforderung
+FA-H01;Hardware;Der Schlagzähler wird über USB mit Strom versorgt (5V).
+FA-H02;Hardware;Der Schlagzähler verfügt über ein Display und 4 Buttons, mit welchen er gesteuert werden kann.
+FA-S01;Schlagerkennung;Der Schlagzähler kann Schläge auf das Schlagfell des Böckli erkennen.
+FA-S02;Schlagerkennung;Die Empfindlichkeit für die Schlagerkennung wird beim Start automatisch kalibriert.
+FA-S03;Spielmodi;Der Schlagzähler verfügt über den Spielmodus «Zählen». In diesem Modus werden die Schläge gezählt, ohne Ziel oder Ende.
+FA-S04;Spielmodi;Der Schlagzähler verfügt über den Spielmodus «Zeit». In diesem Modus geht es darum, möglichst viele Schläge in einer bestimmten Zeitspane zu erreichen.
+FA-S05;Spielmodi;Im Spielmodus «Zeit» kann die Zeitspanne in vordefinierten Schritten angepasst werden.
+FA-S06;Spielmodi;Der Schlagzähler verfügt über den Spielmodus «Rennen». In diesem Modus geht es darum, eine bestimmte Anzahl Schläge in möglichst kurzer Zeit zu erreichen.
+FA-S07;Spielmodi;Im Spielmodus «Rennen» kann die Anzahl Schläge in vordefinierten Schritten angepasst werden.
+FA-S08;Spielmodi;Die Spielmodi «Zählen», «Zeit» und «Rennen» sind ohne Host spielbar.
+FA-S09;Bedienung;Die Navigation über die Spielmodi, Menus und Konfigurationen erfolgt über die 4 Buttons.
+FA-S10;Bedienung;Auf dem Display wird je nach Modus und Zustand der aktuelle Punktestand, die verbleibende Zeit oder das Menu angezeigt.
+FA-S11;Bedienung;Nach dem Ende des Spiels wird das Ergebnis angezeigt, bis ins Menu gewechselt oder ein neues Spiel gestartet wird.
+FA-S12;Bedienung;Ein laufendes Spiel kann über die Bedienelemente unterbrochen werden.
+FA-K01;Kommunikation;Der Schlagzähler kann mit einem Computer bidirektional kommunizieren.
+FA-K02;Kommunikation;Der Schlagzähler überträgt ereignisbasiert seinen Zustand an einen verbundenen Computer.
+FA-K03;Kommunikation;Die Kommunikation kann via USB erfolgen.
+FA-C01;Companion;Im Companion können mehrere Schlagzähler verbunden werden.
+FA-C02;Companion;Im Companion ist der aktuelle Zustand (z. B. Spielmodus, Punktestand) der verbundenen Schlagzähler sichtbar.
+FA-C03;Companion;Über den Companion kann der Spielmodus verbundener Schlagzähler gewechselt werden.
+FA-C04;Companion;Der Companion erkennt den Unterbruch einer Verbindung und zeigt dies entsprechend an.
+FA-C05;Companion;Ein Unterbruch der Verbindung zum Companion beendet ein lokal laufendes Spiel nicht.
