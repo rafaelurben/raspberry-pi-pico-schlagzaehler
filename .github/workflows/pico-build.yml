@@ -1,0 +1,31 @@
+name: Build Pico Code
+
+on:
+  push:
+    paths:
+      - "schlagzaehler-pico/**"
+      - ".github/workflows/pico-build.yml"
+
+jobs:
+  build:
+    name: Build program
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build schlagzaehler-pico
+        id: build
+        uses: samyarsadat/Pico-Build-Action@dbb9ed078bfed217ef917dd09860c2c5096e8eb9 # v1.3.0
+        with:
+          source_dir: "schlagzaehler-pico"
+          cmake_args: "-DCMAKE_BUILD_TYPE=Debug"
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: workspace_artifacts
+          path: ${{steps.build.outputs.output_dir}}
