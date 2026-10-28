@@ -101,7 +101,7 @@ group 1. Process Completed ADC DMA Buffer
             GameController -> Time : Time_now_us()
             GameController -> Modes : CountMode / TimedMode / RaceMode_on_hit()
             GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_HIT_DETECTED)
-            GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_SCORE_UPDATED)
+            GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_SCORE_CHANGED)
             deactivate GameController
         else new_sensor_state == SENSOR_STATE_ARMED
             App -> Board : Board_set_led(false)

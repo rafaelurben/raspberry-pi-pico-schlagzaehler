@@ -24,6 +24,7 @@ typedef struct {
     uint8_t calib_percent;
     uint16_t baseline;
     uint16_t threshold;
+    uint8_t capture_target;
 
     bool needs_full_redraw;
     bool needs_score_redraw;

@@ -252,54 +252,78 @@ export class WaveformChartComponent implements AfterViewInit {
 
     ctx.setLineDash([]);
 
-    // Waveform path (min/max bucketed per horizontal pixel for crisp rendering of 21,000 samples)
+    // Waveform path
     if (samples.length > 0 && end >= start) {
-      ctx.strokeStyle = '#818cf8';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-
-      const totalVisible = end - start + 1;
-      const bucketSize = Math.max(1, Math.floor(totalVisible / (plotW * 2)));
-
-      let first = true;
-      for (let i = start; i <= end && i < samples.length; i += bucketSize) {
-        const bucketEnd = Math.min(end, samples.length - 1, i + bucketSize - 1);
-        let minV = samples[i];
-        let maxV = samples[i];
-        let minIdx = i;
-        let maxIdx = i;
-
-        for (let j = i + 1; j <= bucketEnd; j++) {
-          const v = samples[j];
-          if (v < minV) {
-            minV = v;
-            minIdx = j;
+      if (cap.target === 3) {
+        // Multi-channel interleaved mode: draw 3 distinct colored sensor curves
+        const colors = ['#38bdf8', '#34d399', '#f59e0b'];
+        for (let s = 0; s < 3; s++) {
+          ctx.strokeStyle = colors[s];
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          let first = true;
+          const firstIdx = start + ((s - (start % 3) + 3) % 3);
+          for (let i = firstIdx; i <= end && i < samples.length; i += 3) {
+            const x = idxToPx(i);
+            const y = yToPx(samples[i]);
+            if (first) {
+              ctx.moveTo(x, y);
+              first = false;
+            } else {
+              ctx.lineTo(x, y);
+            }
           }
-          if (v > maxV) {
-            maxV = v;
-            maxIdx = j;
+          ctx.stroke();
+        }
+      } else {
+        // Single channel mode: min/max bucketed per horizontal pixel for crisp rendering
+        ctx.strokeStyle = '#818cf8';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+
+        const totalVisible = end - start + 1;
+        const bucketSize = Math.max(1, Math.floor(totalVisible / (plotW * 2)));
+
+        let first = true;
+        for (let i = start; i <= end && i < samples.length; i += bucketSize) {
+          const bucketEnd = Math.min(end, samples.length - 1, i + bucketSize - 1);
+          let minV = samples[i];
+          let maxV = samples[i];
+          let minIdx = i;
+          let maxIdx = i;
+
+          for (let j = i + 1; j <= bucketEnd; j++) {
+            const v = samples[j];
+            if (v < minV) {
+              minV = v;
+              minIdx = j;
+            }
+            if (v > maxV) {
+              maxV = v;
+              maxIdx = j;
+            }
+          }
+
+          const firstIdx = Math.min(minIdx, maxIdx);
+          const secondIdx = Math.max(minIdx, maxIdx);
+          const firstVal = firstIdx === minIdx ? minV : maxV;
+          const secondVal = secondIdx === minIdx ? minV : maxV;
+
+          const x1 = idxToPx(firstIdx);
+          const y1 = yToPx(firstVal);
+          if (first) {
+            ctx.moveTo(x1, y1);
+            first = false;
+          } else {
+            ctx.lineTo(x1, y1);
+          }
+
+          if (secondIdx !== firstIdx) {
+            ctx.lineTo(idxToPx(secondIdx), yToPx(secondVal));
           }
         }
-
-        const firstIdx = Math.min(minIdx, maxIdx);
-        const secondIdx = Math.max(minIdx, maxIdx);
-        const firstVal = firstIdx === minIdx ? minV : maxV;
-        const secondVal = secondIdx === minIdx ? minV : maxV;
-
-        const x1 = idxToPx(firstIdx);
-        const y1 = yToPx(firstVal);
-        if (first) {
-          ctx.moveTo(x1, y1);
-          first = false;
-        } else {
-          ctx.lineTo(x1, y1);
-        }
-
-        if (secondIdx !== firstIdx) {
-          ctx.lineTo(idxToPx(secondIdx), yToPx(secondVal));
-        }
+        ctx.stroke();
       }
-      ctx.stroke();
     }
 
     // Hover crosshair

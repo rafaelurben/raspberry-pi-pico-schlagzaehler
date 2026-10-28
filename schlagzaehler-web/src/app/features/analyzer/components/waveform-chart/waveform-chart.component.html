@@ -2,10 +2,25 @@
   <!-- Chart Controls & Legend -->
   <div class="flex flex-wrap items-center justify-between gap-3 text-xs min-h-8">
     <div class="flex flex-wrap items-center gap-4">
-      <span class="inline-flex items-center gap-1.5 text-slate-300">
-        <span class="h-2.5 w-2.5 rounded-full bg-indigo-400"></span>
-        <span>Piezo ADC Signal</span>
-      </span>
+      @if (capture().target === 3) {
+        <span class="inline-flex items-center gap-1.5 text-slate-300">
+          <span class="h-2.5 w-2.5 rounded-full bg-sky-400"></span>
+          <span>Sensor 0</span>
+        </span>
+        <span class="inline-flex items-center gap-1.5 text-slate-300">
+          <span class="h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
+          <span>Sensor 1</span>
+        </span>
+        <span class="inline-flex items-center gap-1.5 text-slate-300">
+          <span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>
+          <span>Sensor 2</span>
+        </span>
+      } @else {
+        <span class="inline-flex items-center gap-1.5 text-slate-300">
+          <span class="h-2.5 w-2.5 rounded-full bg-indigo-400"></span>
+          <span>Sensor {{ capture().target }}</span>
+        </span>
+      }
       <span class="inline-flex items-center gap-1.5 text-slate-300">
         <span class="h-0.5 w-3.5 bg-amber-400"></span>
         <span>Threshold ({{ capture().threshold }})</span>

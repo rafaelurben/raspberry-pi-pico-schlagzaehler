@@ -3,7 +3,7 @@
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
 
-#define MAX_DMA_BUFFER_SAMPLES 512
+#define MAX_DMA_BUFFER_SAMPLES 768
 
 static uint16_t s_buffer0[MAX_DMA_BUFFER_SAMPLES];
 static uint16_t s_buffer1[MAX_DMA_BUFFER_SAMPLES];
@@ -41,10 +41,13 @@ bool PiezoAdcDriver_init(const Config* config) {
     s_warmup_buffers_to_skip = 0;
     s_is_running = false;
 
-    /* Initialize ADC hardware */
+    /* Initialize ADC hardware with round-robin */
     adc_init();
-    adc_gpio_init(PIN_PIEZO_ADC);
-    adc_select_input(ADC_INPUT_CHANNEL);
+    adc_gpio_init(PIN_PIEZO_ADC_0);
+    adc_gpio_init(PIN_PIEZO_ADC_1);
+    adc_gpio_init(PIN_PIEZO_ADC_2);
+    adc_select_input(0);
+    adc_set_round_robin(ADC_ROUND_ROBIN_MASK);
 
     /* Setup ADC FIFO */
     adc_fifo_setup(
@@ -81,8 +84,9 @@ void PiezoAdcDriver_start(void) {
     s_has_new_buffer = false;
     s_warmup_buffers_to_skip = 2;
 
-    /* Drain any stale FIFO samples */
+    /* Drain any stale FIFO samples and align to channel 0 */
     adc_fifo_drain();
+    adc_select_input(0);
 
     /* Start DMA and ADC free-running mode */
     Dma_start_adc();

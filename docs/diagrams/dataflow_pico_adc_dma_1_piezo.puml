@@ -78,7 +78,7 @@ Buf1 -down-> PollBuffer : Zero-copy pointer\n(when index == 1)
 
 PollBuffer -down-> HitDetector : uint16_t* samples\nsample_count = 256
 HitDetector -down-> GameController : HitEvent\n(hit_id, peak, intensity, timestamp_us)
-GameController -down-> InterCoreQueue : MSG_HIT_DETECTED\nMSG_SCORE_UPDATED
+GameController -down-> InterCoreQueue : MSG_HIT_DETECTED\nMSG_SCORE_CHANGED
 InterCoreQueue -down-> Core1Consumers : Non-blocking pop\non Core 1
 
 @enduml
