@@ -23,7 +23,7 @@ bool CommandHandler_handle_set_parameter(CommandHandler* handler, uint32_t param
 bool CommandHandler_handle_request_calibration(CommandHandler* handler);
 bool CommandHandler_handle_request_status(CommandHandler* handler);
 bool CommandHandler_handle_set_sensitivity(CommandHandler* handler, float factor);
-bool CommandHandler_handle_request_capture(CommandHandler* handler, bool enable);
+bool CommandHandler_handle_request_capture(CommandHandler* handler, bool enable, uint8_t target);
 
 #ifdef __cplusplus
 }

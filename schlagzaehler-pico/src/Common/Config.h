@@ -10,8 +10,12 @@ extern "C" {
 #endif
 
 /* Hardware Pin Definitions */
-#define PIN_PIEZO_ADC           26  /* GPIO 26 / ADC 0 */
+#define SENSOR_COUNT            3
+#define PIN_PIEZO_ADC_0         26  /* GPIO 26 / ADC 0 */
+#define PIN_PIEZO_ADC_1         27  /* GPIO 27 / ADC 1 */
+#define PIN_PIEZO_ADC_2         28  /* GPIO 28 / ADC 2 */
 #define ADC_INPUT_CHANNEL       0
+#define ADC_ROUND_ROBIN_MASK    0x07 /* for ADC 0, 1, 2 */
 
 #define PIN_BTN_UP              10  /* GPIO 10 */
 #define PIN_BTN_DOWN            14  /* GPIO 14 */
@@ -56,13 +60,14 @@ typedef struct {
 
 static inline void Config_set_defaults(Config* config) {
     if (!config) return;
-    config->sample_rate_hz           = 50000;
-    config->dma_buffer_samples       = 256;
+    /* 3 sensors sampled round-robin at 50 kHz each = 150 kHz aggregate */
+    config->sample_rate_hz           = 150000;
+    config->dma_buffer_samples       = 384;   /* 128 samples per sensor, divisible by 3 */
     config->calibration_duration_ms  = 1500;
-    config->calibration_min_samples  = 10000;
+    config->calibration_min_samples  = 30000; /* 10000 samples per sensor */
     config->noise_factor             = 4.5f;
     config->min_threshold_delta      = 25;
-    config->lockout_duration_ms      = 100;
+    config->lockout_duration_ms      = 25;
     config->decay_factor             = 0.995f;
 
     config->default_mode             = GAME_MODE_COUNT;

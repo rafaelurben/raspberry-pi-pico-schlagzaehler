@@ -38,12 +38,24 @@ void CompanionProtocol_parse_line(CompanionProtocol* proto, const char* line) {
         CommandHandler_handle_request_calibration(proto->command_handler);
     } else if (strcmp(line, "STATUS") == 0) {
         CommandHandler_handle_request_status(proto->command_handler);
-    } else if (strcmp(line, "CAPTURE") == 0 || strcmp(line, "CAPTURE:START") == 0) {
+    } else if (strcmp(line, "CAPTURE") == 0 || strcmp(line, "CAPTURE:START") == 0 ||
+               strcmp(line, "CAPTURE:ALL") == 0 || strcmp(line, "CAPTURE:all") == 0 ||
+               strcmp(line, "CAPTURE:3") == 0 || strcmp(line, "CAPTURE:START:3") == 0 ||
+               strcmp(line, "CAPTURE:START:ALL") == 0 || strcmp(line, "CAPTURE:START:all") == 0) {
         CompanionProtocol_cancel_capture_tx(proto);
-        CommandHandler_handle_request_capture(proto->command_handler, true);
+        CommandHandler_handle_request_capture(proto->command_handler, true, 3);
+    } else if (strcmp(line, "CAPTURE:0") == 0 || strcmp(line, "CAPTURE:START:0") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
+        CommandHandler_handle_request_capture(proto->command_handler, true, 0);
+    } else if (strcmp(line, "CAPTURE:1") == 0 || strcmp(line, "CAPTURE:START:1") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
+        CommandHandler_handle_request_capture(proto->command_handler, true, 1);
+    } else if (strcmp(line, "CAPTURE:2") == 0 || strcmp(line, "CAPTURE:START:2") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
+        CommandHandler_handle_request_capture(proto->command_handler, true, 2);
     } else if (strcmp(line, "CAPTURE:STOP") == 0) {
         CompanionProtocol_cancel_capture_tx(proto);
-        CommandHandler_handle_request_capture(proto->command_handler, false);
+        CommandHandler_handle_request_capture(proto->command_handler, false, 0);
     } else if (strncmp(line, "MODE:", 5) == 0) {
         const char* val = line + 5;
         if (strcmp(val, "COUNT") == 0 || strcmp(val, "0") == 0) {
@@ -83,8 +95,9 @@ void CompanionProtocol_send_message(CompanionProtocol* proto, const Core0ToCore1
 
     switch (msg->type) {
         case MSG_HIT_DETECTED:
-            snprintf(out, sizeof(out), "HIT id=%lu peak=%u intensity=%u",
+            snprintf(out, sizeof(out), "HIT id=%lu target=%u peak=%u intensity=%u",
                      (unsigned long)msg->data.hit.hit_id,
+                     (unsigned int)msg->data.hit.sensor_id,
                      msg->data.hit.peak_value,
                      msg->data.hit.intensity);
             UsbSerialDriver_write_line(out);
@@ -126,8 +139,9 @@ void CompanionProtocol_send_message(CompanionProtocol* proto, const Core0ToCore1
             break;
 
         case MSG_CALIBRATION_RESULT:
-            snprintf(out, sizeof(out), "CALIB success=%d baseline=%u noise=%u threshold=%u",
+            snprintf(out, sizeof(out), "CALIB success=%d target=%u baseline=%u noise=%u threshold=%u",
                      msg->data.calibration_result.success ? 1 : 0,
+                     (unsigned int)msg->data.calibration_result.sensor_id,
                      msg->data.calibration_result.baseline,
                      msg->data.calibration_result.noise,
                      msg->data.calibration_result.threshold);
@@ -147,10 +161,11 @@ void CompanionProtocol_send_message(CompanionProtocol* proto, const Core0ToCore1
 
         case MSG_CAPTURE_READY:
             snprintf(out, sizeof(out),
-                     "CAPTURE_START rate=%lu pre=%u count=%u baseline=%u noise=%u threshold=%u",
+                     "CAPTURE_START rate=%lu pre=%u count=%u target=%u baseline=%u noise=%u threshold=%u",
                      (unsigned long)msg->data.capture_ready.sample_rate_hz,
                      msg->data.capture_ready.pre_samples,
                      msg->data.capture_ready.total_samples,
+                     (unsigned int)msg->data.capture_ready.target,
                      msg->data.capture_ready.baseline,
                      msg->data.capture_ready.noise,
                      msg->data.capture_ready.threshold);
@@ -225,7 +240,7 @@ bool CompanionProtocol_tick_capture_tx(CompanionProtocol* proto) {
         UsbSerialDriver_write_line(line);
         CompanionProtocol_cancel_capture_tx(proto);
         if (proto->command_handler) {
-            CommandHandler_handle_request_capture(proto->command_handler, false);
+            CommandHandler_handle_request_capture(proto->command_handler, false, 0);
         }
         return true;
     }

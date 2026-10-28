@@ -377,4 +377,27 @@ describe('DeviceManagerService', () => {
     expect(service.autoRearmDevices()[deviceId]).toBe(false);
     expect(transport.sentPayloads).toContain('CAPTURE:STOP');
   });
+
+  it('should support target-selected capture (e.g. sensor 1 or all) and retain target across auto-rearm', async () => {
+    setupService();
+    const transport = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport];
+
+    const dev = await service.connectSerialDevice('Pico Target');
+    const deviceId = dev!.id;
+
+    service.setAutoRearm(deviceId, true);
+    await service.startCapture(deviceId, 1);
+    expect(transport.sentPayloads).toContain('CAPTURE:1');
+
+    transport.eventsSubject.next(
+      'CAPTURE_START rate=10000 pre=2 count=6 target=1 baseline=1980 noise=3 threshold=2010',
+    );
+    transport.eventsSubject.next('CAPTURE_DATA offset=0 values=1979,1981,2450,2200,2050,1982');
+    transport.eventsSubject.next('CAPTURE_END count=6');
+
+    // Auto-rearm should re-issue CAPTURE:1
+    expect(transport.sentPayloads.filter((p) => p === 'CAPTURE:1')).toHaveLength(2);
+    expect(service.captures()[0].target).toBe(1);
+  });
 });

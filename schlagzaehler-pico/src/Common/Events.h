@@ -24,6 +24,7 @@ typedef struct {
 
 typedef struct {
     uint32_t hit_id;
+    uint8_t  sensor_id;
     uint64_t timestamp_us;
     uint16_t peak_value;
     uint16_t baseline_value;

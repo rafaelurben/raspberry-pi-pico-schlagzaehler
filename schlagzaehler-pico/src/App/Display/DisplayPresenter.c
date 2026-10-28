@@ -27,6 +27,7 @@ void DisplayPresenter_init(DisplayPresenter* presenter) {
     presenter->calib_percent = 0;
     presenter->baseline = 0;
     presenter->threshold = 0;
+    presenter->capture_target = 3;
 
     presenter->needs_full_redraw = true;
     presenter->needs_score_redraw = false;
@@ -83,6 +84,7 @@ void DisplayPresenter_handle_message(DisplayPresenter* presenter, const Core0ToC
         case MSG_SENSOR_STATUS_CHANGED: {
             SensorState old_s = presenter->sensor_state;
             presenter->sensor_state = msg->data.sensor_status.state;
+            presenter->capture_target = msg->data.sensor_status.target;
             if (presenter->sensor_state == SENSOR_STATE_ERROR ||
                 presenter->sensor_state == SENSOR_STATE_CAPTURE_ARMED ||
                 presenter->sensor_state == SENSOR_STATE_CAPTURING ||
@@ -94,6 +96,9 @@ void DisplayPresenter_handle_message(DisplayPresenter* presenter, const Core0ToC
             }
             break;
         }
+        case MSG_CAPTURE_READY:
+            presenter->capture_target = msg->data.capture_ready.target;
+            break;
         default:
             break;
     }
@@ -257,9 +262,17 @@ static void render_capturing(DisplayPresenter* presenter) {
     DisplayDriver_draw_string(DISP_X_TITLE, DISP_Y_TITLE, "Analyse", DISPLAY_COLOR_RED, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
     DisplayDriver_draw_hline(DISP_Y_TITLE_LINE, DISPLAY_COLOR_GRAY);
 
-    char thresh_str[32];
-    snprintf(thresh_str, sizeof(thresh_str), "Schwelle: %u", presenter->threshold);
-    DisplayDriver_draw_string(10, 40, thresh_str, DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+    char sensor_str[32];
+    if (presenter->capture_target == 0) {
+        snprintf(sensor_str, sizeof(sensor_str), "Sensor: 0");
+    } else if (presenter->capture_target == 1) {
+        snprintf(sensor_str, sizeof(sensor_str), "Sensor: 1");
+    } else if (presenter->capture_target == 2) {
+        snprintf(sensor_str, sizeof(sensor_str), "Sensor: 2");
+    } else {
+        snprintf(sensor_str, sizeof(sensor_str), "Sensor: alle");
+    }
+    DisplayDriver_draw_string(10, 40, sensor_str, DISPLAY_COLOR_YELLOW, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
 
     if (presenter->sensor_state == SENSOR_STATE_CAPTURE_ARMED) {
         DisplayDriver_draw_string(35, 65, "BEREIT!", DISPLAY_COLOR_GREEN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);

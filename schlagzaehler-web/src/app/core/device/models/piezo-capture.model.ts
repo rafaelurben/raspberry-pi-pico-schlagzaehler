@@ -9,6 +9,7 @@ export interface PiezoCaptureResult {
   readonly baseline: number;
   readonly noise: number;
   readonly threshold: number;
+  readonly target?: number;
   readonly peak: number;
   readonly samples: readonly number[];
 }
@@ -21,6 +22,7 @@ export interface CaptureStartMessage {
   readonly baseline: number;
   readonly noise: number;
   readonly threshold: number;
+  readonly target?: number;
 }
 
 export interface CaptureDataMessage {

@@ -26,13 +26,21 @@ typedef struct {
     OsalQueue* queue_to_core1;
 
     SensorState last_sensor_state;
+    uint8_t capture_target;
     GameState pre_capture_state;
     uint64_t last_timer_broadcast_us;
 } GameController;
 
 void GameController_init(GameController* gc, const Config* config, OsalQueue* queue_to_core1);
 
-void GameController_on_sensor_state(GameController* gc, SensorState sensor_state, uint16_t baseline, uint16_t noise, uint16_t threshold);
+void GameController_on_sensor_state(
+    GameController* gc,
+    SensorState sensor_state,
+    uint8_t capture_target,
+    const uint16_t baselines[SENSOR_COUNT],
+    const uint16_t noises[SENSOR_COUNT],
+    const uint16_t thresholds[SENSOR_COUNT]
+);
 void GameController_on_hit(GameController* gc, const HitEvent* hit);
 void GameController_on_button(GameController* gc, const ButtonEvent* btn);
 void GameController_on_command(GameController* gc, const Core1ToCore0Message* cmd);

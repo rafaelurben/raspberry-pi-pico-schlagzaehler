@@ -41,7 +41,8 @@ export const CompanionCommands = {
   reset: (): string => 'RESET',
   calibrate: (): string => 'CALIB',
   status: (): string => 'STATUS',
-  captureStart: (): string => 'CAPTURE',
+  captureStart: (target?: number | 'all'): string =>
+    target !== undefined ? `CAPTURE:${target}` : 'CAPTURE',
   captureStop: (): string => 'CAPTURE:STOP',
   setMode: (mode: SelectableGameMode): string => `MODE:${mode}`,
   setParameter: (param: number): string => `PARAM:${Math.max(1, Math.floor(param))}`,
@@ -92,6 +93,8 @@ export function parseCaptureMessage(rawLine: string): CaptureProtocolMessage | n
     const baseline = Number.parseInt(kv['baseline'] ?? '0', 10);
     const noise = Number.parseInt(kv['noise'] ?? '0', 10);
     const threshold = Number.parseInt(kv['threshold'] ?? '0', 10);
+    const targetParsed = Number.parseInt(kv['target'] ?? '', 10);
+    const target = Number.isNaN(targetParsed) ? undefined : targetParsed;
 
     if (Number.isNaN(totalSamples) || totalSamples <= 0) {
       return null;
@@ -105,6 +108,7 @@ export function parseCaptureMessage(rawLine: string): CaptureProtocolMessage | n
       baseline: Number.isNaN(baseline) ? 0 : baseline,
       noise: Number.isNaN(noise) ? 0 : noise,
       threshold: Number.isNaN(threshold) ? 0 : threshold,
+      target,
     };
   }
 
