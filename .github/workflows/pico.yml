@@ -4,7 +4,7 @@ on:
   push:
     paths:
       - "schlagzaehler-pico/**"
-      - ".github/workflows/pico-build.yml"
+      - ".github/workflows/pico.yml"
 
 jobs:
   test:
