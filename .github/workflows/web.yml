@@ -1,4 +1,4 @@
-name: Deploy Angular app to GitHub Pages
+name: schlagzaehler-web
 
 on:
   push:

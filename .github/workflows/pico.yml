@@ -1,4 +1,4 @@
-name: Build Pico Code
+name: schlagzaehler-pico
 
 on:
   push:
@@ -8,7 +8,6 @@ on:
 
 jobs:
   test:
-    name: Run C tests
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -45,7 +44,6 @@ jobs:
         run: /tmp/test_firmware
 
   build:
-    name: Build program
     runs-on: ubuntu-latest
     needs: test
     permissions:
