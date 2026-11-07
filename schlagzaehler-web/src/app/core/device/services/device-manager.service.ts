@@ -25,6 +25,7 @@ interface InProgressCapture {
   readonly baseline: number;
   readonly noise: number;
   readonly threshold: number;
+  readonly target?: number;
   readonly samples: number[];
   receivedCount: number;
 }
@@ -75,6 +76,7 @@ export class DeviceManagerService implements OnDestroy {
 
   private readonly activeDevices = new Map<string, ActiveDeviceEntry>();
   private readonly inProgressCaptures = new Map<string, InProgressCapture>();
+  private readonly deviceCaptureTargets = new Map<string, number | 'all' | undefined>();
   private deviceCounter = 0;
 
   /**
@@ -367,10 +369,14 @@ export class DeviceManagerService implements OnDestroy {
   /**
    * Arms raw piezo waveform capture on a device.
    */
-  async startCapture(deviceId: string): Promise<void> {
+  async startCapture(deviceId: string, target?: number | 'all'): Promise<void> {
+    if (target !== undefined) {
+      this.deviceCaptureTargets.set(deviceId, target);
+    }
+    const resolvedTarget = target ?? this.deviceCaptureTargets.get(deviceId);
     this.inProgressCaptures.delete(deviceId);
     this.setDeviceCaptureProgress(deviceId, null);
-    await this.sendCommand(deviceId, CompanionCommands.captureStart());
+    await this.sendCommand(deviceId, CompanionCommands.captureStart(resolvedTarget));
   }
 
   /**
@@ -378,6 +384,7 @@ export class DeviceManagerService implements OnDestroy {
    */
   async stopCapture(deviceId: string): Promise<void> {
     this.setAutoRearm(deviceId, false);
+    this.deviceCaptureTargets.delete(deviceId);
     this.inProgressCaptures.delete(deviceId);
     this.setDeviceCaptureProgress(deviceId, null);
     await this.sendCommand(deviceId, CompanionCommands.captureStop());
@@ -506,6 +513,7 @@ export class DeviceManagerService implements OnDestroy {
         baseline: msg.baseline,
         noise: msg.noise,
         threshold: msg.threshold,
+        target: msg.target,
         samples: new Array<number>(msg.totalSamples).fill(msg.baseline),
         receivedCount: 0,
       });
@@ -559,6 +567,7 @@ export class DeviceManagerService implements OnDestroy {
           baseline: active.baseline,
           noise: active.noise,
           threshold: active.threshold,
+          target: active.target,
           peak,
           samples: active.samples,
         };
@@ -567,7 +576,8 @@ export class DeviceManagerService implements OnDestroy {
       }
 
       if (this.autoRearmDevices()[deviceId]) {
-        void this.startCapture(deviceId).catch(() => {
+        const lastTarget = this.deviceCaptureTargets.get(deviceId);
+        void this.startCapture(deviceId, lastTarget).catch(() => {
           // Ignore rearm errors if device disconnected
         });
       }

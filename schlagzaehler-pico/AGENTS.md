@@ -10,8 +10,11 @@ You are an expert in embedded C (C23) and C++ (C++23) development for the Raspbe
 
 ### Hardware Peripherals & Pinout (`src/Common/Config.h`)
 
-- **Piezo Sensor (ADC + DMA)**:
-  - `PIN_PIEZO_ADC`: GPIO 26 (`ADC_INPUT_CHANNEL` 0), sampled continuously at **50 kHz** (`50000` Hz) using ping-pong DMA buffers (`256` samples per buffer).
+- **Piezo Sensors (3x ADC + DMA Hardware Round-Robin)**:
+  - `PIN_PIEZO_ADC_0`: GPIO 26 (`ADC_INPUT_CHANNEL` 0)
+  - `PIN_PIEZO_ADC_1`: GPIO 27 (`ADC_INPUT_CHANNEL` 1)
+  - `PIN_PIEZO_ADC_2`: GPIO 28 (`ADC_INPUT_CHANNEL` 2)
+  - Sampled continuously using RP2040 hardware round-robin (`ADC_ROUND_ROBIN_MASK = 0x07`) at **150 kHz aggregate** (**50 kHz** per channel, `50000` Hz) using ping-pong DMA buffers of **384** samples (`128` per sensor per buffer, interleaved `0, 1, 2, 0, 1, 2...`).
 - **Navigation Buttons (Active-Low with Internal Pull-Ups, Interrupt-Driven)**:
   - `PIN_BTN_UP`: GPIO 10
   - `PIN_BTN_DOWN`: GPIO 14
@@ -70,7 +73,8 @@ The firmware is strictly divided into three layers so that all application logic
 - **`src/App/`**: Platform-agnostic application logic:
   - `App.h` / `App.c`: Top-level orchestrator owning state, inter-core queues, Core 0 loop (`App_run_core0`), and Core 1 loop (`App_run_core1`).
   - `ConfigService.h` / `ConfigService.c`: Validates, clamps, and updates runtime configuration parameters.
-  - `HitDetection/HitDetector.h` / `.c`: Processes ADC sample buffers, performs baseline/noise calibration, computes dynamic threshold with exponential decay, and enforces hit lockout and button-settling suppression windows.
+  - `HitDetection/HitDetector.h` / `.c`: De-interleaves 3-channel round-robin ADC sample buffers, performs per-sensor baseline/noise calibration, computes per-sensor dynamic threshold with exponential decay, enforces per-sensor hit lockout and button-settling suppression windows, aggregates simultaneous vibrations across the target mount via a 2.5 ms coincidence window, and selects the winning piezo based on maximum peak intensity.
+  - `HitDetection/SignalCapture.h` / `.c`: Captures target-selected raw piezo waveforms (`0`, `1`, `2`, or `all`). Single-sensor capture downsamples at 5:1 max-pooling (10 kHz effective rate); "all" mode downsamples at 15:1 max-pooling per sensor interleaved `0,1,2,0,1,2...` for 10 kHz total rate without requiring additional RAM (`21,000` samples max).
   - `Input/ButtonController.h` / `.c`: Handles GPIO edge interrupts with 25 ms debouncing, queues `ButtonEvent`s in an ISR-safe ring buffer, and tracks button settling periods to suppress mechanical button-press vibrations from triggering piezo hits.
   - `Game/GameController.h` / `.c` & `GameState.h` / `.c`: Authoritative state machine managing game states, modes, score, timers, local button navigation, companion commands, and state broadcasts to Core 1.
   - `Game/Modes/`: Mode-specific rules (`CountMode`, `TimedMode`, `RaceMode`).
@@ -90,7 +94,7 @@ The RP2040's two ARM Cortex-M0+ cores have strictly separated responsibilities a
 
 ### Core 0: Real-Time Sensing & Authoritative Game Logic (`App_run_core0`)
 
-1. **ADC DMA Processing**: Polls completed 256-sample ping-pong buffers from `PiezoAdcDriver` and feeds them into `HitDetector_process_buffer()`.
+1. **ADC DMA Processing**: Polls completed 384-sample ping-pong buffers from `PiezoAdcDriver` (128 samples per sensor, interleaved `[S0, S1, S2, ...]`) and feeds them into `HitDetector_process_buffer()`.
 2. **Power & Noise Gating**: Automatically stops ADC/DMA when in `GAME_STATE_MENU` (unless calibrating) to save resources and avoid spurious hits, and suppresses piezo detection for 150–250 ms during and immediately after physical button presses (`HitDetector_suppress_hits()`).
 3. **Button Processing**: Drains debounced `ButtonEvent`s from `ButtonController` and forwards them to `GameController_on_button()`.
 4. **Companion Command Processing**: Pops `Core1ToCore0Message` commands queued by Core 1 and applies calibration, sensitivity, mode, parameter, start, or reset actions.
@@ -110,11 +114,11 @@ The RP2040's two ARM Cortex-M0+ cores have strictly separated responsibilities a
 ### Sensor State (`SensorState`)
 
 - `SENSOR_STATE_INIT`: Initial uncalibrated state on boot.
-- `SENSOR_STATE_CALIBRATING`: Samples baseline mean and variance over `1500 ms` (min `10000` samples), computing `base_threshold = baseline + max(min_threshold_delta, noise_factor * noise)`. Fails to `ERROR` if signal span exceeds 1500 ADC counts.
-- `SENSOR_STATE_ARMED`: Ready to detect hits exceeding `base_threshold`.
-- `SENSOR_STATE_HIT_LOCKOUT`: Triggered upon a hit; tracks peak intensity with exponential decay (`decay_factor = 0.995`) during `lockout_duration_ms` (`100 ms`) to prevent double-counting ringdown oscillations.
-- `SENSOR_STATE_CAPTURE_ARMED`: Armed via companion `CAPTURE` command; continuously fills a `0.1 s` pre-trigger circular buffer (`1,000` samples at `10 kHz`, 5:1 max-pooled from `50 kHz` DMA) until a sample crosses `base_threshold`.
-- `SENSOR_STATE_CAPTURING`: Triggered; collects `2.0 s` post-trigger samples (`20,000` samples at `10 kHz`) into the `21,000`-sample buffer (`SignalCapture`)
+- `SENSOR_STATE_CALIBRATING`: Samples baseline mean and variance across all 3 sensors over `1500 ms` (min `10000` samples per sensor), computing per-sensor `base_threshold = baseline + max(min_threshold_delta, noise_factor * noise)`. If a sensor baseline is below `config->min_baseline_for_active_sensor`, it is flagged as `ignored = true` and prevented from triggering hits or winning coincidence arbitration. Fails to `ERROR` if signal span exceeds 1500 ADC counts on any active sensor.
+- `SENSOR_STATE_ARMED`: Ready to detect hits exceeding per-sensor thresholds (skipping ignored sensors).
+- `SENSOR_STATE_HIT_LOCKOUT`: Triggered upon a hit; tracks peak intensity with exponential decay (`decay_factor`) per sensor during `lockout_duration_ms` to prevent double-counting ringdown oscillations. Coincidence window resolves multi-sensor vibration and picks the winning piezo by peak intensity (ignoring inactive sensors).
+- `SENSOR_STATE_CAPTURE_ARMED`: Armed via companion `CAPTURE` command (target `0`, `1`, `2`, or `all`); continuously fills a `0.1 s` pre-trigger circular buffer (`1,000` samples at `10 kHz`, 5:1 max-pooled or 15:1 max-pooled per sensor) until a sample crosses the trigger threshold.
+- `SENSOR_STATE_CAPTURING`: Triggered; collects `2.0 s` post-trigger samples (`20,000` samples at `10 kHz`) into the `21,000`-sample buffer (`SignalCapture`).
 - `SENSOR_STATE_TRANSMITTING`: Streams chunks of samples non-blockingly over USB CDC via Core 1.
 - `SENSOR_STATE_ERROR`: Calibration or sensor fault.
 
@@ -123,7 +127,7 @@ The RP2040's two ARM Cortex-M0+ cores have strictly separated responsibilities a
 - `GAME_STATE_BOOT`: Shown during initial sensor calibration; transitions to `READY` when calibration succeeds.
 - `GAME_STATE_MENU`: Mode selection (`UP`/`DOWN` to cycle mode, `RIGHT` to confirm and enter `READY`).
 - `GAME_STATE_READY`: Pre-game screen (`LEFT` returns to `MENU`, `UP`/`DOWN` adjusts parameter in `TIMED` or `RACE` mode, `RIGHT` or companion `START` command transitions to `RUNNING`).
-- `GAME_STATE_RUNNING`: Active gameplay (`LEFT` aborts and resets to `READY`; hits increment score; timer ticks).
+- `GAME_STATE_RUNNING`: Active gameplay (`LEFT` aborts and resets to `READY`; hits increment authoritative aggregate score; timer ticks; individual winning piezo ID is not displayed on TFT).
 - `GAME_STATE_FINISHED`: Game over screen (`LEFT` returns to `MENU`, `RIGHT` resets to `READY`).
 - `GAME_STATE_CAPTURING`: Dedicated screen shown while raw piezo signal capture is armed (`SENSOR_STATE_CAPTURE_ARMED`) or actively recording/streaming (`SENSOR_STATE_CAPTURING`).
 
@@ -143,14 +147,14 @@ Communication with `schlagzaehler-web` uses newline-delimited (`\n`) ASCII messa
 
 - `BOOT success=<0|1> msg=<text>`
 - `SENSOR status=<INIT|CALIBRATING|ARMED|LOCKOUT|CAPTURE_ARMED|CAPTURING|TRANSMITTING|ERROR>`
-- `CALIB success=<0|1> baseline=<u16> noise=<u16> threshold=<u16>`
-- `HIT id=<u32> peak=<u16> intensity=<u16>`
+- `CALIB success=<0|1> target=<0|1|2> baseline=<u16> noise=<u16> threshold=<u16> ignored=<true|false>`
+- `HIT id=<u32> target=<0|1|2> peak=<u16> intensity=<u16>`
 - `STATE old=<BOOT|MENU|READY|RUNNING|FINISHED|CAPTURING> new=<...>`
 - `MODE active=<COUNT|TIMED|RACE> param=<u32>`
 - `SCORE value=<u32>`
 - `TIMER elapsed=<u32> remaining=<u32>`
 - `RESULT score=<u32> time_ms=<u32> reason=<NONE|TIME_LIMIT|TARGET_REACHED|ABORTED>`
-- `CAPTURE_START rate=<u32> pre=<u16> count=<u16> baseline=<u16> noise=<u16> threshold=<u16>`
+- `CAPTURE_START rate=<u32> pre=<u16> count=<u16> target=<0|1|2|all> baseline=<u16> noise=<u16> threshold=<u16>`
 - `CAPTURE_DATA offset=<u16> values=<v0>,<v1>,...`
 - `CAPTURE_END count=<u16>`
 - `ERROR code=<u32> comp=<name> msg=<text>`
@@ -159,13 +163,13 @@ Communication with `schlagzaehler-web` uses newline-delimited (`\n`) ASCII messa
 
 - `START`: Start game (if in `MENU` or `READY`) or restart (if `FINISHED`).
 - `RESET`: Abort/reset current game back to `READY` with score 0 (also cancels active capture).
-- `CALIB`: Trigger sensor recalibration.
+- `CALIB`: Trigger sensor recalibration for all sensors.
 - `STATUS`: Broadcast a full state snapshot (`SENSOR`, `STATE`, `MODE`, `SCORE`, `TIMER`).
-- `CAPTURE` (or `CAPTURE:START`): Arm single-shot raw piezo waveform capture (`1,000` pre + `20,000` post samples at `10 kHz`).
+- `CAPTURE [target=<0|1|2|all>]` (or `CAPTURE:START ...`): Arm single-shot raw piezo waveform capture for a target piezo or all piezos (`1,000` pre + `20,000` post samples at `10 kHz`).
 - `CAPTURE:STOP`: Cancel armed or ongoing raw piezo waveform capture.
 - `MODE:<COUNT|TIMED|RACE|0|1|2>`: Switch active game mode.
 - `PARAM:<u32>`: Set mode parameter (seconds for `TIMED`, target hits for `RACE`).
-- `SENS:<float>`: Set piezo sensitivity (`noise_factor`, clamped to `1.0`–`20.0`).
+- `SENS:<float>`: Set piezo sensitivity (`noise_factor`, clamped to `1.0`–`20.0`) for all sensors.
 
 ---
 
@@ -221,5 +225,6 @@ cc -std=c23 -Wall -Wextra -Isrc \
   src/App/Input/ButtonController.c \
   src/App/Companion/CommandHandler.c \
   src/App/Companion/CompanionProtocol.c \
+  src/App/Display/DisplayPresenter.c \
   -lm -o /tmp/test_firmware && /tmp/test_firmware && rm -f /tmp/test_firmware
 ```

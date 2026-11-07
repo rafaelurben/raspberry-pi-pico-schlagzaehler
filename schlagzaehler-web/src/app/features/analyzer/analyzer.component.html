@@ -19,13 +19,26 @@
             [ngModel]="dev.id"
             (ngModelChange)="onSelectDevice($event)"
             aria-label="Select target device"
-            class="rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+            class="cursor-pointer rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
           >
             @for (d of connectedDevices(); track d.id) {
               <option [value]="d.id">{{ d.name }}</option>
             }
           </select>
         }
+
+        <!-- Sensor Target Selection -->
+        <select
+          [ngModel]="selectedTarget()"
+          (ngModelChange)="onSelectTarget($event)"
+          [disabled]="isDeviceCapturingOrArmed()"
+          aria-label="Select sensor to capture"
+          class="cursor-pointer rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          @for (opt of sensorTargetOptions; track opt.value) {
+            <option [value]="opt.value">{{ opt.label }}</option>
+          }
+        </select>
 
         <label
           class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/60 px-3.5 py-2 text-xs font-medium text-slate-200 select-none"
@@ -65,7 +78,7 @@
 
   @if (!activeDevice()) {
     <!-- No Connected Device Empty State -->
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-10 text-center shadow-lg">
+    <div class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-10 text-center shadow-lg">
       <h2 class="text-lg font-semibold text-white">No connected Pico device</h2>
       <p class="mx-auto mt-2 max-w-md text-xs text-slate-400 sm:text-sm">
         Connect a Schlagzähler Raspberry Pi Pico over USB Serial first to arm raw piezo signal
@@ -114,17 +127,16 @@
           </span>
           <span class="text-xs text-slate-300 sm:text-sm">
             @if (dev.state.sensorState === 'CAPTURE_ARMED') {
-              Waiting for hit trigger on <strong class="text-white">{{ dev.name }}</strong
-              >...
+              Waiting for hit trigger on <strong class="text-white">{{ dev.name }}</strong>
+              (<span class="font-medium text-indigo-300">{{ formatTargetLabel(selectedTarget()) }}</span>)...
             } @else if (dev.state.sensorState === 'CAPTURING') {
-              Trigger detected! Recording 2.0s post-trigger waveform...
+              Trigger detected! Recording 2.0s post-trigger waveform (<span class="font-medium text-indigo-300">{{ formatTargetLabel(selectedTarget()) }}</span>)...
             } @else if (
               dev.state.sensorState === 'TRANSMITTING' || activeDeviceProgress() !== null
             ) {
               Recording complete. Transferring 21,000 samples over USB...
             } @else {
-              Ready. Click <strong class="text-white">Arm Capture</strong> and strike the piezo
-              target to record a 2.1s waveform.
+              Ready. Choose sensor, click <strong class="text-white">Arm Capture</strong>, and strike the piezo target to record a 2.1s waveform.
             }
           </span>
         </div>
@@ -159,6 +171,7 @@
                 {{ cap.deviceName }} &mdash; {{ cap.timestamp | date: 'HH:mm:ss.SSS' }}
               </h2>
               <p class="mt-0.5 text-xs text-slate-400">
+                Target: <span class="font-semibold text-indigo-300">{{ formatTargetLabel(cap.target) }}</span> |
                 Peak: <span class="font-semibold text-white">{{ cap.peak }}</span> | Threshold:
                 <span class="text-amber-300">{{ cap.threshold }}</span> | Baseline:
                 <span class="text-emerald-300">{{ cap.baseline }}</span> | Noise:
@@ -287,9 +300,24 @@
                     <span class="text-xs font-semibold text-white">
                       Run #{{ deviceManager.captures().length - idx }}
                     </span>
-                    <span class="font-mono text-[11px] text-slate-400">
-                      {{ item.timestamp | date: 'HH:mm:ss' }}
-                    </span>
+                    <div class="flex items-center gap-2">
+                      <span
+                        class="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                        [class.bg-sky-500/20]="item.target === 3 || item.target === undefined"
+                        [class.text-sky-300]="item.target === 3 || item.target === undefined"
+                        [class.bg-indigo-500/20]="item.target === 0"
+                        [class.text-indigo-300]="item.target === 0"
+                        [class.bg-emerald-500/20]="item.target === 1"
+                        [class.text-emerald-300]="item.target === 1"
+                        [class.bg-amber-500/20]="item.target === 2"
+                        [class.text-amber-300]="item.target === 2"
+                      >
+                        {{ formatTargetBadge(item.target) }}
+                      </span>
+                      <span class="font-mono text-[11px] text-slate-400">
+                        {{ item.timestamp | date: 'HH:mm:ss' }}
+                      </span>
+                    </div>
                   </div>
                   <div class="mt-1 text-[11px] text-slate-300">
                     Peak: <span class="font-semibold text-indigo-300">{{ item.peak }}</span> |

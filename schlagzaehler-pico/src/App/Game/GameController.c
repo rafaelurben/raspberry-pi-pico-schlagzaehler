@@ -61,7 +61,8 @@ static void broadcast_sensor_state(GameController* gc) {
         .type = MSG_SENSOR_STATUS_CHANGED,
         .timestamp_us = Time_now_us(),
         .data.sensor_status = {
-            .state = gc->last_sensor_state
+            .state = gc->last_sensor_state,
+            .target = gc->capture_target
         }
     };
     send_msg(gc, &msg);
@@ -91,6 +92,7 @@ void GameController_init(GameController* gc, const Config* config, OsalQueue* qu
 
     gc->queue_to_core1 = queue_to_core1;
     gc->last_sensor_state = SENSOR_STATE_INIT;
+    gc->capture_target = 3;
     gc->pre_capture_state = GAME_STATE_READY;
     gc->last_timer_broadcast_us = 0;
 
@@ -108,11 +110,20 @@ void GameController_init(GameController* gc, const Config* config, OsalQueue* qu
     RaceMode_init(&gc->race_mode, gc->config.race_target_hits);
 }
 
-void GameController_on_sensor_state(GameController* gc, SensorState sensor_state, uint16_t baseline, uint16_t noise, uint16_t threshold) {
+void GameController_on_sensor_state(
+    GameController* gc,
+    SensorState sensor_state,
+    uint8_t capture_target,
+    const uint16_t baselines[SENSOR_COUNT],
+    const uint16_t noises[SENSOR_COUNT],
+    const uint16_t thresholds[SENSOR_COUNT],
+    const bool ignored[SENSOR_COUNT]
+) {
     if (!gc) return;
 
     SensorState prev_sensor_state = gc->last_sensor_state;
     gc->last_sensor_state = sensor_state;
+    gc->capture_target = capture_target;
 
     /* Notify Core 1 */
     broadcast_sensor_state(gc);
@@ -140,17 +151,21 @@ void GameController_on_sensor_state(GameController* gc, SensorState sensor_state
     bool from_calibration = (prev_sensor_state == SENSOR_STATE_CALIBRATING || prev_sensor_state == SENSOR_STATE_INIT);
 
     if (sensor_state == SENSOR_STATE_ARMED && from_calibration) {
-        Core0ToCore1Message c_msg = {
-            .type = MSG_CALIBRATION_RESULT,
-            .timestamp_us = Time_now_us(),
-            .data.calibration_result = {
-                .success = true,
-                .baseline = baseline,
-                .noise = noise,
-                .threshold = threshold
-            }
-        };
-        send_msg(gc, &c_msg);
+        for (uint8_t s = 0; s < SENSOR_COUNT; ++s) {
+            Core0ToCore1Message c_msg = {
+                .type = MSG_CALIBRATION_RESULT,
+                .timestamp_us = Time_now_us(),
+                .data.calibration_result = {
+                    .success = true,
+                    .ignored = ignored ? ignored[s] : false,
+                    .sensor_id = s,
+                    .baseline = baselines ? baselines[s] : 0,
+                    .noise = noises ? noises[s] : 0,
+                    .threshold = thresholds ? thresholds[s] : 0
+                }
+            };
+            send_msg(gc, &c_msg);
+        }
 
         if (gc->state_model.state == GAME_STATE_BOOT) {
             GameState old_s = gc->state_model.state;
@@ -159,17 +174,21 @@ void GameController_on_sensor_state(GameController* gc, SensorState sensor_state
             broadcast_mode_change(gc);
         }
     } else if (sensor_state == SENSOR_STATE_ERROR && from_calibration) {
-        Core0ToCore1Message c_msg = {
-            .type = MSG_CALIBRATION_RESULT,
-            .timestamp_us = Time_now_us(),
-            .data.calibration_result = {
-                .success = false,
-                .baseline = baseline,
-                .noise = noise,
-                .threshold = threshold
-            }
-        };
-        send_msg(gc, &c_msg);
+        for (uint8_t s = 0; s < SENSOR_COUNT; ++s) {
+            Core0ToCore1Message c_msg = {
+                .type = MSG_CALIBRATION_RESULT,
+                .timestamp_us = Time_now_us(),
+                .data.calibration_result = {
+                    .success = false,
+                    .ignored = ignored ? ignored[s] : false,
+                    .sensor_id = s,
+                    .baseline = baselines ? baselines[s] : 0,
+                    .noise = noises ? noises[s] : 0,
+                    .threshold = thresholds ? thresholds[s] : 0
+                }
+            };
+            send_msg(gc, &c_msg);
+        }
     }
 }
 

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { DeviceState } from '../models/device.model';
-import { CompanionCommands, parseCompanionMessage } from './companion-protocol';
+import {
+  CompanionCommands,
+  parseCaptureMessage,
+  parseCompanionMessage,
+} from './companion-protocol';
 
 describe('companion-protocol', () => {
   it('should format companion commands properly', () => {
@@ -13,6 +17,10 @@ describe('companion-protocol', () => {
     expect(CompanionCommands.setMode('RACE')).toBe('MODE:RACE');
     expect(CompanionCommands.setParameter(30)).toBe('PARAM:30');
     expect(CompanionCommands.setSensitivity(1.5)).toBe('SENS:1.5');
+    expect(CompanionCommands.captureStart()).toBe('CAPTURE');
+    expect(CompanionCommands.captureStart(1)).toBe('CAPTURE:1');
+    expect(CompanionCommands.captureStart('all')).toBe('CAPTURE:all');
+    expect(CompanionCommands.captureStop()).toBe('CAPTURE:STOP');
   });
 
   it('should parse STATE messages and update readiness and timer start timestamp', () => {
@@ -73,8 +81,21 @@ describe('companion-protocol', () => {
     expect(state.sensorState).toBe('CALIBRATING');
     expect(state.isReady).toBe(false);
 
-    state = parseCompanionMessage('CALIB success=1 baseline=2000 noise=12 threshold=2050', state);
+    state = parseCompanionMessage('CALIB success=1 target=1 baseline=2000 noise=12 threshold=2050', state);
     expect(state.sensorState).toBe('ARMED');
     expect(state.isReady).toBe(true);
+  });
+
+  it('should parse CAPTURE messages with target', () => {
+    const start = parseCaptureMessage(
+      'CAPTURE_START rate=10000 pre=999 count=21000 target=3 baseline=2000 noise=12 threshold=2050',
+    );
+    expect(start).not.toBeNull();
+    expect(start?.type).toBe('CAPTURE_START');
+    if (start?.type === 'CAPTURE_START') {
+      expect(start.target).toBe(3);
+      expect(start.preSamples).toBe(999);
+      expect(start.totalSamples).toBe(21000);
+    }
   });
 });

@@ -42,6 +42,8 @@ typedef struct {
 
 typedef struct {
     bool success;
+    bool ignored;
+    uint8_t sensor_id;
     uint16_t baseline;
     uint16_t noise;
     uint16_t threshold;
@@ -49,6 +51,7 @@ typedef struct {
 
 typedef struct {
     SensorState state;
+    uint8_t target; /* 0, 1, 2, or 3 for ALL */
 } MsgSensorStatusChanged;
 
 typedef HitEvent MsgHitDetected;
@@ -85,6 +88,7 @@ typedef struct {
 
 typedef struct {
     uint32_t sample_rate_hz;
+    uint8_t target; /* 0, 1, 2, or 3 for ALL */
     uint16_t pre_samples;
     uint16_t total_samples;
     uint16_t baseline;
@@ -148,6 +152,7 @@ typedef struct {
 
 typedef struct {
     bool enable;
+    uint8_t target; /* 0, 1, 2, or 3 for ALL */
 } MsgRequestCapture;
 
 typedef struct {

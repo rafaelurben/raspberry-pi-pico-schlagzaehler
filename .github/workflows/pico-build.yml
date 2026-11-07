@@ -38,6 +38,7 @@ jobs:
             src/App/Input/ButtonController.c \
             src/App/Companion/CommandHandler.c \
             src/App/Companion/CompanionProtocol.c \
+            src/App/Display/DisplayPresenter.c \
             -lm -o /tmp/test_firmware
 
       - name: Execute C tests

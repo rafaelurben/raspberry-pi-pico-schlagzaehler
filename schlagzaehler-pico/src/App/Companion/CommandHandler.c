@@ -70,11 +70,14 @@ bool CommandHandler_handle_set_sensitivity(CommandHandler* handler, float factor
     return send_cmd(handler, &msg);
 }
 
-bool CommandHandler_handle_request_capture(CommandHandler* handler, bool enable) {
+bool CommandHandler_handle_request_capture(CommandHandler* handler, bool enable, uint8_t target) {
     Core1ToCore0Message msg = {
         .type = MSG_REQUEST_CAPTURE,
         .timestamp_us = Time_now_us(),
-        .data.request_capture.enable = enable
+        .data.request_capture = {
+            .enable = enable,
+            .target = target
+        }
     };
     return send_cmd(handler, &msg);
 }
