@@ -38,6 +38,12 @@ jobs:
       - name: Test Angular application
         run: npm run test
 
+      - name: Lint Angular application
+        run: npm run lint
+
+      - name: Check Angular application formatting
+        run: npm run format-check
+
   # Build job
   build:
     runs-on: ubuntu-latest

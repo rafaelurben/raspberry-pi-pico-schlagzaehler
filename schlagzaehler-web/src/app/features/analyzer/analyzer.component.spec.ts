@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { DeviceManagerService } from '../../core/device/services/device-manager.service';
 import { WebSerialTransportFactory } from '../../core/device/transport/web-serial-transport-factory.service';
 import { AnalyzerComponent } from './analyzer.component';
+import { Device } from '../../core/device/models/device.model';
 
 class MockWebSerialFactory {
   isSupported(): boolean {
@@ -62,9 +63,9 @@ describe('AnalyzerComponent', () => {
     setupComponent();
     expect(component.formatTargetLabel('all')).toBe('All Sensors (Interleaved)');
     expect(component.formatTargetLabel(3)).toBe('All Sensors (Interleaved)');
-    expect(component.formatTargetLabel(0)).toBe('Sensor 0 (GPIO 26)');
-    expect(component.formatTargetLabel(1)).toBe('Sensor 1 (GPIO 27)');
-    expect(component.formatTargetLabel(2)).toBe('Sensor 2 (GPIO 28)');
+    expect(component.formatTargetLabel(0)).toBe('Sensor 0');
+    expect(component.formatTargetLabel(1)).toBe('Sensor 1');
+    expect(component.formatTargetLabel(2)).toBe('Sensor 2');
 
     expect(component.formatTargetBadge(3)).toBe('All (3x)');
     expect(component.formatTargetBadge(0)).toBe('Sensor 0');
@@ -75,9 +76,9 @@ describe('AnalyzerComponent', () => {
 
   it('should invoke deviceManager.startCapture with selected sensor target when armed', async () => {
     setupComponent();
-    const startCaptureSpy = vi
-      .spyOn(deviceManager, 'startCapture')
-      .mockImplementation(async () => {});
+    const startCaptureSpy = vi.spyOn(deviceManager, 'startCapture').mockImplementation(async () => {
+      /* empty */
+    });
 
     // Mock an active connected device
     vi.spyOn(component, 'activeDevice').mockReturnValue({
@@ -94,7 +95,7 @@ describe('AnalyzerComponent', () => {
         sensorState: 'ARMED',
         isReady: true,
       },
-    } as any);
+    } as unknown as Device);
 
     component.onSelectTarget('1');
     await component.onArmCapture();

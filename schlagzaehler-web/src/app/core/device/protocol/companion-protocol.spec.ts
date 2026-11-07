@@ -81,7 +81,10 @@ describe('companion-protocol', () => {
     expect(state.sensorState).toBe('CALIBRATING');
     expect(state.isReady).toBe(false);
 
-    state = parseCompanionMessage('CALIB success=1 target=1 baseline=2000 noise=12 threshold=2050', state);
+    state = parseCompanionMessage(
+      'CALIB success=1 target=1 baseline=2000 noise=12 threshold=2050',
+      state,
+    );
     expect(state.sensorState).toBe('ARMED');
     expect(state.isReady).toBe(true);
   });
