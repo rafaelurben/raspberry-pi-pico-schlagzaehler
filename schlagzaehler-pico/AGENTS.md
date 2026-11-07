@@ -114,9 +114,9 @@ The RP2040's two ARM Cortex-M0+ cores have strictly separated responsibilities a
 ### Sensor State (`SensorState`)
 
 - `SENSOR_STATE_INIT`: Initial uncalibrated state on boot.
-- `SENSOR_STATE_CALIBRATING`: Samples baseline mean and variance across all 3 sensors over `1500 ms` (min `10000` samples per sensor), computing per-sensor `base_threshold = baseline + max(min_threshold_delta, noise_factor * noise)`. Fails to `ERROR` if signal span exceeds 1500 ADC counts on any sensor.
-- `SENSOR_STATE_ARMED`: Ready to detect hits exceeding per-sensor thresholds.
-- `SENSOR_STATE_HIT_LOCKOUT`: Triggered upon a hit; tracks peak intensity with exponential decay (`decay_factor`) per sensor during `lockout_duration_ms` to prevent double-counting ringdown oscillations. Coincidence window resolves multi-sensor vibration and picks the winning piezo by peak intensity.
+- `SENSOR_STATE_CALIBRATING`: Samples baseline mean and variance across all 3 sensors over `1500 ms` (min `10000` samples per sensor), computing per-sensor `base_threshold = baseline + max(min_threshold_delta, noise_factor * noise)`. If a sensor baseline is below `config->min_baseline_for_active_sensor`, it is flagged as `ignored = true` and prevented from triggering hits or winning coincidence arbitration. Fails to `ERROR` if signal span exceeds 1500 ADC counts on any active sensor.
+- `SENSOR_STATE_ARMED`: Ready to detect hits exceeding per-sensor thresholds (skipping ignored sensors).
+- `SENSOR_STATE_HIT_LOCKOUT`: Triggered upon a hit; tracks peak intensity with exponential decay (`decay_factor`) per sensor during `lockout_duration_ms` to prevent double-counting ringdown oscillations. Coincidence window resolves multi-sensor vibration and picks the winning piezo by peak intensity (ignoring inactive sensors).
 - `SENSOR_STATE_CAPTURE_ARMED`: Armed via companion `CAPTURE` command (target `0`, `1`, `2`, or `all`); continuously fills a `0.1 s` pre-trigger circular buffer (`1,000` samples at `10 kHz`, 5:1 max-pooled or 15:1 max-pooled per sensor) until a sample crosses the trigger threshold.
 - `SENSOR_STATE_CAPTURING`: Triggered; collects `2.0 s` post-trigger samples (`20,000` samples at `10 kHz`) into the `21,000`-sample buffer (`SignalCapture`).
 - `SENSOR_STATE_TRANSMITTING`: Streams chunks of samples non-blockingly over USB CDC via Core 1.
@@ -147,7 +147,7 @@ Communication with `schlagzaehler-web` uses newline-delimited (`\n`) ASCII messa
 
 - `BOOT success=<0|1> msg=<text>`
 - `SENSOR status=<INIT|CALIBRATING|ARMED|LOCKOUT|CAPTURE_ARMED|CAPTURING|TRANSMITTING|ERROR>`
-- `CALIB success=<0|1> sensor=<0|1|2> baseline=<u16> noise=<u16> threshold=<u16>`
+- `CALIB success=<0|1> target=<0|1|2> baseline=<u16> noise=<u16> threshold=<u16> ignored=<true|false>`
 - `HIT id=<u32> target=<0|1|2> peak=<u16> intensity=<u16>`
 - `STATE old=<BOOT|MENU|READY|RUNNING|FINISHED|CAPTURING> new=<...>`
 - `MODE active=<COUNT|TIMED|RACE> param=<u32>`

@@ -27,6 +27,7 @@ void HitDetector_init(HitDetector* detector, const Config* config) {
         detector->channels[s].noise = 0;
         detector->channels[s].base_threshold = 100;
         detector->channels[s].dynamic_threshold = 100.0f;
+        detector->channels[s].ignored = false;
         detector->channels[s].calib_sample_sum = 0;
         detector->channels[s].calib_sample_sq_sum = 0;
         detector->channels[s].calib_sample_count = 0;
@@ -49,6 +50,7 @@ void HitDetector_start_calibration(HitDetector* detector) {
     detector->coinc_samples_remaining = 0;
 
     for (size_t s = 0; s < SENSOR_COUNT; ++s) {
+        detector->channels[s].ignored = false;
         detector->channels[s].calib_sample_sum = 0;
         detector->channels[s].calib_sample_sq_sum = 0;
         detector->channels[s].calib_sample_count = 0;
@@ -71,7 +73,11 @@ bool HitDetector_start_capture(HitDetector* detector, uint8_t target) {
     for (size_t s = 0; s < SENSOR_COUNT; ++s) {
         baselines[s] = detector->channels[s].baseline;
         noises[s] = detector->channels[s].noise;
-        thresholds[s] = detector->channels[s].base_threshold;
+        if (detector->channels[s].ignored) {
+            thresholds[s] = 65535;
+        } else {
+            thresholds[s] = detector->channels[s].base_threshold;
+        }
         detector->channels[s].dynamic_threshold = (float)detector->channels[s].base_threshold;
     }
 
@@ -164,6 +170,11 @@ uint16_t HitDetector_get_sensor_noise(const HitDetector* detector, uint8_t senso
     return detector->channels[sensor_id].noise;
 }
 
+bool HitDetector_is_sensor_ignored(const HitDetector* detector, uint8_t sensor_id) {
+    if (!detector || sensor_id >= SENSOR_COUNT) return false;
+    return detector->channels[sensor_id].ignored;
+}
+
 bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, size_t count, HitEvent* out_event) {
     if (!detector || !samples || count == 0) return false;
 
@@ -234,14 +245,19 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
                 double noise = (variance > 0.0) ? sqrt(variance) : 0.0;
                 uint16_t range = ch->calib_max - ch->calib_min;
 
-                /* Plausibility check: 12-bit ADC range 0..4095 */
-                if (mean < 2.0 || mean > 4000.0 || noise > 350.0 || range > 800) {
-                    detector->state = SENSOR_STATE_ERROR;
-                    return false;
-                }
-
                 ch->baseline = (uint16_t)(mean + 0.5);
                 ch->noise = (uint16_t)(noise + 0.5);
+
+                if (ch->baseline < detector->config.min_baseline_for_active_sensor) {
+                    ch->ignored = true;
+                } else {
+                    ch->ignored = false;
+                    /* Plausibility check for active sensors: 12-bit ADC range 0..4095 */
+                    if (mean > 4000.0 || noise > 350.0 || range > 800) {
+                        detector->state = SENSOR_STATE_ERROR;
+                        return false;
+                    }
+                }
 
                 float delta = detector->config.noise_factor * (float)ch->noise;
                 if (delta < (float)detector->config.min_threshold_delta) {
@@ -293,9 +309,12 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
             }
 
             if (!detector->coinc_active) {
-                /* Check if any sensor exceeds its dynamic threshold */
+                /* Check if any non-ignored sensor exceeds its dynamic threshold */
                 bool triggered = false;
                 for (size_t s = 0; s < SENSOR_COUNT; ++s) {
+                    if (detector->channels[s].ignored) {
+                        continue;
+                    }
                     uint16_t val = samples[t * SENSOR_COUNT + s];
                     if ((float)val > detector->channels[s].dynamic_threshold) {
                         triggered = true;
@@ -326,12 +345,16 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
                 }
 
                 if (detector->coinc_samples_remaining == 0) {
-                    /* Coincidence window complete: determine peak intensity winner! */
+                    /* Coincidence window complete: determine peak intensity winner among non-ignored sensors */
                     detector->coinc_active = false;
                     uint8_t winner = 0;
                     uint32_t best_score = 0;
+                    bool winner_found = false;
 
                     for (size_t s = 0; s < SENSOR_COUNT; ++s) {
+                        if (detector->channels[s].ignored) {
+                            continue;
+                        }
                         uint16_t peak = detector->coinc_peaks[s];
                         uint16_t base = detector->channels[s].baseline;
                         uint16_t thresh = detector->channels[s].base_threshold;
@@ -340,10 +363,15 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
                         /* Relative intensity score: (intensity * 1000) / threshold_delta */
                         uint32_t score = (intensity * 1000U) / delta_base;
 
-                        if (score > best_score) {
+                        if (!winner_found || score > best_score) {
                             best_score = score;
                             winner = (uint8_t)s;
+                            winner_found = true;
                         }
+                    }
+
+                    if (!winner_found) {
+                        continue;
                     }
 
                     detector->current_hit_id++;

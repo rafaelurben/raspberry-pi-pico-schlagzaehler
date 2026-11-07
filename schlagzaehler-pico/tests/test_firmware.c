@@ -242,10 +242,11 @@ void test_game_controller_and_modes(void) {
     uint16_t baselines[SENSOR_COUNT] = {1980, 1500, 2200};
     uint16_t noises[SENSOR_COUNT] = {2, 3, 2};
     uint16_t thresholds[SENSOR_COUNT] = {2005, 1525, 2225};
+    bool ignored[SENSOR_COUNT] = {false, false, false};
 
     /* Sensor enters calibration, then calibration completes */
-    GameController_on_sensor_state(&gc, SENSOR_STATE_CALIBRATING, 3, NULL, NULL, NULL);
-    GameController_on_sensor_state(&gc, SENSOR_STATE_ARMED, 3, baselines, noises, thresholds);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_CALIBRATING, 3, NULL, NULL, NULL, NULL);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_ARMED, 3, baselines, noises, thresholds, ignored);
     assert(gc.state_model.state == GAME_STATE_READY);
 
     /* Verify MSG_CALIBRATION_RESULT was sent for all SENSOR_COUNT sensors upon calibration completion */
@@ -257,6 +258,7 @@ void test_game_controller_and_modes(void) {
             calib_result_count++;
             if (msg.data.calibration_result.sensor_id < SENSOR_COUNT) {
                 seen_sensor[msg.data.calibration_result.sensor_id] = true;
+                assert(msg.data.calibration_result.ignored == false);
             }
         }
     }
@@ -266,14 +268,14 @@ void test_game_controller_and_modes(void) {
     }
 
     /* Hit starts game into RUNNING, and sensor goes HIT_LOCKOUT -> ARMED */
-    GameController_on_sensor_state(&gc, SENSOR_STATE_HIT_LOCKOUT, 3, baselines, noises, thresholds);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_HIT_LOCKOUT, 3, baselines, noises, thresholds, ignored);
     HitEvent hit1 = { .hit_id = 1, .sensor_id = 0, .peak_value = 2150, .timestamp_us = s_mock_time_us };
     GameController_on_hit(&gc, &hit1);
     assert(gc.state_model.state == GAME_STATE_RUNNING);
     assert(gc.state_model.score == 1);
 
     /* Lockout ends -> returns to ARMED: must NOT emit MSG_CALIBRATION_RESULT */
-    GameController_on_sensor_state(&gc, SENSOR_STATE_ARMED, 3, baselines, noises, thresholds);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_ARMED, 3, baselines, noises, thresholds, ignored);
     while (OsalQueue_pop(&q0_to_q1, &msg)) {
         assert(msg.type != MSG_CALIBRATION_RESULT);
     }
@@ -340,14 +342,14 @@ void test_game_controller_and_modes(void) {
     assert(gc.state_model.parameter == cfg.race_target_hits);
 
     /* Entering capture mode transitions GameState to GAME_STATE_CAPTURING and back to READY when ARMED */
-    GameController_on_sensor_state(&gc, SENSOR_STATE_CAPTURE_ARMED, 1, baselines, noises, thresholds);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_CAPTURE_ARMED, 1, baselines, noises, thresholds, ignored);
     assert(gc.state_model.state == GAME_STATE_CAPTURING);
     assert(gc.capture_target == 1);
-    GameController_on_sensor_state(&gc, SENSOR_STATE_CAPTURING, 1, baselines, noises, thresholds);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_CAPTURING, 1, baselines, noises, thresholds, ignored);
     assert(gc.state_model.state == GAME_STATE_CAPTURING);
-    GameController_on_sensor_state(&gc, SENSOR_STATE_TRANSMITTING, 1, baselines, noises, thresholds);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_TRANSMITTING, 1, baselines, noises, thresholds, ignored);
     assert(gc.state_model.state == GAME_STATE_CAPTURING);
-    GameController_on_sensor_state(&gc, SENSOR_STATE_ARMED, 3, baselines, noises, thresholds);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_ARMED, 3, baselines, noises, thresholds, ignored);
     assert(gc.state_model.state == GAME_STATE_READY);
 
     /* Test STATUS command handling in GameController: emits SENSOR, STATE, MODE, SCORE, TIMER */
@@ -749,6 +751,104 @@ void test_display_presenter_capturing(void) {
     printf("PASS: test_display_presenter_capturing\n");
 }
 
+void test_ignored_sensor_calibration_and_detection(void) {
+    Config cfg;
+    Config_set_defaults(&cfg);
+    cfg.calibration_duration_ms = 100;
+    cfg.calibration_min_samples = 300; /* 100 per sensor */
+    cfg.min_threshold_delta = 25;
+    cfg.lockout_duration_ms = 100;
+
+    HitDetector hd;
+    HitDetector_init(&hd, &cfg);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_INIT);
+
+    /* Sensor 0: healthy (~1980)
+     * Sensor 1: disconnected/dead (baseline ~50 < config.min_baseline_for_active_sensor)
+     * Sensor 2: healthy (~2200)
+     */
+    uint16_t samples[384];
+    for (int t = 0; t < 128; ++t) {
+        samples[t * 3 + 0] = 1980 + (t % 3);
+        samples[t * 3 + 1] = 50 + (t % 2); /* < 128 */
+        samples[t * 3 + 2] = 2200 + (t % 3);
+    }
+
+    HitEvent ev;
+    HitDetector_process_buffer(&hd, samples, 384, &ev);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_CALIBRATING);
+
+    s_mock_time_us += 120000;
+    HitDetector_process_buffer(&hd, samples, 384, &ev);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_ARMED);
+
+    /* Verify ignored sensor flags */
+    assert(HitDetector_is_sensor_ignored(&hd, 0) == false);
+    assert(HitDetector_is_sensor_ignored(&hd, 1) == true);
+    assert(HitDetector_is_sensor_ignored(&hd, 2) == false);
+
+    /* Try to hit sensor 1 (ignored sensor) with a huge peak */
+    uint16_t hit_samples[384];
+    for (int t = 0; t < 128; ++t) {
+        hit_samples[t * 3 + 0] = 1980;
+        hit_samples[t * 3 + 1] = 50;
+        hit_samples[t * 3 + 2] = 2200;
+    }
+    hit_samples[2 * 3 + 1] = 3000; /* Huge spike on ignored sensor 1 */
+
+    bool hit = HitDetector_process_buffer(&hd, hit_samples, 384, &ev);
+    assert(hit == false); /* Ignored sensor MUST NOT trigger hit! */
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_ARMED);
+
+    /* Now hit active sensor 0 (peak 2500) while ignored sensor 1 has an even larger crosstalk spike (3500) */
+    hit_samples[2 * 3 + 0] = 2500;
+    hit_samples[2 * 3 + 1] = 3500; /* Ignored sensor has higher amplitude */
+    hit = HitDetector_process_buffer(&hd, hit_samples, 384, &ev);
+    assert(hit == true);
+    assert(ev.sensor_id == 0); /* Winner MUST be sensor 0, NOT the ignored sensor 1 */
+    assert(ev.peak_value == 2500);
+
+    /* Test companion protocol CALIB message output formatting with ignored */
+    CompanionProtocol cp;
+    OsalQueue q_dummy;
+    OsalQueue_init(&q_dummy, NULL, sizeof(Core1ToCore0Message), 16);
+    CommandHandler ch_dummy;
+    CommandHandler_init(&ch_dummy, &q_dummy);
+    CompanionProtocol_init(&cp, &ch_dummy);
+
+    Core0ToCore1Message calib_msg_active = {
+        .type = MSG_CALIBRATION_RESULT,
+        .timestamp_us = 1000,
+        .data.calibration_result = {
+            .sensor_id = 0,
+            .success = true,
+            .baseline = 1980,
+            .noise = 2,
+            .threshold = 2005,
+            .ignored = false
+        }
+    };
+    CompanionProtocol_send_message(&cp, &calib_msg_active);
+    assert(strcmp(s_last_serial_line, "CALIB success=1 target=0 baseline=1980 noise=2 threshold=2005 ignored=false") == 0);
+
+    Core0ToCore1Message calib_msg_ignored = {
+        .type = MSG_CALIBRATION_RESULT,
+        .timestamp_us = 1000,
+        .data.calibration_result = {
+            .sensor_id = 1,
+            .success = true,
+            .baseline = 50,
+            .noise = 1,
+            .threshold = 75,
+            .ignored = true
+        }
+    };
+    CompanionProtocol_send_message(&cp, &calib_msg_ignored);
+    assert(strcmp(s_last_serial_line, "CALIB success=1 target=1 baseline=50 noise=1 threshold=75 ignored=true") == 0);
+
+    printf("PASS: test_ignored_sensor_calibration_and_detection\n");
+}
+
 int main(void) {
     printf("--- Running Schlagzaehler Architecture Unit Tests ---\n");
     test_config_service();
@@ -758,6 +858,7 @@ int main(void) {
     test_signal_capture();
     test_button_controller_interrupts();
     test_display_presenter_capturing();
-    printf("--- ALL 7 ARCHITECTURE TEST SUITES PASSED! ---\n");
+    test_ignored_sensor_calibration_and_detection();
+    printf("--- ALL 8 ARCHITECTURE TEST SUITES PASSED! ---\n");
     return 0;
 }

@@ -39,7 +39,8 @@ void GameController_on_sensor_state(
     uint8_t capture_target,
     const uint16_t baselines[SENSOR_COUNT],
     const uint16_t noises[SENSOR_COUNT],
-    const uint16_t thresholds[SENSOR_COUNT]
+    const uint16_t thresholds[SENSOR_COUNT],
+    const bool ignored[SENSOR_COUNT]
 );
 void GameController_on_hit(GameController* gc, const HitEvent* hit);
 void GameController_on_button(GameController* gc, const ButtonEvent* btn);

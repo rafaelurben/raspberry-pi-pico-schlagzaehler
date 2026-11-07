@@ -42,6 +42,7 @@ typedef struct {
 
 typedef struct {
     bool success;
+    bool ignored;
     uint8_t sensor_id;
     uint16_t baseline;
     uint16_t noise;

@@ -107,10 +107,12 @@ static void App_notify_sensor_state(App* app) {
     uint16_t baselines[SENSOR_COUNT];
     uint16_t noises[SENSOR_COUNT];
     uint16_t thresholds[SENSOR_COUNT];
+    bool ignored[SENSOR_COUNT];
     for (uint8_t s = 0; s < SENSOR_COUNT; ++s) {
         baselines[s] = HitDetector_get_sensor_baseline(&app->hit_detector, s);
         noises[s] = HitDetector_get_sensor_noise(&app->hit_detector, s);
         thresholds[s] = HitDetector_get_sensor_threshold(&app->hit_detector, s);
+        ignored[s] = HitDetector_is_sensor_ignored(&app->hit_detector, s);
     }
     GameController_on_sensor_state(
         &app->game_controller,
@@ -118,7 +120,8 @@ static void App_notify_sensor_state(App* app) {
         HitDetector_get_capture_target(&app->hit_detector),
         baselines,
         noises,
-        thresholds
+        thresholds,
+        ignored
     );
 }
 

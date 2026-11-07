@@ -139,12 +139,13 @@ void CompanionProtocol_send_message(CompanionProtocol* proto, const Core0ToCore1
             break;
 
         case MSG_CALIBRATION_RESULT:
-            snprintf(out, sizeof(out), "CALIB success=%d target=%u baseline=%u noise=%u threshold=%u",
+            snprintf(out, sizeof(out), "CALIB success=%d target=%u baseline=%u noise=%u threshold=%u ignored=%s",
                      msg->data.calibration_result.success ? 1 : 0,
                      (unsigned int)msg->data.calibration_result.sensor_id,
                      msg->data.calibration_result.baseline,
                      msg->data.calibration_result.noise,
-                     msg->data.calibration_result.threshold);
+                     msg->data.calibration_result.threshold,
+                     msg->data.calibration_result.ignored ? "true" : "false");
             UsbSerialDriver_write_line(out);
             break;
 

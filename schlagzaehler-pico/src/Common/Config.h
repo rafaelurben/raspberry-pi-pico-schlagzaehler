@@ -48,6 +48,7 @@ typedef struct {
     uint16_t min_threshold_delta;    /* Minimum offset above baseline */
     uint32_t lockout_duration_ms;    /* Dead time after hit to prevent re-triggering */
     float    decay_factor;           /* Dynamic peak threshold decay per sample */
+    uint16_t min_baseline_for_active_sensor; /* Sensors with baseline below this are ignored */
 
     /* Game Mode Settings */
     GameMode default_mode;
@@ -69,6 +70,7 @@ static inline void Config_set_defaults(Config* config) {
     config->min_threshold_delta      = 25;
     config->lockout_duration_ms      = 25;
     config->decay_factor             = 0.995f;
+    config->min_baseline_for_active_sensor = 128;
 
     config->default_mode             = GAME_MODE_COUNT;
     config->timed_duration_s         = 30;

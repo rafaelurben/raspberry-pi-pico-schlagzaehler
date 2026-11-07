@@ -19,6 +19,7 @@ typedef struct {
     uint16_t noise;
     uint16_t base_threshold;
     float dynamic_threshold;
+    bool ignored;
 
     /* Calibration accumulators */
     uint64_t calib_sample_sum;
@@ -69,6 +70,7 @@ uint8_t HitDetector_get_capture_target(const HitDetector* detector);
 uint16_t HitDetector_get_sensor_threshold(const HitDetector* detector, uint8_t sensor_id);
 uint16_t HitDetector_get_sensor_baseline(const HitDetector* detector, uint8_t sensor_id);
 uint16_t HitDetector_get_sensor_noise(const HitDetector* detector, uint8_t sensor_id);
+bool HitDetector_is_sensor_ignored(const HitDetector* detector, uint8_t sensor_id);
 
 /**
  * @brief Process a completed interleaved buffer of samples from ADC DMA.

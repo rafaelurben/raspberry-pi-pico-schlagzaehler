@@ -116,7 +116,8 @@ void GameController_on_sensor_state(
     uint8_t capture_target,
     const uint16_t baselines[SENSOR_COUNT],
     const uint16_t noises[SENSOR_COUNT],
-    const uint16_t thresholds[SENSOR_COUNT]
+    const uint16_t thresholds[SENSOR_COUNT],
+    const bool ignored[SENSOR_COUNT]
 ) {
     if (!gc) return;
 
@@ -156,6 +157,7 @@ void GameController_on_sensor_state(
                 .timestamp_us = Time_now_us(),
                 .data.calibration_result = {
                     .success = true,
+                    .ignored = ignored ? ignored[s] : false,
                     .sensor_id = s,
                     .baseline = baselines ? baselines[s] : 0,
                     .noise = noises ? noises[s] : 0,
@@ -178,6 +180,7 @@ void GameController_on_sensor_state(
                 .timestamp_us = Time_now_us(),
                 .data.calibration_result = {
                     .success = false,
+                    .ignored = ignored ? ignored[s] : false,
                     .sensor_id = s,
                     .baseline = baselines ? baselines[s] : 0,
                     .noise = noises ? noises[s] : 0,
