@@ -347,7 +347,7 @@ void test_game_controller_and_modes(void) {
     assert(gc.capture_target == 1);
     GameController_on_sensor_state(&gc, SENSOR_STATE_CAPTURING, 1, baselines, noises, thresholds, ignored);
     assert(gc.state_model.state == GAME_STATE_CAPTURING);
-    GameController_on_sensor_state(&gc, SENSOR_STATE_TRANSMITTING, 1, baselines, noises, thresholds, ignored);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_CAPTURE_TX_WAIT, 1, baselines, noises, thresholds, ignored);
     assert(gc.state_model.state == GAME_STATE_CAPTURING);
     GameController_on_sensor_state(&gc, SENSOR_STATE_ARMED, 3, baselines, noises, thresholds, ignored);
     assert(gc.state_model.state == GAME_STATE_READY);
@@ -591,7 +591,7 @@ void test_signal_capture(void) {
             assert(ready.total_samples == SIGNAL_CAPTURE_TOTAL_SAMPLES);
             assert(ready.target == 1);
             assert(ready.samples == captured);
-            assert(HitDetector_get_state(&hd) == SENSOR_STATE_TRANSMITTING);
+            assert(HitDetector_get_state(&hd) == SENSOR_STATE_CAPTURE_TX_WAIT);
         }
     }
     HitDetector_stop_capture(&hd);

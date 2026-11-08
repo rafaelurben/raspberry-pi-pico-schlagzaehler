@@ -53,7 +53,7 @@ The firmware runs a strict three-layer architecture: **Application Layer** (`src
   - **Hit Detection Engine**: Samples the piezo sensor at **50 kHz** via continuous ping-pong DMA buffers (256 samples per buffer). Performs dynamic statistical calibration (mean baseline and noise variance over 1.5 s / 10,000 samples). Calculates an adaptive dynamic threshold with exponential decay (`decay_factor = 0.995`) and enforces a configurable lockout dead-time (`100 ms`) to reject mechanical ringdown reverberations.
   - **Mechanical Vibration Suppression**: Automatically ignores piezo triggers during and immediately following button presses (`150–250 ms`) to prevent button-press vibrations from registering as hits.
   - **Raw Waveform Capture Engine (`SignalCapture`)**: Single-shot raw signal recording tool. Uses **5:1 max-pooling** (10 kHz effective rate) to preserve high-frequency hit peaks while capturing **21,000 samples (2.1 seconds)** into a static 42 KB buffer (`0` dynamic allocations). Unrolls a 1,000-sample circular pre-trigger buffer (`0.1 s`) and records 20,000 post-trigger samples (`2.0 s`).
-  - **Sensor Lifecycle**: Authoritative state machine managing `SENSOR_STATE_INIT`, `CALIBRATING`, `ARMED`, `HIT_LOCKOUT`, `CAPTURE_ARMED`, `CAPTURING` (LED on), and `TRANSMITTING` (LED off).
+  - **Sensor Lifecycle**: Authoritative state machine managing `SENSOR_STATE_INIT`, `CALIBRATING`, `ARMED`, `HIT_LOCKOUT`, `CAPTURE_ARMED`, `CAPTURING` (LED on), and `CAPTURE_TX_WAIT` (LED off).
 - **`GameController` & `GameState`** (`src/App/Game/`):
   - Authoritative game engine for all match rules, scorekeeping, and countdown timing.
   - Manages transitions between `GAME_STATE_BOOT`, `MENU`, `READY`, `RUNNING`, `FINISHED`, and `CAPTURING`.

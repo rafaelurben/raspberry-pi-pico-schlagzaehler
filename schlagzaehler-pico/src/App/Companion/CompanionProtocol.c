@@ -155,7 +155,7 @@ void CompanionProtocol_send_message(CompanionProtocol* proto, const Core0ToCore1
             UsbSerialDriver_write_line(out);
             if (msg->data.sensor_status.state != SENSOR_STATE_CAPTURING &&
                 msg->data.sensor_status.state != SENSOR_STATE_CAPTURE_ARMED &&
-                msg->data.sensor_status.state != SENSOR_STATE_TRANSMITTING) {
+                msg->data.sensor_status.state != SENSOR_STATE_CAPTURE_TX_WAIT) {
                 CompanionProtocol_cancel_capture_tx(proto);
             }
             break;

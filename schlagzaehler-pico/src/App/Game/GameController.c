@@ -130,7 +130,7 @@ void GameController_on_sensor_state(
 
     if (sensor_state == SENSOR_STATE_CAPTURE_ARMED ||
         sensor_state == SENSOR_STATE_CAPTURING ||
-        sensor_state == SENSOR_STATE_TRANSMITTING) {
+        sensor_state == SENSOR_STATE_CAPTURE_TX_WAIT) {
         if (gc->state_model.state != GAME_STATE_CAPTURING) {
             GameState old_s = gc->state_model.state;
             gc->pre_capture_state = (old_s == GAME_STATE_MENU) ? GAME_STATE_MENU : GAME_STATE_READY;

@@ -93,7 +93,7 @@ void HitDetector_stop_capture(HitDetector* detector) {
     if (!detector) return;
     if (detector->state == SENSOR_STATE_CAPTURE_ARMED ||
         detector->state == SENSOR_STATE_CAPTURING ||
-        detector->state == SENSOR_STATE_TRANSMITTING) {
+        detector->state == SENSOR_STATE_CAPTURE_TX_WAIT) {
         SignalCapture_reset(&detector->capture);
         for (size_t s = 0; s < SENSOR_COUNT; ++s) {
             detector->channels[s].dynamic_threshold = (float)detector->channels[s].base_threshold;
@@ -124,7 +124,7 @@ void HitDetector_reset_to_armed(HitDetector* detector) {
     if (detector->state == SENSOR_STATE_HIT_LOCKOUT ||
         detector->state == SENSOR_STATE_CAPTURE_ARMED ||
         detector->state == SENSOR_STATE_CAPTURING ||
-        detector->state == SENSOR_STATE_TRANSMITTING) {
+        detector->state == SENSOR_STATE_CAPTURE_TX_WAIT) {
         SignalCapture_reset(&detector->capture);
         detector->coinc_active = false;
         detector->coinc_samples_remaining = 0;
@@ -191,12 +191,12 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
             detector->state = SENSOR_STATE_CAPTURING;
         }
         if (completed) {
-            detector->state = SENSOR_STATE_TRANSMITTING;
+            detector->state = SENSOR_STATE_CAPTURE_TX_WAIT;
         }
         return false;
     }
 
-    if (detector->state == SENSOR_STATE_TRANSMITTING) {
+    if (detector->state == SENSOR_STATE_CAPTURE_TX_WAIT) {
         return false;
     }
 

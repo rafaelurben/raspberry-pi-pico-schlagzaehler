@@ -119,7 +119,7 @@ The RP2040's two ARM Cortex-M0+ cores have strictly separated responsibilities a
 - `SENSOR_STATE_HIT_LOCKOUT`: Triggered upon a hit; tracks peak intensity with exponential decay (`decay_factor`) per sensor during `lockout_duration_ms` to prevent double-counting ringdown oscillations. Coincidence window resolves multi-sensor vibration and picks the winning piezo by peak intensity (ignoring inactive sensors).
 - `SENSOR_STATE_CAPTURE_ARMED`: Armed via companion `CAPTURE` command (target `0`, `1`, `2`, or `all`); continuously fills a `0.1 s` pre-trigger circular buffer (`1,000` samples at `10 kHz`, 5:1 max-pooled or 15:1 max-pooled per sensor) until a sample crosses the trigger threshold.
 - `SENSOR_STATE_CAPTURING`: Triggered; collects `2.0 s` post-trigger samples (`20,000` samples at `10 kHz`) into the `21,000`-sample buffer (`SignalCapture`).
-- `SENSOR_STATE_TRANSMITTING`: Streams chunks of samples non-blockingly over USB CDC via Core 1.
+- `SENSOR_STATE_CAPTURE_TX_WAIT`: Streams chunks of samples non-blockingly over USB CDC via Core 1.
 - `SENSOR_STATE_ERROR`: Calibration or sensor fault.
 
 ### Game State (`GameState`)

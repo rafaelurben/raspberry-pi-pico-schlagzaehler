@@ -108,20 +108,20 @@
             [class.text-indigo-300]="dev.state.sensorState === 'CAPTURE_ARMED'"
             [class.bg-amber-500/20]="dev.state.sensorState === 'CAPTURING'"
             [class.text-amber-300]="dev.state.sensorState === 'CAPTURING'"
-            [class.bg-cyan-500/20]="dev.state.sensorState === 'TRANSMITTING'"
-            [class.text-cyan-300]="dev.state.sensorState === 'TRANSMITTING'"
+            [class.bg-cyan-500/20]="dev.state.sensorState === 'CAPTURE_TX_WAIT'"
+            [class.text-cyan-300]="dev.state.sensorState === 'CAPTURE_TX_WAIT'"
             [class.bg-emerald-500/20]="dev.state.sensorState === 'ARMED'"
             [class.text-emerald-300]="dev.state.sensorState === 'ARMED'"
             [class.bg-slate-700/60]="
               dev.state.sensorState !== 'CAPTURE_ARMED' &&
               dev.state.sensorState !== 'CAPTURING' &&
-              dev.state.sensorState !== 'TRANSMITTING' &&
+              dev.state.sensorState !== 'CAPTURE_TX_WAIT' &&
               dev.state.sensorState !== 'ARMED'
             "
             [class.text-slate-300]="
               dev.state.sensorState !== 'CAPTURE_ARMED' &&
               dev.state.sensorState !== 'CAPTURING' &&
-              dev.state.sensorState !== 'TRANSMITTING' &&
+              dev.state.sensorState !== 'CAPTURE_TX_WAIT' &&
               dev.state.sensorState !== 'ARMED'
             "
           >
@@ -139,7 +139,7 @@
                 >{{ formatTargetLabel(selectedTarget()) }}</span
               >)...
             } @else if (
-              dev.state.sensorState === 'TRANSMITTING' || activeDeviceProgress() !== null
+              dev.state.sensorState === 'CAPTURE_TX_WAIT' || activeDeviceProgress() !== null
             ) {
               Recording complete. Transferring 21,000 samples over USB...
             } @else {

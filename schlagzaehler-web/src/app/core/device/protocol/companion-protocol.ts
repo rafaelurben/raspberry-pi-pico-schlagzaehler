@@ -25,7 +25,7 @@ const VALID_SENSOR_STATES = new Set<SensorState>([
   'LOCKOUT',
   'CAPTURE_ARMED',
   'CAPTURING',
-  'TRANSMITTING',
+  'CAPTURE_TX_WAIT',
   'ERROR',
   'UNKNOWN',
 ]);

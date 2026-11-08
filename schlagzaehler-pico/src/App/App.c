@@ -169,7 +169,7 @@ void App_run_core0(App* app) {
             Board_set_led(true);
         } else if (new_sensor_state == SENSOR_STATE_ARMED ||
                    new_sensor_state == SENSOR_STATE_CAPTURE_ARMED ||
-                   new_sensor_state == SENSOR_STATE_TRANSMITTING) {
+                   new_sensor_state == SENSOR_STATE_CAPTURE_TX_WAIT) {
             Board_set_led(false);
         }
 
@@ -180,7 +180,7 @@ void App_run_core0(App* app) {
     ButtonEvent btn_event;
     while (ButtonController_pop_event(&app->button_controller, &btn_event)) {
         SensorState s = HitDetector_get_state(&app->hit_detector);
-        if (s == SENSOR_STATE_CAPTURE_ARMED || s == SENSOR_STATE_CAPTURING || s == SENSOR_STATE_TRANSMITTING) {
+        if (s == SENSOR_STATE_CAPTURE_ARMED || s == SENSOR_STATE_CAPTURING || s == SENSOR_STATE_CAPTURE_TX_WAIT) {
             HitDetector_stop_capture(&app->hit_detector);
             Board_set_led(false);
             App_notify_sensor_state(app);

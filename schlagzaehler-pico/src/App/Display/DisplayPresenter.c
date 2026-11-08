@@ -88,10 +88,10 @@ void DisplayPresenter_handle_message(DisplayPresenter* presenter, const Core0ToC
             if (presenter->sensor_state == SENSOR_STATE_ERROR ||
                 presenter->sensor_state == SENSOR_STATE_CAPTURE_ARMED ||
                 presenter->sensor_state == SENSOR_STATE_CAPTURING ||
-                presenter->sensor_state == SENSOR_STATE_TRANSMITTING ||
+                presenter->sensor_state == SENSOR_STATE_CAPTURE_TX_WAIT ||
                 old_s == SENSOR_STATE_CAPTURE_ARMED ||
                 old_s == SENSOR_STATE_CAPTURING ||
-                old_s == SENSOR_STATE_TRANSMITTING) {
+                old_s == SENSOR_STATE_CAPTURE_TX_WAIT) {
                 presenter->needs_full_redraw = true;
             }
             break;
@@ -280,7 +280,7 @@ static void render_capturing(DisplayPresenter* presenter) {
     } else if (presenter->sensor_state == SENSOR_STATE_CAPTURING) {
         DisplayDriver_draw_string(20, 65, "AUFNAHME", DISPLAY_COLOR_RED, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
         DisplayDriver_draw_string(10, 95, "2s Messung...", DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
-    } else if (presenter->sensor_state == SENSOR_STATE_TRANSMITTING) {
+    } else if (presenter->sensor_state == SENSOR_STATE_CAPTURE_TX_WAIT) {
         DisplayDriver_draw_string(15, 65, "TRANSFER", DISPLAY_COLOR_CYAN, DISPLAY_COLOR_BLACK, DISPLAY_FONT_RETRO);
         DisplayDriver_draw_string(10, 95, "Sende Daten...", DISPLAY_COLOR_WHITE, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
     }

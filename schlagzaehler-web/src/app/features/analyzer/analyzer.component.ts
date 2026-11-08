@@ -73,7 +73,7 @@ export class AnalyzerComponent {
     return (
       s === 'CAPTURE_ARMED' ||
       s === 'CAPTURING' ||
-      s === 'TRANSMITTING' ||
+      s === 'CAPTURE_TX_WAIT' ||
       this.activeDeviceProgress() !== null
     );
   });
