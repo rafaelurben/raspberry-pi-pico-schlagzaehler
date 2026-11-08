@@ -454,4 +454,5 @@ export function serializeBinaryCommand(command: UnifiedProtocolCommand, seq?: nu
       return serializeBinaryFrame(BinaryCommandType.CMD_CAPTURE, payload, 0, sequenceNumber);
     }
   }
+  throw new Error('Invalid command received: ' + command.type);
 }

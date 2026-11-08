@@ -5,7 +5,6 @@ import { ConnectionState } from '../models/connection-state.type';
 import { DeviceEvent, EventDirection } from '../models/device-event.model';
 import { Device, DeviceState, SelectableGameMode } from '../models/device.model';
 import { CaptureProtocolMessage, PiezoCaptureResult } from '../models/piezo-capture.model';
-import { BinaryCommandType } from '../protocol/binary/binary-protocol.types';
 import { serializeAsciiCommand } from '../protocol/ascii/ascii-payload-parser';
 import { serializeBinaryCommand } from '../protocol/binary/binary-payload-parser';
 import {
@@ -35,18 +34,6 @@ interface InProgressCapture {
   readonly samples: Uint16Array;
   receivedCount: number;
 }
-
-const BINARY_CMD_NAME_MAP: Record<number, string> = {
-  [BinaryCommandType.CMD_HANDSHAKE]: 'CMD_HANDSHAKE',
-  [BinaryCommandType.CMD_START]: 'CMD_START',
-  [BinaryCommandType.CMD_RESET]: 'CMD_RESET',
-  [BinaryCommandType.CMD_CALIBRATE]: 'CMD_CALIBRATE',
-  [BinaryCommandType.CMD_STATUS]: 'CMD_STATUS',
-  [BinaryCommandType.CMD_SET_MODE]: 'CMD_SET_MODE',
-  [BinaryCommandType.CMD_SET_PARAMETER]: 'CMD_SET_PARAMETER',
-  [BinaryCommandType.CMD_SET_SENSITIVITY]: 'CMD_SET_SENSITIVITY',
-  [BinaryCommandType.CMD_CAPTURE]: 'CMD_CAPTURE',
-};
 
 @Injectable({ providedIn: 'root' })
 export class DeviceManagerService implements OnDestroy {

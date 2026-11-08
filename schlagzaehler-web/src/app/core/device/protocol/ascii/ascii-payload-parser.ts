@@ -307,4 +307,5 @@ export function serializeAsciiCommand(command: UnifiedProtocolCommand): string {
     case '_RAW':
       return command.payload;
   }
+  throw new Error('Invalid command received!');
 }
