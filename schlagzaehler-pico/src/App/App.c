@@ -161,6 +161,43 @@ void App_run_core0(App* app) {
         };
         if (HitDetector_take_completed_capture(&app->hit_detector, &cap_msg.data.capture_ready)) {
             Board_set_led(false);
+
+            /* Pre-capture calibration re-emission (repeated = true) */
+            uint8_t target = cap_msg.data.capture_ready.target;
+            if (target < SENSOR_COUNT) {
+                Core0ToCore1Message calib_msg = {
+                    .type = MSG_CALIBRATION_RESULT,
+                    .timestamp_us = Time_now_us(),
+                    .data.calibration_result = {
+                        .success = true,
+                        .ignored = HitDetector_is_sensor_ignored(&app->hit_detector, target),
+                        .repeated = true,
+                        .sensor_id = target,
+                        .baseline = HitDetector_get_sensor_baseline(&app->hit_detector, target),
+                        .noise = HitDetector_get_sensor_noise(&app->hit_detector, target),
+                        .threshold = HitDetector_get_sensor_threshold(&app->hit_detector, target)
+                    }
+                };
+                OsalQueue_push(&app->queue_core0_to_core1, &calib_msg);
+            } else {
+                for (uint8_t s = 0; s < SENSOR_COUNT; ++s) {
+                    Core0ToCore1Message calib_msg = {
+                        .type = MSG_CALIBRATION_RESULT,
+                        .timestamp_us = Time_now_us(),
+                        .data.calibration_result = {
+                            .success = true,
+                            .ignored = HitDetector_is_sensor_ignored(&app->hit_detector, s),
+                            .repeated = true,
+                            .sensor_id = s,
+                            .baseline = HitDetector_get_sensor_baseline(&app->hit_detector, s),
+                            .noise = HitDetector_get_sensor_noise(&app->hit_detector, s),
+                            .threshold = HitDetector_get_sensor_threshold(&app->hit_detector, s)
+                        }
+                    };
+                    OsalQueue_push(&app->queue_core0_to_core1, &calib_msg);
+                }
+            }
+
             OsalQueue_push(&app->queue_core0_to_core1, &cap_msg);
         } else if (hit_occurred) {
             Board_set_led(true);

@@ -62,12 +62,12 @@ describe('AnalyzerComponent', () => {
   it('should format target labels and badges accurately', () => {
     setupComponent();
     expect(component.formatTargetLabel('all')).toBe('All Sensors (Interleaved)');
-    expect(component.formatTargetLabel(3)).toBe('All Sensors (Interleaved)');
+    expect(component.formatTargetLabel(255)).toBe('All Sensors (Interleaved)');
     expect(component.formatTargetLabel(0)).toBe('Sensor 0');
     expect(component.formatTargetLabel(1)).toBe('Sensor 1');
     expect(component.formatTargetLabel(2)).toBe('Sensor 2');
 
-    expect(component.formatTargetBadge(3)).toBe('All (3x)');
+    expect(component.formatTargetBadge(255)).toBe('All (3x)');
     expect(component.formatTargetBadge(0)).toBe('Sensor 0');
     expect(component.formatTargetBadge(1)).toBe('Sensor 1');
     expect(component.formatTargetBadge(2)).toBe('Sensor 2');

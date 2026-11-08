@@ -14,7 +14,7 @@ typedef enum {
     CAPTURE_TARGET_0   = 0,
     CAPTURE_TARGET_1   = 1,
     CAPTURE_TARGET_2   = 2,
-    CAPTURE_TARGET_ALL = 3
+    CAPTURE_TARGET_ALL = 255
 } CaptureTarget;
 
 /* Single sensor: 50 kHz / 5 = 10 kHz effective capture rate */

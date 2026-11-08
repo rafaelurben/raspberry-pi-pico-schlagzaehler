@@ -3,14 +3,21 @@ import { BehaviorSubject, Subject } from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import { ConnectionState } from '../models/connection-state.type';
 import { DeviceMetadata, TransportType } from '../models/device.model';
-import { DeviceTransport } from '../transport/device-transport.interface';
+import {
+  BinaryCommandType,
+  BinaryFrame,
+  BinaryMessageType,
+  SYNC_BYTE_0,
+  SYNC_BYTE_1,
+} from '../protocol/binary/binary-protocol.types';
+import { DeviceTransport, TransportEvent } from '../transport/device-transport.interface';
 import { WebSerialTransportFactory } from '../transport/web-serial-transport-factory.service';
 import { DeviceManagerService } from './device-manager.service';
 
 class MockDeviceTransport implements DeviceTransport {
   readonly transportType: TransportType = 'serial';
   readonly stateSubject = new BehaviorSubject<ConnectionState>('disconnected');
-  readonly eventsSubject = new Subject<string>();
+  readonly eventsSubject = new Subject<TransportEvent>();
   readonly errorsSubject = new Subject<Error>();
 
   readonly state$ = this.stateSubject.asObservable();
@@ -20,7 +27,7 @@ class MockDeviceTransport implements DeviceTransport {
   connectCalls = 0;
   disconnectCalls = 0;
   shouldFailConnect = false;
-  sentPayloads: string[] = [];
+  sentPayloads: (string | Uint8Array)[] = [];
 
   constructor(private readonly metadata?: DeviceMetadata) {}
 
@@ -42,7 +49,7 @@ class MockDeviceTransport implements DeviceTransport {
     this.stateSubject.next('disconnected');
   }
 
-  async send(data: string): Promise<void> {
+  async send(data: string | Uint8Array): Promise<void> {
     this.sentPayloads.push(data);
   }
 }
@@ -105,7 +112,11 @@ describe('DeviceManagerService', () => {
     expect(service.devices()).toHaveLength(1);
     expect(service.isConnecting()).toBe(false);
     expect(transport.connectCalls).toBe(1);
-    expect(transport.sentPayloads).toEqual(['STATUS']);
+    expect(transport.sentPayloads).toHaveLength(1);
+    const sent = transport.sentPayloads[0] as Uint8Array;
+    expect(sent[0]).toBe(SYNC_BYTE_0);
+    expect(sent[1]).toBe(SYNC_BYTE_1);
+    expect(sent[3]).toBe(BinaryCommandType.CMD_HANDSHAKE);
   });
 
   it('should allow specifying a custom device name on connect and modifying it later', async () => {
@@ -158,9 +169,9 @@ describe('DeviceManagerService', () => {
     const device1 = await service.connectSerialDevice();
     const device2 = await service.connectSerialDevice();
 
-    transport1.eventsSubject.next('MODE active=TIMED param=45');
-    transport2.eventsSubject.next('SCORE value=10');
-    transport1.eventsSubject.next('SCORE value=7');
+    transport1.eventsSubject.next({ type: 'ascii', content: 'MODE active=TIMED param=45' });
+    transport2.eventsSubject.next({ type: 'ascii', content: 'SCORE value=10' });
+    transport1.eventsSubject.next({ type: 'ascii', content: 'SCORE value=7' });
 
     const receivedEvents = service.events().filter((e) => e.direction === 'received');
     expect(receivedEvents).toHaveLength(3);
@@ -251,7 +262,7 @@ describe('DeviceManagerService', () => {
     await service.resetGame(dev2!.id);
     expect(transport2.sentPayloads).toEqual(['RESET']);
 
-    await service.sendCommandToDevices([dev1!.id, dev2!.id], 'CALIB');
+    await service.sendCommandToDevices([dev1!.id, dev2!.id], { type: 'CALIBRATE' });
     expect(transport1.sentPayloads).toContain('CALIB');
     expect(transport2.sentPayloads).toContain('CALIB');
 
@@ -282,25 +293,31 @@ describe('DeviceManagerService', () => {
 
     await service.connectSerialDevice();
     service.clearEvents();
-    transport.eventsSubject.next('EVENT_1');
+    transport.eventsSubject.next({ type: 'ascii', content: 'SCORE value=1' });
     expect(service.events()).toHaveLength(1);
 
     service.clearEvents();
     expect(service.events()).toHaveLength(0);
   });
 
-  it('should automatically send STATUS command upon device connection and reconnection', async () => {
+  it('should automatically send CMD_HANDSHAKE upon device connection and reconnection', async () => {
     setupService();
     const transport = new MockDeviceTransport();
     mockFactory.transportsToReturn = [transport];
 
     const device = await service.connectSerialDevice();
-    expect(transport.sentPayloads).toEqual(['STATUS']);
+    expect(transport.sentPayloads).toHaveLength(1);
+    const sent1 = transport.sentPayloads[0] as Uint8Array;
+    expect(sent1[0]).toBe(SYNC_BYTE_0);
+    expect(sent1[1]).toBe(SYNC_BYTE_1);
+    expect(sent1[3]).toBe(BinaryCommandType.CMD_HANDSHAKE);
 
     transport.sentPayloads = [];
     await service.disconnectDevice(device!.id);
     await service.reconnectDevice(device!.id);
-    expect(transport.sentPayloads).toEqual(['STATUS']);
+    expect(transport.sentPayloads).toHaveLength(1);
+    const sent2 = transport.sentPayloads[0] as Uint8Array;
+    expect(sent2[3]).toBe(BinaryCommandType.CMD_HANDSHAKE);
   });
 
   it('should reject connection when Web Serial is not supported', async () => {
@@ -326,24 +343,38 @@ describe('DeviceManagerService', () => {
     await service.startCapture(deviceId);
     expect(transport.sentPayloads).toContain('CAPTURE');
 
-    transport.eventsSubject.next('SENSOR status=CAPTURE_ARMED');
+    transport.eventsSubject.next({ type: 'ascii', content: 'SENSOR status=CAPTURE_ARMED' });
     expect(service.getDevice(deviceId)?.state.sensorState).toBe('CAPTURE_ARMED');
 
-    transport.eventsSubject.next('SENSOR status=CAPTURING');
+    transport.eventsSubject.next({ type: 'ascii', content: 'SENSOR status=CAPTURING' });
     expect(service.getDevice(deviceId)?.state.sensorState).toBe('CAPTURING');
 
-    transport.eventsSubject.next(
-      'CAPTURE_START rate=10000 pre=2 count=6 baseline=1980 noise=3 threshold=2010',
-    );
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CALIB success=1 target=0 repeated=1 baseline=1980 noise=3 threshold=2010',
+    });
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_START rate=10000 pre=2 count=6 target=0',
+    });
     expect(service.captureProgress()[deviceId]).toBe(0);
 
-    transport.eventsSubject.next('CAPTURE_DATA offset=0 values=1979,1981,2450');
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_DATA offset=0 values=1979,1981,2450',
+    });
     expect(service.captureProgress()[deviceId]).toBe(50);
 
-    transport.eventsSubject.next('CAPTURE_DATA offset=3 values=2200,2050,1982');
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_DATA offset=3 values=2200,2050,1982',
+    });
     expect(service.captureProgress()[deviceId]).toBe(100);
 
-    transport.eventsSubject.next('CAPTURE_END count=6');
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_END count=6',
+    });
     expect(service.captureProgress()[deviceId]).toBeUndefined();
 
     const captures = service.captures();
@@ -363,9 +394,7 @@ describe('DeviceManagerService', () => {
       .events()
       .filter((e) => e.direction === 'received')
       .map((e) => e.payload);
-    expect(receivedPayloads).toContain(
-      'CAPTURE_START rate=10000 pre=2 count=6 baseline=1980 noise=3 threshold=2010',
-    );
+    expect(receivedPayloads).toContain('CAPTURE_START rate=10000 pre=2 count=6 target=0');
     expect(receivedPayloads).toContain('CAPTURE_END count=6');
     expect(receivedPayloads.some((p) => p.startsWith('CAPTURE_DATA'))).toBe(false);
 
@@ -390,14 +419,229 @@ describe('DeviceManagerService', () => {
     await service.startCapture(deviceId, 1);
     expect(transport.sentPayloads).toContain('CAPTURE:1');
 
-    transport.eventsSubject.next(
-      'CAPTURE_START rate=10000 pre=2 count=6 target=1 baseline=1980 noise=3 threshold=2010',
-    );
-    transport.eventsSubject.next('CAPTURE_DATA offset=0 values=1979,1981,2450,2200,2050,1982');
-    transport.eventsSubject.next('CAPTURE_END count=6');
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CALIB success=1 target=1 repeated=false baseline=1980 noise=3 threshold=2010',
+    });
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_START rate=10000 pre=2 count=6 target=1',
+    });
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_DATA offset=0 values=1979,1981,2450,2200,2050,1982',
+    });
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_END count=6',
+    });
 
     // Auto-rearm should re-issue CAPTURE:1
     expect(transport.sentPayloads.filter((p) => p === 'CAPTURE:1')).toHaveLength(2);
     expect(service.captures()[0].target).toBe(1);
+  });
+
+  it('should handle incoming binary frames and update device state, metadata, and event log', async () => {
+    setupService();
+    const transport = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport];
+
+    const dev = await service.connectSerialDevice('Pico Binary');
+    const deviceId = dev!.id;
+
+    // 1. MSG_HANDSHAKE_ACK
+    const ackPayload = new Uint8Array(20);
+    const ackView = new DataView(ackPayload.buffer);
+    ackView.setUint8(0, 1); // hwGen
+    ackView.setUint8(1, 1); // hwRev
+    ackView.setUint8(2, 1); // protoMajor
+    ackView.setUint8(3, 0); // protoMinor
+    ackView.setUint8(4, 1); // fwMajor
+    ackView.setUint8(5, 2); // fwMinor
+    ackView.setUint8(6, 0); // fwPatch
+    ackView.setUint32(16, 9999, true); // uptimeMs
+
+    const ackFrame: BinaryFrame = {
+      type: BinaryMessageType.MSG_HANDSHAKE_ACK,
+      flags: 0,
+      seq: 1,
+      payload: ackPayload,
+    };
+    transport.eventsSubject.next({
+      type: 'binary',
+      content: ackFrame,
+    });
+
+    const updatedDev = service.getDevice(deviceId);
+    expect(updatedDev?.state.fwVersion).toBe('1.2.0');
+    expect(updatedDev?.state.uptimeMs).toBe(9999);
+    expect(updatedDev?.metadata?.fwVersion).toBe('1.2.0');
+
+    // 2. MSG_SCORE
+    const scorePayload = new Uint8Array(4);
+    new DataView(scorePayload.buffer).setUint32(0, 42, true);
+    transport.eventsSubject.next({
+      type: 'binary',
+      content: {
+        type: BinaryMessageType.MSG_SCORE,
+        flags: 0,
+        seq: 2,
+        payload: scorePayload,
+      },
+    });
+    expect(service.getDevice(deviceId)?.state.score).toBe(42);
+
+    // 3. MSG_HIT_DETECTED
+    const hitPayload = new Uint8Array(16);
+    const hitView = new DataView(hitPayload.buffer);
+    hitView.setUint32(0, 1, true); // hitId
+    hitView.setUint16(4, 2150, true); // peak
+    hitView.setUint16(6, 300, true); // intensity
+    hitView.setUint8(8, 0); // sensorId
+    transport.eventsSubject.next({
+      type: 'binary',
+      content: {
+        type: BinaryMessageType.MSG_HIT_DETECTED,
+        flags: 0,
+        seq: 3,
+        payload: hitPayload,
+      },
+    });
+    const latestEvent = service.events()[0];
+    expect(latestEvent.payload).toBe('HIT id=1 target=0 peak=2150 intensity=300');
+  });
+
+  it('should maintain cached per-sensor calibrations and apply them to binary waveform captures', async () => {
+    setupService();
+    const transport = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport];
+
+    const dev = await service.connectSerialDevice('Pico Calib');
+    const deviceId = dev!.id;
+
+    // Receive MSG_CALIBRATION_RESULT for sensor 0
+    const calibPayload = new Uint8Array(8);
+    const calibView = new DataView(calibPayload.buffer);
+    calibView.setUint8(0, 0); // flags: repeated = false, ignored = false
+    calibView.setUint8(1, 0); // sensorId = 0
+    calibView.setUint16(2, 1850, true); // baseline
+    calibView.setUint16(4, 12, true); // noise
+    calibView.setUint16(6, 1910, true); // threshold
+
+    transport.eventsSubject.next({
+      type: 'binary',
+      content: {
+        type: BinaryMessageType.MSG_CALIBRATION_RESULT,
+        flags: 0,
+        seq: 1,
+        payload: calibPayload,
+      },
+    });
+
+    const cached = service.getSensorCalibration(deviceId, 0);
+    expect(cached).toBeDefined();
+    expect(cached?.baseline).toBe(1850);
+    expect(cached?.noise).toBe(12);
+    expect(cached?.threshold).toBe(1910);
+
+    // Stream binary capture (MSG_CAPTURE_START without baseline/noise/threshold)
+    const capStartPayload = new Uint8Array(9);
+    const capStartView = new DataView(capStartPayload.buffer);
+    capStartView.setUint32(0, 10000, true);
+    capStartView.setUint16(4, 2, true);
+    capStartView.setUint16(6, 4, true);
+    capStartView.setUint8(8, 0); // target 0
+
+    transport.eventsSubject.next({
+      type: 'binary',
+      content: {
+        type: BinaryMessageType.MSG_CAPTURE_START,
+        flags: 0,
+        seq: 2,
+        payload: capStartPayload,
+      },
+    });
+
+    // MSG_CAPTURE_DATA with 4 uint16 samples: [1850, 1852, 2200, 1860]
+    const dataBuf = new ArrayBuffer(4 + 8);
+    const dataView = new DataView(dataBuf);
+    dataView.setUint16(0, 0, true); // offset
+    dataView.setUint16(2, 4, true); // count
+    dataView.setUint16(4, 1850, true);
+    dataView.setUint16(6, 1852, true);
+    dataView.setUint16(8, 2200, true);
+    dataView.setUint16(10, 1860, true);
+
+    transport.eventsSubject.next({
+      type: 'binary',
+      content: {
+        type: BinaryMessageType.MSG_CAPTURE_DATA,
+        flags: 0,
+        seq: 3,
+        payload: new Uint8Array(dataBuf),
+      },
+    });
+
+    // MSG_CAPTURE_END
+    const endPayload = new Uint8Array(4);
+    new DataView(endPayload.buffer).setUint16(0, 4, true);
+    transport.eventsSubject.next({
+      type: 'binary',
+      content: {
+        type: BinaryMessageType.MSG_CAPTURE_END,
+        flags: 0,
+        seq: 4,
+        payload: endPayload,
+      },
+    });
+
+    const captures = service.captures();
+    expect(captures).toHaveLength(1);
+    const cap = captures[0];
+    expect(cap.baseline).toBe(1850); // Resolved from cached calibration!
+    expect(cap.noise).toBe(12);
+    expect(cap.threshold).toBe(1910);
+    expect(cap.peak).toBe(2200);
+    expect(cap.samples).toEqual([1850, 1852, 2200, 1860]);
+  });
+
+  it('should respond to ASCII BOOT message with a Handshake command and update state', async () => {
+    setupService();
+    const transport = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport];
+
+    const dev = await service.connectSerialDevice('Pico Test');
+    const deviceId = dev!.id;
+
+    // Clear initial handshake sent upon connect
+    transport.sentPayloads.length = 0;
+
+    // Simulate device emitting ASCII BOOT message
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'BOOT success=1 msg=OK',
+    });
+
+    // Device state should be updated to BOOT
+    const updatedDev = service.getDevice(deviceId);
+    expect(updatedDev?.state.gameState).toBe('BOOT');
+    expect(updatedDev?.state.sensorState).toBe('INIT');
+
+    // A Handshake packet should have been sent to the transport
+    expect(transport.sentPayloads).toHaveLength(1);
+    const sent = transport.sentPayloads[0];
+    expect(sent).toBeInstanceOf(Uint8Array);
+    if (sent instanceof Uint8Array) {
+      expect(sent[3]).toBe(BinaryCommandType.CMD_HANDSHAKE);
+    }
+
+    // Event log should contain the received BOOT message and sent CMD_HANDSHAKE
+    const events = service.events();
+    expect(
+      events.some((e) => e.payload === 'BOOT success=1 msg=OK' && e.direction === 'received'),
+    ).toBe(true);
+    expect(events.some((e) => e.payload === '[CMD_HANDSHAKE]' && e.direction === 'sent')).toBe(
+      true,
+    );
   });
 });
