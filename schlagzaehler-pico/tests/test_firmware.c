@@ -490,19 +490,25 @@ void test_companion_protocol(void) {
     assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
     assert(msg.type == MSG_REQUEST_CAPTURE);
     assert(msg.data.request_capture.enable == true);
-    assert(msg.data.request_capture.target == 3); /* Default is ALL */
+    assert(msg.data.request_capture.target == 255); /* Default is ALL */
 
     CompanionProtocol_parse_line(&cp, "CAPTURE:all");
     assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
     assert(msg.type == MSG_REQUEST_CAPTURE);
     assert(msg.data.request_capture.enable == true);
-    assert(msg.data.request_capture.target == 3);
+    assert(msg.data.request_capture.target == 255);
 
     CompanionProtocol_parse_line(&cp, "CAPTURE:ALL");
     assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
     assert(msg.type == MSG_REQUEST_CAPTURE);
     assert(msg.data.request_capture.enable == true);
-    assert(msg.data.request_capture.target == 3);
+    assert(msg.data.request_capture.target == 255);
+
+    CompanionProtocol_parse_line(&cp, "CAPTURE:255");
+    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_CAPTURE);
+    assert(msg.data.request_capture.enable == true);
+    assert(msg.data.request_capture.target == 255);
 
     CompanionProtocol_parse_line(&cp, "CAPTURE:1");
     assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
@@ -523,7 +529,7 @@ void test_companion_protocol(void) {
         .timestamp_us = 2000,
         .data.capture_ready = {
             .sample_rate_hz = 10000,
-            .target = 3,
+            .target = 255,
             .pre_samples = 20,
             .total_samples = 120,
             .baseline = 1900,
@@ -533,7 +539,7 @@ void test_companion_protocol(void) {
         }
     };
     CompanionProtocol_send_message(&cp, &cap_ready_msg);
-    assert(strcmp(s_last_serial_line, "CAPTURE_START rate=10000 pre=20 count=120 target=3") == 0);
+    assert(strcmp(s_last_serial_line, "CAPTURE_START rate=10000 pre=20 count=120 target=255") == 0);
     assert(cp.capture_tx_active == true);
 
     /* Tick 1 sends line 1 (50 samples) */
@@ -778,8 +784,8 @@ void test_display_presenter_capturing(void) {
     }
     assert(found_sensor_2);
 
-    /* Target ALL (3) -> "Sensor: alle" */
-    sensor_msg.data.sensor_status.target = 3;
+    /* Target ALL (255) -> "Sensor: alle" */
+    sensor_msg.data.sensor_status.target = 255;
     DisplayPresenter_handle_message(&dp, &sensor_msg);
     DisplayPresenter_render(&dp);
     bool found_sensor_all = false;
@@ -1120,9 +1126,18 @@ void test_binary_commands(void) {
     assert(msg.data.request_capture.enable == true);
     assert(msg.data.request_capture.target == 1);
 
+    /* CMD_CAPTURE (action = 1, target = 255 for ALL) */
+    CmdCapturePayload c_payload_all = { .action = 1, .target_sensor = 255 };
+    len = build_binary_frame(frame, CMD_CAPTURE, 0, &c_payload_all, sizeof(c_payload_all), 9);
+    CompanionProtocol_feed_bytes(&cp, frame, len);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_CAPTURE);
+    assert(msg.data.request_capture.enable == true);
+    assert(msg.data.request_capture.target == 255);
+
     /* CMD_CAPTURE (action = 0, target = 0) */
     CmdCapturePayload c_stop = { .action = 0, .target_sensor = 0 };
-    len = build_binary_frame(frame, CMD_CAPTURE, 0, &c_stop, sizeof(c_stop), 9);
+    len = build_binary_frame(frame, CMD_CAPTURE, 0, &c_stop, sizeof(c_stop), 10);
     CompanionProtocol_feed_bytes(&cp, frame, len);
     assert(OsalQueue_pop(&q_to_core0, &msg) == true);
     assert(msg.type == MSG_REQUEST_CAPTURE);
@@ -1255,7 +1270,7 @@ void test_binary_capture_chunked_streaming(void) {
         .timestamp_us = 1000,
         .data.capture_ready = {
             .sample_rate_hz = 10000,
-            .target = 3,
+            .target = 255,
             .pre_samples = 100,
             .total_samples = 300,
             .baseline = 1850,
@@ -1276,7 +1291,7 @@ void test_binary_capture_chunked_streaming(void) {
     assert(sp->sample_rate_hz == 10000);
     assert(sp->pre_samples == 100);
     assert(sp->total_samples == 300);
-    assert(sp->target_channel == 3);
+    assert(sp->target_channel == 255);
 
     /* 2. Tick 1: Chunk 0..127 */
     s_last_serial_bytes_len = 0;

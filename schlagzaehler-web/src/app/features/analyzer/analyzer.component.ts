@@ -112,7 +112,7 @@ export class AnalyzerComponent {
   }
 
   formatTargetLabel(target: CaptureTargetOption | number | undefined): string {
-    if (target === 'all' || target === 3) {
+    if (target === 'all' || target === 255) {
       return 'All Sensors (Interleaved)';
     }
     if (target === 0) {
@@ -128,7 +128,7 @@ export class AnalyzerComponent {
   }
 
   formatTargetBadge(target: number | undefined): string {
-    if (target === 3) {
+    if (target === 255) {
       return 'All (3x)';
     }
     if (target === 0 || target === 1 || target === 2) {
@@ -193,7 +193,7 @@ export class AnalyzerComponent {
     }
 
     let csvContent: string;
-    if (cap.target === 3) {
+    if (cap.target === 255) {
       const lines = ['Triplet,Time_ms,Sensor_0,Sensor_1,Sensor_2'];
       const preTriplets = Math.floor(cap.preSamples / 3);
       const tripletCount = Math.floor(cap.samples.length / 3);

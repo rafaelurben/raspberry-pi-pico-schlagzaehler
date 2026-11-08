@@ -92,7 +92,7 @@ void GameController_init(GameController* gc, const Config* config, OsalQueue* qu
 
     gc->queue_to_core1 = queue_to_core1;
     gc->last_sensor_state = SENSOR_STATE_INIT;
-    gc->capture_target = 3;
+    gc->capture_target = 255;
     gc->pre_capture_state = GAME_STATE_READY;
     gc->last_timer_broadcast_us = 0;
 

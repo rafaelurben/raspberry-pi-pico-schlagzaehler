@@ -234,8 +234,8 @@ export const BinaryCompanionCommands = {
     seq?: number,
   ): Uint8Array => {
     const actionVal = action === 'start' || action === 1 ? 1 : 0;
-    let targetVal = 3;
-    if (typeof target === 'number' && target >= 0 && target <= 3) {
+    let targetVal = 255;
+    if (typeof target === 'number' && target >= 0 && target <= 2) {
       targetVal = target;
     }
     const payload = new Uint8Array([actionVal, targetVal, 0, 0]);

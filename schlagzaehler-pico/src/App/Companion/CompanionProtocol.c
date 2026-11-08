@@ -90,10 +90,10 @@ void CompanionProtocol_parse_line(CompanionProtocol* proto, const char* line) {
         CommandHandler_handle_request_status(proto->command_handler);
     } else if (strcmp(line, "CAPTURE") == 0 || strcmp(line, "CAPTURE:START") == 0 ||
                strcmp(line, "CAPTURE:ALL") == 0 || strcmp(line, "CAPTURE:all") == 0 ||
-               strcmp(line, "CAPTURE:3") == 0 || strcmp(line, "CAPTURE:START:3") == 0 ||
+               strcmp(line, "CAPTURE:255") == 0 || strcmp(line, "CAPTURE:START:255") == 0 ||
                strcmp(line, "CAPTURE:START:ALL") == 0 || strcmp(line, "CAPTURE:START:all") == 0) {
         CompanionProtocol_cancel_capture_tx(proto);
-        CommandHandler_handle_request_capture(proto->command_handler, true, 3);
+        CommandHandler_handle_request_capture(proto->command_handler, true, 255);
     } else if (strcmp(line, "CAPTURE:0") == 0 || strcmp(line, "CAPTURE:START:0") == 0) {
         CompanionProtocol_cancel_capture_tx(proto);
         CommandHandler_handle_request_capture(proto->command_handler, true, 0);

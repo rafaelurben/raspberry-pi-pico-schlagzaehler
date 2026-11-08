@@ -121,7 +121,15 @@ describe('companion-protocol', () => {
       expect(capStart[8]).toBe(1); // action = start (1)
       expect(capStart[9]).toBe(1); // target = 1
 
-      const capStop = BinaryCompanionCommands.captureStop(15);
+      const capAll = BinaryCompanionCommands.captureStart('all', 15);
+      expect(capAll[8]).toBe(1);
+      expect(capAll[9]).toBe(255); // target = 255 for ALL
+
+      const capDefault = BinaryCompanionCommands.captureStart(undefined, 16);
+      expect(capDefault[8]).toBe(1);
+      expect(capDefault[9]).toBe(255); // target = 255 default ALL
+
+      const capStop = BinaryCompanionCommands.captureStop(17);
       expect(capStop[3]).toBe(BinaryCommandType.CMD_CAPTURE);
       expect(capStop[8]).toBe(0); // action = stop (0)
     });
@@ -419,14 +427,14 @@ describe('companion-protocol', () => {
     });
 
     it('should parse ASCII CAPTURE_START without baseline/noise/threshold', () => {
-      const start = parseCaptureMessage('CAPTURE_START rate=10000 pre=1000 count=21000 target=3');
+      const start = parseCaptureMessage('CAPTURE_START rate=10000 pre=1000 count=21000 target=255');
       expect(start).not.toBeNull();
       expect(start?.type).toBe('CAPTURE_START');
       if (start?.type === 'CAPTURE_START') {
         expect(start.sampleRateHz).toBe(10000);
         expect(start.preSamples).toBe(1000);
         expect(start.totalSamples).toBe(21000);
-        expect(start.target).toBe(3);
+        expect(start.target).toBe(255);
       }
     });
 

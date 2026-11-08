@@ -152,7 +152,7 @@ typedef struct __attribute__((packed)) {
 /* CMD_CAPTURE (0x09) - 2 bytes */
 typedef struct __attribute__((packed)) {
     uint8_t action;         /* 0 = STOP, 1 = START */
-    uint8_t target_sensor;  /* 0, 1, 2, or 3 for ALL */
+    uint8_t target_sensor;  /* 0, 1, 2, or 255 for ALL */
 } CmdCapturePayload;
 
 /* -------------------------------------------------------------
@@ -177,7 +177,7 @@ typedef struct __attribute__((packed)) {
 /* MSG_SENSOR_STATUS (0x82) - 2 bytes */
 typedef struct __attribute__((packed)) {
     uint8_t state;          /* SensorState enum: 0..7 */
-    uint8_t target;         /* 0, 1, 2, or 3 for ALL */
+    uint8_t target;         /* 0, 1, 2, or 255 for ALL */
 } MsgSensorStatusPayload;
 
 /* MSG_CALIBRATION_RESULT (0x83) - 8 bytes */
@@ -235,7 +235,7 @@ typedef struct __attribute__((packed)) {
     uint32_t sample_rate_hz;
     uint16_t pre_samples;
     uint16_t total_samples;
-    uint8_t  target_channel;/* 0, 1, 2, or 3 for ALL */
+    uint8_t  target_channel;/* 0, 1, 2, or 255 for ALL */
 } MsgCaptureStartPayload;
 
 /* MSG_CAPTURE_DATA (0x8B) - 4 bytes header followed by N * uint16_t */

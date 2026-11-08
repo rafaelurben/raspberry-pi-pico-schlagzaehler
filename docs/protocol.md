@@ -262,7 +262,7 @@ packet
 | Field | Type | Description |
 | --- | --- | --- |
 | `action` | `uint8_t` | `0` = `STOP` / cancel capture, `1` = `START` / arm capture. |
-| `target_sensor` | `uint8_t` | `0`, `1`, `2` for a single channel, or `3` for `ALL` channels. |
+| `target_sensor` | `uint8_t` | `0`, `1`, `2` for a single channel, or `255` for `ALL` channels. |
 
 ---
 
@@ -320,7 +320,7 @@ packet
 | Field | Type | Description |
 | --- | --- | --- |
 | `state` | `uint8_t` | `0` = `INIT`, `1` = `CALIBRATING`, `2` = `ARMED`, `3` = `LOCKOUT`, `4` = `CAPTURE_ARMED`, `5` = `CAPTURING`, `6` = `CAPTURE_TX_WAIT`, `7` = `ERROR`. |
-| `target` | `uint8_t` | `0`, `1`, `2` for a single channel; `3` for `ALL`. |
+| `target` | `uint8_t` | `0`, `1`, `2` for a single channel; `255` for `ALL`. |
 
 ---
 
@@ -490,7 +490,7 @@ packet
 | `sample_rate_hz` | `uint32_t` | Effective sampling rate in Hz (nominally `10000`). |
 | `pre_samples` | `uint16_t` | Pre-trigger sample count (`1000`, corresponding to 100 ms). |
 | `total_samples` | `uint16_t` | Total buffer sample count (`21000`, corresponding to 2.1 seconds). |
-| `target_channel` | `uint8_t` | Channel index recorded (`0`, `1`, `2`, or `3 = ALL`). |
+| `target_channel` | `uint8_t` | Channel index recorded (`0`, `1`, `2`, or `255 = ALL`). |
 
 ---
 
@@ -592,7 +592,7 @@ Newline-delimited (`\n` or `\r\n`):
 | `SCORE value=<u>` | `MSG_SCORE` | `SCORE value=12` |
 | `TIMER elapsed=<u> remaining=<u>` | `MSG_TIMER` | `TIMER elapsed=5000 remaining=25000` |
 | `RESULT score=<u> time_ms=<u> reason=<s>` | `MSG_GAME_FINISHED` | `RESULT score=42 time_ms=30000 reason=TIME_LIMIT` |
-| `CAPTURE_START rate=<u> pre=<u> count=<u> target=<u>` | `MSG_CAPTURE_START` | `CAPTURE_START rate=10000 pre=1000 count=21000 target=3` |
+| `CAPTURE_START rate=<u> pre=<u> count=<u> target=<u>` | `MSG_CAPTURE_START` | `CAPTURE_START rate=10000 pre=1000 count=21000 target=255` |
 | `CAPTURE_DATA offset=<u> values=...` | `MSG_CAPTURE_DATA` | `CAPTURE_DATA offset=0 values=1850,1852,1849...` |
 | `CAPTURE_END count=<u>` | `MSG_CAPTURE_END` | `CAPTURE_END count=21000` |
 | `ERROR code=<u> comp=<s> msg=<s>` | `MSG_ERROR` | `ERROR code=1 comp=ADC msg=Timeout` |
