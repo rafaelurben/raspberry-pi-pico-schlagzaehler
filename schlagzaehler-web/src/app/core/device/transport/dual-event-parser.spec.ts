@@ -15,8 +15,25 @@ describe('DualEventParser', () => {
     const chunk = encoder.encode('BOOT success=1 msg=Ready\r\nSENSOR status=ARMED\n');
     const events = parser.push(chunk);
 
-    expect(events).toEqual(['BOOT success=1 msg=Ready', 'SENSOR status=ARMED']);
+    expect(events).toEqual([
+      { type: 'ascii', content: 'BOOT success=1 msg=Ready' },
+      { type: 'ascii', content: 'SENSOR status=ARMED' },
+    ]);
     expect(parser.buffered).toHaveLength(0);
+  });
+
+  it('should filter out unprintable garbage and control characters', () => {
+    // 0x01, 0x02, 0x00, 0x7f, etc. should be stripped before valid ASCII line
+    const chunk = new Uint8Array([
+      0x00,
+      0x01,
+      0x1f,
+      0x7f,
+      ...encoder.encode('STATE old=READY new=RUNNING\r\n'),
+    ]);
+    const events = parser.push(chunk);
+
+    expect(events).toEqual([{ type: 'ascii', content: 'STATE old=READY new=RUNNING' }]);
   });
 
   it('should parse binary frames correctly', () => {
@@ -25,10 +42,10 @@ describe('DualEventParser', () => {
 
     expect(events).toHaveLength(1);
     const parsed = events[0];
-    expect(typeof parsed).toBe('object');
-    if (typeof parsed !== 'string') {
-      expect(parsed.type).toBe(BinaryMessageType.MSG_SCORE);
-      expect(Array.from(parsed.payload)).toEqual([5, 0, 0, 0]);
+    expect(parsed.type).toBe('binary');
+    if (parsed.type === 'binary') {
+      expect(parsed.content.type).toBe(BinaryMessageType.MSG_SCORE);
+      expect(Array.from(parsed.content.payload)).toEqual([5, 0, 0, 0]);
     }
   });
 
@@ -43,10 +60,10 @@ describe('DualEventParser', () => {
     const events = parser.push(merged);
 
     expect(events).toHaveLength(2);
-    expect(events[0]).toBe('BOOT success=1 msg=Ready');
-    expect(typeof events[1]).toBe('object');
-    if (typeof events[1] !== 'string') {
-      expect(events[1].type).toBe(BinaryCommandType.CMD_START);
+    expect(events[0]).toEqual({ type: 'ascii', content: 'BOOT success=1 msg=Ready' });
+    expect(events[1].type).toBe('binary');
+    if (events[1].type === 'binary') {
+      expect(events[1].content.type).toBe(BinaryCommandType.CMD_START);
     }
   });
 
@@ -57,7 +74,7 @@ describe('DualEventParser', () => {
     expect(parser.push(chunk1)).toHaveLength(0);
     const events = parser.push(chunk2);
 
-    expect(events).toEqual(['STATE old=READY new=RUNNING']);
+    expect(events).toEqual([{ type: 'ascii', content: 'STATE old=READY new=RUNNING' }]);
   });
 
   it('should handle fragmented binary frames across chunks', () => {
@@ -74,6 +91,6 @@ describe('DualEventParser', () => {
     const events = parser.push(chunk2);
 
     expect(events).toHaveLength(1);
-    expect(typeof events[0]).toBe('object');
+    expect(events[0].type).toBe('binary');
   });
 });

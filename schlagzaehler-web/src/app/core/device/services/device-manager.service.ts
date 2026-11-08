@@ -5,19 +5,14 @@ import { ConnectionState } from '../models/connection-state.type';
 import { DeviceEvent, EventDirection } from '../models/device-event.model';
 import { Device, DeviceState, SelectableGameMode } from '../models/device.model';
 import { CaptureProtocolMessage, PiezoCaptureResult } from '../models/piezo-capture.model';
-import { BinaryCommandType, BinaryFrame } from '../protocol/binary-protocol.types';
+import { BinaryCommandType } from '../protocol/binary-protocol.types';
 import {
+  applyUnifiedMessageToDeviceState,
   BinaryCompanionCommands,
   CompanionCommands,
-  formatBinaryEventForLog,
-  parseBinaryCalibration,
-  parseBinaryCaptureMessage,
-  parseBinaryCompanionMessage,
-  parseBinaryMetadata,
-  parseCalibrationMessage,
-  parseCaptureMessage,
-  parseCompanionMessage,
+  parseTransportEvent,
   SensorCalibration,
+  UnifiedProtocolMessage,
 } from '../protocol/companion-protocol';
 import { DeviceTransport, TransportEvent } from '../transport/device-transport.interface';
 import { WebSerialTransportFactory } from '../transport/web-serial-transport-factory.service';
@@ -546,71 +541,48 @@ export class DeviceManagerService implements OnDestroy {
 
   private handleIncomingEvent(deviceId: string, event: TransportEvent): void {
     const now = Date.now();
-
-    if (typeof event === 'string') {
-      this.handleIncomingAsciiEvent(deviceId, event, now);
-    } else {
-      this.handleIncomingBinaryEvent(deviceId, event, now);
+    const msg = parseTransportEvent(event);
+    if (!msg) {
+      return;
     }
+    this.handleUnifiedProtocolMessage(deviceId, msg, now);
   }
 
-  private handleIncomingAsciiEvent(deviceId: string, rawLine: string, now: number): void {
-    // 1. Check calibration message
-    const calib = parseCalibrationMessage(rawLine);
-    if (calib) {
-      this.cacheSensorCalibration(deviceId, calib);
+  private handleUnifiedProtocolMessage(
+    deviceId: string,
+    msg: UnifiedProtocolMessage,
+    now: number,
+  ): void {
+    // 1. Cache calibration if message contains calibration result
+    if (msg.type === 'CALIBRATION_RESULT') {
+      this.cacheSensorCalibration(deviceId, msg.payload);
     }
 
-    // 2. Check capture message
-    const captureMsg = parseCaptureMessage(rawLine);
-    if (captureMsg) {
-      this.handleCaptureProtocolMessage(deviceId, captureMsg, rawLine, now);
+    // 2. Route capture streaming chunks directly to capture pipeline
+    if (msg.type === 'CAPTURE_START' || msg.type === 'CAPTURE_DATA' || msg.type === 'CAPTURE_END') {
+      this.handleCaptureProtocolMessage(deviceId, msg.payload, msg.rawText, now);
       return;
     }
 
-    // 3. State update
-    this.devices.update((devices) =>
-      devices.map((d) =>
-        d.id === deviceId
-          ? new Device({
-              ...d,
-              state: parseCompanionMessage(rawLine, d.state, now),
-            })
-          : d,
-      ),
-    );
-
-    this.appendEvent(deviceId, rawLine, 'received', now);
-  }
-
-  private handleIncomingBinaryEvent(deviceId: string, frame: BinaryFrame, now: number): void {
-    // 1. Check calibration frame
-    const calib = parseBinaryCalibration(frame);
-    if (calib) {
-      this.cacheSensorCalibration(deviceId, calib);
-    }
-
-    // 2. Check capture frames
-    const captureMsg = parseBinaryCaptureMessage(frame);
-    if (captureMsg) {
-      const displayPayload = formatBinaryEventForLog(frame);
-      this.handleCaptureProtocolMessage(deviceId, captureMsg, displayPayload, now);
-      return;
-    }
-
-    // 3. Check handshake ACK metadata
-    const metadataUpdates = parseBinaryMetadata(frame);
-
-    // 4. Update device state
+    // 3. Update device state and any metadata (e.g. from HANDSHAKE_ACK)
     this.devices.update((devices) =>
       devices.map((d) => {
         if (d.id !== deviceId) {
           return d;
         }
-        const updatedState = parseBinaryCompanionMessage(frame, d.state, now);
-        const updatedMetadata = metadataUpdates
-          ? { ...d.metadata, ...metadataUpdates }
-          : d.metadata;
+        const updatedState = applyUnifiedMessageToDeviceState(d.state, msg, now);
+        const updatedMetadata =
+          msg.type === 'HANDSHAKE_ACK'
+            ? {
+                ...d.metadata,
+                hardwareGen: msg.payload.hardwareGen,
+                hardwareRev: msg.payload.hardwareRev,
+                protoMajor: msg.payload.protoMajor,
+                protoMinor: msg.payload.protoMinor,
+                fwVersion: `${msg.payload.fwMajor}.${msg.payload.fwMinor}.${msg.payload.fwPatch}`,
+                uptimeMs: msg.payload.uptimeMs,
+              }
+            : d.metadata;
         return new Device({
           ...d,
           state: updatedState,
@@ -619,8 +591,8 @@ export class DeviceManagerService implements OnDestroy {
       }),
     );
 
-    const logText = formatBinaryEventForLog(frame);
-    this.appendEvent(deviceId, logText, 'received', now);
+    // 4. Record sanitized / formatted message in event log
+    this.appendEvent(deviceId, msg.rawText, 'received', now);
   }
 
   private handleCaptureProtocolMessage(

@@ -3,7 +3,17 @@ import { ConnectionState } from '../models/connection-state.type';
 import { DeviceMetadata, TransportType } from '../models/device.model';
 import { BinaryFrame } from '../protocol/binary-protocol.types';
 
-export type TransportEvent = string | BinaryFrame;
+export interface AsciiTransportEvent {
+  readonly type: 'ascii';
+  readonly content: string;
+}
+
+export interface BinaryTransportEvent {
+  readonly type: 'binary';
+  readonly content: BinaryFrame;
+}
+
+export type TransportEvent = AsciiTransportEvent | BinaryTransportEvent;
 
 /**
  * Generic transport abstraction representing a single physical or virtual device connection.

@@ -1,14 +1,23 @@
-import {
-  BinaryFrame,
-  CRC_SIZE,
-  HEADER_SIZE,
-  MIN_FRAME_SIZE,
-  SYNC_BYTE_0,
-  SYNC_BYTE_1,
-} from '../protocol/binary-protocol.types';
-import { computeCrc16 } from '../protocol/crc16';
+import { SYNC_BYTE_0, SYNC_BYTE_1 } from '../protocol/binary-protocol.types';
+import { BinaryFrameParser } from '../protocol/binary-frame-parser';
+import { TransportEvent } from './device-transport.interface';
 
-export type TransportEvent = string | BinaryFrame;
+export type { TransportEvent };
+
+/**
+ * Checks if a string contains only printable characters and common whitespace (tabs).
+ * Discards arbitrary binary garbage or corrupt control bytes.
+ */
+function isPrintableAscii(str: string): boolean {
+  if (str.length === 0) return false;
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if ((code < 0x20 && code !== 0x09) || code === 0x7f) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /**
  * DualEventParser seamlessly parses an incoming raw byte stream from Web Serial
@@ -38,45 +47,35 @@ export class DualEventParser {
     const events: TransportEvent[] = [];
 
     while (this.buffer.length > 0) {
+      // 0. Skip leading control / non-printable noise bytes (except \r, \n, \t)
+      const b0 = this.buffer[0];
+      if ((b0 < 0x20 && b0 !== 0x09 && b0 !== 0x0a && b0 !== 0x0d) || b0 === 0x7f) {
+        this.buffer = this.buffer.slice(1);
+        continue;
+      }
+
       // 1. Check if buffer starts with binary sync word: 0x55, 0xAA
       if (
         this.buffer.length >= 2 &&
         this.buffer[0] === SYNC_BYTE_0 &&
         this.buffer[1] === SYNC_BYTE_1
       ) {
-        if (this.buffer.length < MIN_FRAME_SIZE) {
-          break; // Incomplete header, wait for more data
-        }
+        const result = BinaryFrameParser.extractFrame(this.buffer);
 
-        const payloadLen = this.buffer[4] | (this.buffer[5] << 8);
-        const totalFrameLength = HEADER_SIZE + payloadLen + CRC_SIZE;
-
-        if (this.buffer.length < totalFrameLength) {
+        if (result.status === 'incomplete') {
           break; // Incomplete frame, wait for more data
         }
 
-        const computedCrc = computeCrc16(this.buffer.subarray(0, HEADER_SIZE + payloadLen));
-        const expectedCrc =
-          this.buffer[HEADER_SIZE + payloadLen] | (this.buffer[HEADER_SIZE + payloadLen + 1] << 8);
-
-        if (computedCrc === expectedCrc) {
-          const verFlags = this.buffer[2];
-          const flags = (verFlags >> 4) & 0x0f;
-          const msgType = this.buffer[3];
-          const seqId = this.buffer[6] | (this.buffer[7] << 8);
-          const payload = this.buffer.slice(HEADER_SIZE, HEADER_SIZE + payloadLen);
-
+        if (result.status === 'complete' && result.frame && result.totalLength) {
           events.push({
-            type: msgType,
-            flags,
-            seq: seqId,
-            payload,
+            type: 'binary',
+            content: result.frame,
           });
-
-          this.buffer = this.buffer.slice(totalFrameLength);
+          this.buffer = this.buffer.slice(result.totalLength);
           continue;
         } else {
-          // CRC mismatch: not a valid binary frame. Advance 1 byte and resume scanning
+          // CRC mismatch: error already logged by BinaryFrameParser.
+          // Advance 1 byte and resume scanning to find subsequent sync word or newline
           this.buffer = this.buffer.slice(1);
           continue;
         }
@@ -104,7 +103,14 @@ export class DualEventParser {
         }
         line = line.trim();
         if (line.length > 0) {
-          events.push(line);
+          if (isPrintableAscii(line)) {
+            events.push({
+              type: 'ascii',
+              content: line,
+            });
+          } else {
+            console.warn('[DualEventParser] Discarded corrupt/non-printable ASCII line:', line);
+          }
         }
         continue;
       }
@@ -118,7 +124,17 @@ export class DualEventParser {
         }
         prefixStr = prefixStr.trim();
         if (prefixStr.length > 0) {
-          events.push(prefixStr);
+          if (isPrintableAscii(prefixStr)) {
+            events.push({
+              type: 'ascii',
+              content: prefixStr,
+            });
+          } else {
+            console.warn(
+              '[DualEventParser] Discarded non-printable noise before binary sync word:',
+              prefixBytes,
+            );
+          }
         }
 
         this.buffer = this.buffer.slice(syncIdx);

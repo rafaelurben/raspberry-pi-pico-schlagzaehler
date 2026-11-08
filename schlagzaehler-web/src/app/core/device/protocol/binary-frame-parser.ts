@@ -53,12 +53,64 @@ export function serializeBinaryFrame(
   return frame;
 }
 
+export interface FrameExtractionResult {
+  readonly status: 'complete' | 'incomplete' | 'crc_error';
+  readonly frame?: BinaryFrame;
+  readonly totalLength?: number;
+  readonly computedCrc?: number;
+  readonly expectedCrc?: number;
+}
+
 /**
  * BinaryFrameParser accumulates incoming raw Uint8Array byte chunks from serial/transport,
  * scans for 0xAA55 sync words, verifies frame CRC-16, and emits validated BinaryFrames.
  */
 export class BinaryFrameParser {
   private buffer: Uint8Array = new Uint8Array(0);
+
+  /**
+   * Attempts to parse a single frame starting at index 0 of `buffer`.
+   */
+  static extractFrame(buffer: Uint8Array): FrameExtractionResult {
+    if (buffer.length < MIN_FRAME_SIZE) {
+      return { status: 'incomplete' };
+    }
+
+    const payloadLen = buffer[4] | (buffer[5] << 8);
+    const totalFrameLength = HEADER_SIZE + payloadLen + CRC_SIZE;
+
+    if (buffer.length < totalFrameLength) {
+      return { status: 'incomplete', totalLength: totalFrameLength };
+    }
+
+    const computedCrc = computeCrc16(buffer.subarray(0, HEADER_SIZE + payloadLen));
+    const expectedCrc =
+      buffer[HEADER_SIZE + payloadLen] | (buffer[HEADER_SIZE + payloadLen + 1] << 8);
+
+    if (computedCrc !== expectedCrc) {
+      console.error(
+        `[BinaryFrameParser] CRC-16 mismatch: expected 0x${expectedCrc.toString(16).padStart(4, '0')}, computed 0x${computedCrc.toString(16).padStart(4, '0')}`,
+      );
+      return { status: 'crc_error', computedCrc, expectedCrc };
+    }
+
+    const verFlags = buffer[2];
+    const flags = (verFlags >> 4) & 0x0f;
+    const msgType = buffer[3];
+    const seqId = buffer[6] | (buffer[7] << 8);
+    const payload = buffer.slice(HEADER_SIZE, HEADER_SIZE + payloadLen);
+
+    return {
+      status: 'complete',
+      frame: {
+        type: msgType,
+        flags,
+        seq: seqId,
+        payload,
+      },
+      totalLength: totalFrameLength,
+    };
+  }
 
   /**
    * Pushes incoming raw bytes, parses all complete validated frames,
@@ -109,45 +161,17 @@ export class BinaryFrameParser {
         this.buffer = this.buffer.slice(syncIndex);
       }
 
-      // Check if we have at least MIN_FRAME_SIZE bytes
-      if (this.buffer.length < MIN_FRAME_SIZE) {
-        break; // Wait for more data
-      }
+      const result = BinaryFrameParser.extractFrame(this.buffer);
 
-      // Read header fields
-      const verFlags = this.buffer[2];
-      const flags = (verFlags >> 4) & 0x0f;
-      const msgType = this.buffer[3];
-      const payloadLen = this.buffer[4] | (this.buffer[5] << 8);
-      const seqId = this.buffer[6] | (this.buffer[7] << 8);
-
-      const totalFrameLength = HEADER_SIZE + payloadLen + CRC_SIZE;
-
-      // Check if the entire frame has arrived
-      if (this.buffer.length < totalFrameLength) {
+      if (result.status === 'incomplete') {
         break; // Wait for full payload + CRC
       }
 
-      // Verify CRC-16 over Header + Payload
-      const computedCrc = computeCrc16(this.buffer.subarray(0, HEADER_SIZE + payloadLen));
-      const expectedCrc =
-        this.buffer[HEADER_SIZE + payloadLen] | (this.buffer[HEADER_SIZE + payloadLen + 1] << 8);
-
-      if (computedCrc === expectedCrc) {
-        // Valid frame! Extract payload
-        const payload = this.buffer.slice(HEADER_SIZE, HEADER_SIZE + payloadLen);
-        frames.push({
-          type: msgType,
-          flags,
-          seq: seqId,
-          payload,
-        });
-
-        // Advance buffer past this complete frame
-        this.buffer = this.buffer.slice(totalFrameLength);
+      if (result.status === 'complete' && result.frame && result.totalLength) {
+        frames.push(result.frame);
+        this.buffer = this.buffer.slice(result.totalLength);
       } else {
-        // CRC mismatch! Invalid frame or false sync word.
-        // Advance by 1 byte to resynchronize on subsequent sync word
+        // CRC mismatch or invalid frame. Advance by 1 byte to resynchronize
         this.buffer = this.buffer.slice(1);
       }
     }

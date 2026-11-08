@@ -169,9 +169,9 @@ describe('DeviceManagerService', () => {
     const device1 = await service.connectSerialDevice();
     const device2 = await service.connectSerialDevice();
 
-    transport1.eventsSubject.next('MODE active=TIMED param=45');
-    transport2.eventsSubject.next('SCORE value=10');
-    transport1.eventsSubject.next('SCORE value=7');
+    transport1.eventsSubject.next({ type: 'ascii', content: 'MODE active=TIMED param=45' });
+    transport2.eventsSubject.next({ type: 'ascii', content: 'SCORE value=10' });
+    transport1.eventsSubject.next({ type: 'ascii', content: 'SCORE value=7' });
 
     const receivedEvents = service.events().filter((e) => e.direction === 'received');
     expect(receivedEvents).toHaveLength(3);
@@ -293,7 +293,7 @@ describe('DeviceManagerService', () => {
 
     await service.connectSerialDevice();
     service.clearEvents();
-    transport.eventsSubject.next('EVENT_1');
+    transport.eventsSubject.next({ type: 'ascii', content: 'SCORE value=1' });
     expect(service.events()).toHaveLength(1);
 
     service.clearEvents();
@@ -343,25 +343,38 @@ describe('DeviceManagerService', () => {
     await service.startCapture(deviceId);
     expect(transport.sentPayloads).toContain('CAPTURE');
 
-    transport.eventsSubject.next('SENSOR status=CAPTURE_ARMED');
+    transport.eventsSubject.next({ type: 'ascii', content: 'SENSOR status=CAPTURE_ARMED' });
     expect(service.getDevice(deviceId)?.state.sensorState).toBe('CAPTURE_ARMED');
 
-    transport.eventsSubject.next('SENSOR status=CAPTURING');
+    transport.eventsSubject.next({ type: 'ascii', content: 'SENSOR status=CAPTURING' });
     expect(service.getDevice(deviceId)?.state.sensorState).toBe('CAPTURING');
 
-    transport.eventsSubject.next(
-      'CALIBRATION_RESULT sensor=0 baseline=1980 noise=3 threshold=2010 repeated=1',
-    );
-    transport.eventsSubject.next('CAPTURE_START rate=10000 pre=2 count=6 target=0');
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CALIB success=1 target=0 repeated=1 baseline=1980 noise=3 threshold=2010',
+    });
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_START rate=10000 pre=2 count=6 target=0',
+    });
     expect(service.captureProgress()[deviceId]).toBe(0);
 
-    transport.eventsSubject.next('CAPTURE_DATA offset=0 values=1979,1981,2450');
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_DATA offset=0 values=1979,1981,2450',
+    });
     expect(service.captureProgress()[deviceId]).toBe(50);
 
-    transport.eventsSubject.next('CAPTURE_DATA offset=3 values=2200,2050,1982');
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_DATA offset=3 values=2200,2050,1982',
+    });
     expect(service.captureProgress()[deviceId]).toBe(100);
 
-    transport.eventsSubject.next('CAPTURE_END count=6');
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_END count=6',
+    });
     expect(service.captureProgress()[deviceId]).toBeUndefined();
 
     const captures = service.captures();
@@ -406,11 +419,22 @@ describe('DeviceManagerService', () => {
     await service.startCapture(deviceId, 1);
     expect(transport.sentPayloads).toContain('CAPTURE:1');
 
-    transport.eventsSubject.next(
-      'CAPTURE_START rate=10000 pre=2 count=6 target=1 baseline=1980 noise=3 threshold=2010',
-    );
-    transport.eventsSubject.next('CAPTURE_DATA offset=0 values=1979,1981,2450,2200,2050,1982');
-    transport.eventsSubject.next('CAPTURE_END count=6');
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CALIB success=1 target=1 repeated=false baseline=1980 noise=3 threshold=2010',
+    });
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_START rate=10000 pre=2 count=6 target=1',
+    });
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_DATA offset=0 values=1979,1981,2450,2200,2050,1982',
+    });
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_END count=6',
+    });
 
     // Auto-rearm should re-issue CAPTURE:1
     expect(transport.sentPayloads.filter((p) => p === 'CAPTURE:1')).toHaveLength(2);
@@ -443,7 +467,10 @@ describe('DeviceManagerService', () => {
       seq: 1,
       payload: ackPayload,
     };
-    transport.eventsSubject.next(ackFrame);
+    transport.eventsSubject.next({
+      type: 'binary',
+      content: ackFrame,
+    });
 
     const updatedDev = service.getDevice(deviceId);
     expect(updatedDev?.state.fwVersion).toBe('1.2.0');
@@ -454,10 +481,13 @@ describe('DeviceManagerService', () => {
     const scorePayload = new Uint8Array(4);
     new DataView(scorePayload.buffer).setUint32(0, 42, true);
     transport.eventsSubject.next({
-      type: BinaryMessageType.MSG_SCORE,
-      flags: 0,
-      seq: 2,
-      payload: scorePayload,
+      type: 'binary',
+      content: {
+        type: BinaryMessageType.MSG_SCORE,
+        flags: 0,
+        seq: 2,
+        payload: scorePayload,
+      },
     });
     expect(service.getDevice(deviceId)?.state.score).toBe(42);
 
@@ -469,10 +499,13 @@ describe('DeviceManagerService', () => {
     hitView.setUint16(6, 300, true); // intensity
     hitView.setUint8(8, 0); // sensorId
     transport.eventsSubject.next({
-      type: BinaryMessageType.MSG_HIT_DETECTED,
-      flags: 0,
-      seq: 3,
-      payload: hitPayload,
+      type: 'binary',
+      content: {
+        type: BinaryMessageType.MSG_HIT_DETECTED,
+        flags: 0,
+        seq: 3,
+        payload: hitPayload,
+      },
     });
     const latestEvent = service.events()[0];
     expect(latestEvent.payload).toBe('HIT id=1 target=0 peak=2150 intensity=300');
@@ -496,10 +529,13 @@ describe('DeviceManagerService', () => {
     calibView.setUint16(6, 1910, true); // threshold
 
     transport.eventsSubject.next({
-      type: BinaryMessageType.MSG_CALIBRATION_RESULT,
-      flags: 0,
-      seq: 1,
-      payload: calibPayload,
+      type: 'binary',
+      content: {
+        type: BinaryMessageType.MSG_CALIBRATION_RESULT,
+        flags: 0,
+        seq: 1,
+        payload: calibPayload,
+      },
     });
 
     const cached = service.getSensorCalibration(deviceId, 0);
@@ -517,10 +553,13 @@ describe('DeviceManagerService', () => {
     capStartView.setUint8(8, 0); // target 0
 
     transport.eventsSubject.next({
-      type: BinaryMessageType.MSG_CAPTURE_START,
-      flags: 0,
-      seq: 2,
-      payload: capStartPayload,
+      type: 'binary',
+      content: {
+        type: BinaryMessageType.MSG_CAPTURE_START,
+        flags: 0,
+        seq: 2,
+        payload: capStartPayload,
+      },
     });
 
     // MSG_CAPTURE_DATA with 4 uint16 samples: [1850, 1852, 2200, 1860]
@@ -534,20 +573,26 @@ describe('DeviceManagerService', () => {
     dataView.setUint16(10, 1860, true);
 
     transport.eventsSubject.next({
-      type: BinaryMessageType.MSG_CAPTURE_DATA,
-      flags: 0,
-      seq: 3,
-      payload: new Uint8Array(dataBuf),
+      type: 'binary',
+      content: {
+        type: BinaryMessageType.MSG_CAPTURE_DATA,
+        flags: 0,
+        seq: 3,
+        payload: new Uint8Array(dataBuf),
+      },
     });
 
     // MSG_CAPTURE_END
     const endPayload = new Uint8Array(4);
     new DataView(endPayload.buffer).setUint16(0, 4, true);
     transport.eventsSubject.next({
-      type: BinaryMessageType.MSG_CAPTURE_END,
-      flags: 0,
-      seq: 4,
-      payload: endPayload,
+      type: 'binary',
+      content: {
+        type: BinaryMessageType.MSG_CAPTURE_END,
+        flags: 0,
+        seq: 4,
+        payload: endPayload,
+      },
     });
 
     const captures = service.captures();
