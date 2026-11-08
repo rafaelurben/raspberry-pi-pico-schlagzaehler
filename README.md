@@ -255,18 +255,5 @@ To run the host architecture unit test suite (compiles natively without Pico SDK
 
 ```bash
 cd schlagzaehler-pico
-cc -std=c23 -Wall -Wextra -Isrc \
-  tests/test_firmware.c \
-  src/App/ConfigService.c \
-  src/App/HitDetection/HitDetector.c \
-  src/App/HitDetection/SignalCapture.c \
-  src/App/Game/GameState.c \
-  src/App/Game/Modes/CountMode.c \
-  src/App/Game/Modes/TimedMode.c \
-  src/App/Game/Modes/RaceMode.c \
-  src/App/Game/GameController.c \
-  src/App/Input/ButtonController.c \
-  src/App/Companion/CommandHandler.c \
-  src/App/Companion/CompanionProtocol.c \
-  -lm -o test_firmware && ./test_firmware && rm -f test_firmware
+./tests/run_tests.sh
 ```

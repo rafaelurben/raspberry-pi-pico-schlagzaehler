@@ -84,6 +84,7 @@ The firmware is strictly divided into three layers so that all application logic
   - `inc/`: Pure C headers (`extern "C"`) defining platform contracts.
   - `src/pico/`: RP2040 / Pico SDK implementations (`PicoBoard.c`, `PicoCoreStartup.c`, `PicoDisplayDriver.cpp`, `PicoDma.c`, `PicoGpioDriver.c`, `PicoInterrupt.c`, `PicoPiezoAdcDriver.c`, `PicoQueue.c`, `PicoTime.c`, `PicoUsbSerialDriver.c`, `PicoWatchdogService.c`).
 - **`libs/displaylib_16bit/`**: Vendored C++17/23 16-bit color graphics library for the ST7735 SPI TFT display (wrapped behind C-compatible `DisplayDriver.h` via `PicoDisplayDriver.cpp`).
+- **`tests/run_tests.sh`**: Bash test runner script compiling and executing the host architecture unit test suite.
 - **`tests/test_firmware.c`**: Host-compiled unit test suite mocking OSAL primitives (`Time`, `Interrupt`, `GpioDriver`, `OsalQueue`, `UsbSerialDriver`) to test `ConfigService`, `HitDetector`, `GameController`, `CompanionProtocol`, and `ButtonController`.
 
 ---
@@ -212,19 +213,5 @@ If `build/` needs to be reconfigured from scratch:
 Because `src/App/` is decoupled via the OSAL, the architecture unit test suite in `tests/test_firmware.c` can be compiled and executed directly on the host machine (macOS/Linux) without hardware:
 
 ```bash
-cc -std=c23 -Wall -Wextra -Isrc \
-  tests/test_firmware.c \
-  src/App/ConfigService.c \
-  src/App/HitDetection/HitDetector.c \
-  src/App/HitDetection/SignalCapture.c \
-  src/App/Game/GameState.c \
-  src/App/Game/Modes/CountMode.c \
-  src/App/Game/Modes/TimedMode.c \
-  src/App/Game/Modes/RaceMode.c \
-  src/App/Game/GameController.c \
-  src/App/Input/ButtonController.c \
-  src/App/Companion/CommandHandler.c \
-  src/App/Companion/CompanionProtocol.c \
-  src/App/Display/DisplayPresenter.c \
-  -lm -o /tmp/test_firmware && /tmp/test_firmware && rm -f /tmp/test_firmware
+./tests/run_tests.sh
 ```

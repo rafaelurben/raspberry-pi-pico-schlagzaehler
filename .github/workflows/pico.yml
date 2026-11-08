@@ -21,27 +21,9 @@ jobs:
         with:
           compiler: llvm
 
-      - name: Compile C tests
+      - name: Run C tests
         working-directory: schlagzaehler-pico
-        run: |
-          ${CC:-cc} -std=c23 -Wall -Wextra -Isrc \
-            tests/test_firmware.c \
-            src/App/ConfigService.c \
-            src/App/HitDetection/HitDetector.c \
-            src/App/HitDetection/SignalCapture.c \
-            src/App/Game/GameState.c \
-            src/App/Game/Modes/CountMode.c \
-            src/App/Game/Modes/TimedMode.c \
-            src/App/Game/Modes/RaceMode.c \
-            src/App/Game/GameController.c \
-            src/App/Input/ButtonController.c \
-            src/App/Companion/CommandHandler.c \
-            src/App/Companion/CompanionProtocol.c \
-            src/App/Display/DisplayPresenter.c \
-            -lm -o /tmp/test_firmware
-
-      - name: Execute C tests
-        run: /tmp/test_firmware
+        run: ./tests/run_tests.sh
 
   build:
     runs-on: ubuntu-latest
