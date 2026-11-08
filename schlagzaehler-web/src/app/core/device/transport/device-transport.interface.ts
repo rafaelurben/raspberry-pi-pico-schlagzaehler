@@ -1,10 +1,14 @@
 import { Observable } from 'rxjs';
 import { ConnectionState } from '../models/connection-state.type';
 import { DeviceMetadata, TransportType } from '../models/device.model';
+import { BinaryFrame } from '../protocol/binary-protocol.types';
+
+export type TransportEvent = string | BinaryFrame;
 
 /**
  * Generic transport abstraction representing a single physical or virtual device connection.
- * Designed to support Web Serial, and extensible to future transports like Web Bluetooth or WebSocket.
+ * Designed to support Web Serial (both framed binary TLV and fallback ASCII),
+ * and extensible to future transports like Web Bluetooth or WebSocket.
  */
 export interface DeviceTransport {
   /**
@@ -18,9 +22,9 @@ export interface DeviceTransport {
   readonly state$: Observable<ConnectionState>;
 
   /**
-   * Observable stream of incoming newline-delimited event strings received from the device.
+   * Observable stream of incoming events received from the device (binary frames or ASCII strings).
    */
-  readonly events$: Observable<string>;
+  readonly events$: Observable<TransportEvent>;
 
   /**
    * Observable stream of transport-level errors that occur during connection or reading.
@@ -43,7 +47,7 @@ export interface DeviceTransport {
   disconnect(): Promise<void>;
 
   /**
-   * Sends a raw string command/event line to the connected device.
+   * Sends a raw command line or binary packet to the connected device.
    */
-  send(data: string): Promise<void>;
+  send(data: string | Uint8Array): Promise<void>;
 }

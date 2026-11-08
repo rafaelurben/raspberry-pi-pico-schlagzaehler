@@ -4,13 +4,22 @@ import { MAX_RETAINED_EVENTS, SerialConfig } from '../../config/serial.config';
 import { ConnectionState } from '../models/connection-state.type';
 import { DeviceEvent, EventDirection } from '../models/device-event.model';
 import { Device, DeviceState, SelectableGameMode } from '../models/device.model';
-import { PiezoCaptureResult } from '../models/piezo-capture.model';
+import { CaptureProtocolMessage, PiezoCaptureResult } from '../models/piezo-capture.model';
+import { BinaryCommandType, BinaryFrame } from '../protocol/binary-protocol.types';
 import {
+  BinaryCompanionCommands,
   CompanionCommands,
+  formatBinaryEventForLog,
+  parseBinaryCalibration,
+  parseBinaryCaptureMessage,
+  parseBinaryCompanionMessage,
+  parseBinaryMetadata,
+  parseCalibrationMessage,
   parseCaptureMessage,
   parseCompanionMessage,
+  SensorCalibration,
 } from '../protocol/companion-protocol';
-import { DeviceTransport } from '../transport/device-transport.interface';
+import { DeviceTransport, TransportEvent } from '../transport/device-transport.interface';
 import { WebSerialTransportFactory } from '../transport/web-serial-transport-factory.service';
 
 interface ActiveDeviceEntry {
@@ -26,8 +35,28 @@ interface InProgressCapture {
   readonly noise: number;
   readonly threshold: number;
   readonly target?: number;
-  readonly samples: number[];
+  readonly samples: Uint16Array;
   receivedCount: number;
+}
+
+const BINARY_CMD_NAME_MAP: Record<number, string> = {
+  [BinaryCommandType.CMD_HANDSHAKE]: 'CMD_HANDSHAKE',
+  [BinaryCommandType.CMD_START]: 'CMD_START',
+  [BinaryCommandType.CMD_RESET]: 'CMD_RESET',
+  [BinaryCommandType.CMD_CALIBRATE]: 'CMD_CALIBRATE',
+  [BinaryCommandType.CMD_STATUS]: 'CMD_STATUS',
+  [BinaryCommandType.CMD_SET_MODE]: 'CMD_SET_MODE',
+  [BinaryCommandType.CMD_SET_PARAMETER]: 'CMD_SET_PARAMETER',
+  [BinaryCommandType.CMD_SET_SENSITIVITY]: 'CMD_SET_SENSITIVITY',
+  [BinaryCommandType.CMD_CAPTURE]: 'CMD_CAPTURE',
+};
+
+function formatBinaryCommandForLog(bytes: Uint8Array): string {
+  if (bytes.length >= 4 && bytes[0] === 0x55 && bytes[1] === 0xaa) {
+    const msgType = bytes[3];
+    return BINARY_CMD_NAME_MAP[msgType] ?? `[CMD 0x${msgType.toString(16).padStart(2, '0')}]`;
+  }
+  return `[BINARY ${bytes.length}B]`;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -77,6 +106,7 @@ export class DeviceManagerService implements OnDestroy {
   private readonly activeDevices = new Map<string, ActiveDeviceEntry>();
   private readonly inProgressCaptures = new Map<string, InProgressCapture>();
   private readonly deviceCaptureTargets = new Map<string, number | 'all' | undefined>();
+  private readonly sensorCalibrations = new Map<string, Map<number, SensorCalibration>>();
   private deviceCounter = 0;
 
   /**
@@ -233,6 +263,7 @@ export class DeviceManagerService implements OnDestroy {
       this.activeDevices.delete(deviceId);
     }
     this.devices.update((devices) => devices.filter((d) => d.id !== deviceId));
+    this.sensorCalibrations.delete(deviceId);
   }
 
   /**
@@ -249,14 +280,9 @@ export class DeviceManagerService implements OnDestroy {
   }
 
   /**
-   * Sends a raw string command/event to a single connected device and logs it in the event stream.
+   * Sends a string command or binary packet to a single connected device and logs it in the event stream.
    */
-  async sendCommand(deviceId: string, command: string): Promise<void> {
-    const trimmed = command.trim();
-    if (!trimmed) {
-      return;
-    }
-
+  async sendCommand(deviceId: string, command: string | Uint8Array): Promise<void> {
     const entry = this.activeDevices.get(deviceId);
     if (!entry) {
       const error = new Error(`Device ${deviceId} is not found.`);
@@ -265,8 +291,10 @@ export class DeviceManagerService implements OnDestroy {
     }
 
     try {
-      await entry.transport.send(trimmed);
-      this.appendEvent(deviceId, trimmed, 'sent');
+      await entry.transport.send(command);
+      const logText =
+        typeof command === 'string' ? command.trim() : formatBinaryCommandForLog(command);
+      this.appendEvent(deviceId, logText, 'sent');
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       this.handleDeviceError(deviceId, error);
@@ -275,15 +303,16 @@ export class DeviceManagerService implements OnDestroy {
   }
 
   /**
-   * Sends a raw string command/event to one or multiple devices concurrently.
+   * Sends a command or binary packet to one or multiple devices concurrently.
    */
-  async sendCommandToDevices(deviceIds: readonly string[], command: string): Promise<void> {
-    const trimmed = command.trim();
-    if (!trimmed || deviceIds.length === 0) {
+  async sendCommandToDevices(
+    deviceIds: readonly string[],
+    command: string | Uint8Array,
+  ): Promise<void> {
+    if (deviceIds.length === 0) {
       return;
     }
-
-    await Promise.all(deviceIds.map((id) => this.sendCommand(id, trimmed)));
+    await Promise.all(deviceIds.map((id) => this.sendCommand(id, command)));
   }
 
   /**
@@ -401,6 +430,13 @@ export class DeviceManagerService implements OnDestroy {
   }
 
   /**
+   * Retrieves cached calibration results for a specific sensor channel.
+   */
+  getSensorCalibration(deviceId: string, sensorId: number): SensorCalibration | undefined {
+    return this.sensorCalibrations.get(deviceId)?.get(sensorId);
+  }
+
+  /**
    * Removes a single capture from the session history.
    */
   removeCapture(captureId: string): void {
@@ -470,51 +506,147 @@ export class DeviceManagerService implements OnDestroy {
     );
 
     if (connectionState === 'connected' && prevConnectionState !== 'connected') {
-      void this.sendCommand(deviceId, CompanionCommands.status()).catch((e) =>
-        console.error(`Failed to request status from device ${deviceId}:`, e),
+      // Negotiate binary mode via CMD_HANDSHAKE with TLV_MODE = 1
+      const handshakePacket = BinaryCompanionCommands.handshake({ tlvMode: true });
+      void this.sendCommand(deviceId, handshakePacket).catch((e) =>
+        console.error(`Failed to send handshake to device ${deviceId}:`, e),
       );
     }
   }
 
-  private handleIncomingEvent(deviceId: string, payload: string): void {
-    const now = Date.now();
-    const captureMsg = parseCaptureMessage(payload);
+  private cacheSensorCalibration(deviceId: string, calib: SensorCalibration): void {
+    let devCalibs = this.sensorCalibrations.get(deviceId);
+    if (!devCalibs) {
+      devCalibs = new Map<number, SensorCalibration>();
+      this.sensorCalibrations.set(deviceId, devCalibs);
+    }
+    devCalibs.set(calib.sensorId, calib);
+  }
 
+  private resolveCachedCalibration(
+    deviceId: string,
+    targetChannel?: number,
+  ): { baseline: number; noise: number; threshold: number } {
+    const devCalibs = this.sensorCalibrations.get(deviceId);
+    if (devCalibs) {
+      // If a specific target (0, 1, 2) is requested, check that target; otherwise check sensor 0 or first available
+      const ch =
+        targetChannel !== undefined && targetChannel >= 0 && targetChannel <= 2 ? targetChannel : 0;
+      const calib = devCalibs.get(ch) ?? devCalibs.values().next().value;
+      if (calib) {
+        return {
+          baseline: calib.baseline,
+          noise: calib.noise,
+          threshold: calib.threshold,
+        };
+      }
+    }
+    return { baseline: 0, noise: 0, threshold: 0 };
+  }
+
+  private handleIncomingEvent(deviceId: string, event: TransportEvent): void {
+    const now = Date.now();
+
+    if (typeof event === 'string') {
+      this.handleIncomingAsciiEvent(deviceId, event, now);
+    } else {
+      this.handleIncomingBinaryEvent(deviceId, event, now);
+    }
+  }
+
+  private handleIncomingAsciiEvent(deviceId: string, rawLine: string, now: number): void {
+    // 1. Check calibration message
+    const calib = parseCalibrationMessage(rawLine);
+    if (calib) {
+      this.cacheSensorCalibration(deviceId, calib);
+    }
+
+    // 2. Check capture message
+    const captureMsg = parseCaptureMessage(rawLine);
     if (captureMsg) {
-      this.handleCaptureProtocolMessage(deviceId, captureMsg, payload, now);
+      this.handleCaptureProtocolMessage(deviceId, captureMsg, rawLine, now);
       return;
     }
 
+    // 3. State update
     this.devices.update((devices) =>
       devices.map((d) =>
         d.id === deviceId
           ? new Device({
               ...d,
-              state: parseCompanionMessage(payload, d.state, now),
+              state: parseCompanionMessage(rawLine, d.state, now),
             })
           : d,
       ),
     );
 
-    this.appendEvent(deviceId, payload, 'received', now);
+    this.appendEvent(deviceId, rawLine, 'received', now);
+  }
+
+  private handleIncomingBinaryEvent(deviceId: string, frame: BinaryFrame, now: number): void {
+    // 1. Check calibration frame
+    const calib = parseBinaryCalibration(frame);
+    if (calib) {
+      this.cacheSensorCalibration(deviceId, calib);
+    }
+
+    // 2. Check capture frames
+    const captureMsg = parseBinaryCaptureMessage(frame);
+    if (captureMsg) {
+      const displayPayload = formatBinaryEventForLog(frame);
+      this.handleCaptureProtocolMessage(deviceId, captureMsg, displayPayload, now);
+      return;
+    }
+
+    // 3. Check handshake ACK metadata
+    const metadataUpdates = parseBinaryMetadata(frame);
+
+    // 4. Update device state
+    this.devices.update((devices) =>
+      devices.map((d) => {
+        if (d.id !== deviceId) {
+          return d;
+        }
+        const updatedState = parseBinaryCompanionMessage(frame, d.state, now);
+        const updatedMetadata = metadataUpdates
+          ? { ...d.metadata, ...metadataUpdates }
+          : d.metadata;
+        return new Device({
+          ...d,
+          state: updatedState,
+          metadata: updatedMetadata,
+        });
+      }),
+    );
+
+    const logText = formatBinaryEventForLog(frame);
+    this.appendEvent(deviceId, logText, 'received', now);
   }
 
   private handleCaptureProtocolMessage(
     deviceId: string,
-    msg: NonNullable<ReturnType<typeof parseCaptureMessage>>,
+    msg: CaptureProtocolMessage,
     rawPayload: string,
     now: number,
   ): void {
     if (msg.type === 'CAPTURE_START') {
+      const cached = this.resolveCachedCalibration(deviceId, msg.target);
+      const baseline = cached.baseline;
+      const noise = cached.noise;
+      const threshold = cached.threshold;
+
+      const samples = new Uint16Array(msg.totalSamples);
+      samples.fill(baseline);
+
       this.inProgressCaptures.set(deviceId, {
         sampleRateHz: msg.sampleRateHz,
         preSamples: msg.preSamples,
         totalSamples: msg.totalSamples,
-        baseline: msg.baseline,
-        noise: msg.noise,
-        threshold: msg.threshold,
+        baseline,
+        noise,
+        threshold,
         target: msg.target,
-        samples: new Array<number>(msg.totalSamples).fill(msg.baseline),
+        samples,
         receivedCount: 0,
       });
       this.setDeviceCaptureProgress(deviceId, 0);
@@ -527,15 +659,24 @@ export class DeviceManagerService implements OnDestroy {
       if (!active) {
         return;
       }
-      for (let i = 0; i < msg.values.length; i++) {
-        const idx = msg.offset + i;
-        if (idx >= 0 && idx < active.totalSamples) {
-          active.samples[idx] = msg.values[i];
+      const vals = msg.values;
+      const valCount = vals.length;
+      if (vals instanceof Uint16Array) {
+        // Fast zero-copy blit
+        if (msg.offset + valCount <= active.totalSamples) {
+          active.samples.set(vals, msg.offset);
+        }
+      } else {
+        for (let i = 0; i < valCount; i++) {
+          const idx = msg.offset + i;
+          if (idx >= 0 && idx < active.totalSamples) {
+            active.samples[idx] = vals[i];
+          }
         }
       }
       active.receivedCount = Math.min(
         active.totalSamples,
-        Math.max(active.receivedCount, msg.offset + msg.values.length),
+        Math.max(active.receivedCount, msg.offset + valCount),
       );
       const pct = Math.min(100, Math.round((active.receivedCount * 100) / active.totalSamples));
       this.setDeviceCaptureProgress(deviceId, pct);
@@ -569,7 +710,7 @@ export class DeviceManagerService implements OnDestroy {
           threshold: active.threshold,
           target: active.target,
           peak,
-          samples: active.samples,
+          samples: Array.from(active.samples),
         };
 
         this.captures.update((current) => [result, ...current]);

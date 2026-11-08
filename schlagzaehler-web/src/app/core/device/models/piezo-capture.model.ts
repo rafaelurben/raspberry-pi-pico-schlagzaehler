@@ -11,7 +11,7 @@ export interface PiezoCaptureResult {
   readonly threshold: number;
   readonly target?: number;
   readonly peak: number;
-  readonly samples: readonly number[];
+  readonly samples: readonly number[] | Uint16Array;
 }
 
 export interface CaptureStartMessage {
@@ -19,16 +19,13 @@ export interface CaptureStartMessage {
   readonly sampleRateHz: number;
   readonly preSamples: number;
   readonly totalSamples: number;
-  readonly baseline: number;
-  readonly noise: number;
-  readonly threshold: number;
   readonly target?: number;
 }
 
 export interface CaptureDataMessage {
   readonly type: 'CAPTURE_DATA';
   readonly offset: number;
-  readonly values: readonly number[];
+  readonly values: readonly number[] | Uint16Array;
 }
 
 export interface CaptureEndMessage {

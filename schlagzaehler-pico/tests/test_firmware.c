@@ -19,6 +19,7 @@
 #include "../src/OSAL/inc/GpioDriver.h"
 #include "../src/App/Companion/CommandHandler.h"
 #include "../src/App/Companion/CompanionProtocol.h"
+#include "../src/App/Companion/Crc16.h"
 #include "../src/App/Display/DisplayPresenter.h"
 #include "../src/OSAL/inc/DisplayDriver.h"
 
@@ -88,9 +89,48 @@ size_t OsalQueue_count(const OsalQueue* q) {
 
 /* Mock USB serial output */
 static char s_last_serial_line[256];
+static uint8_t s_last_serial_bytes[1024];
+static size_t s_last_serial_bytes_len = 0;
+
 void UsbSerialDriver_write_line(const char* line) {
     strncpy(s_last_serial_line, line, sizeof(s_last_serial_line) - 1);
+    s_last_serial_line[sizeof(s_last_serial_line) - 1] = '\0';
 }
+
+void UsbSerialDriver_write_string(const char* str) {
+    strncpy(s_last_serial_line, str, sizeof(s_last_serial_line) - 1);
+    s_last_serial_line[sizeof(s_last_serial_line) - 1] = '\0';
+}
+
+int UsbSerialDriver_write_bytes(const uint8_t* buffer, size_t len) {
+    if (!buffer || len == 0) return 0;
+    size_t copy_len = (len < sizeof(s_last_serial_bytes)) ? len : sizeof(s_last_serial_bytes);
+    memcpy(s_last_serial_bytes, buffer, copy_len);
+    s_last_serial_bytes_len = copy_len;
+    return (int)len;
+}
+
+static uint8_t s_mock_serial_rx[512];
+static size_t s_mock_serial_rx_len = 0;
+static size_t s_mock_serial_rx_pos = 0;
+
+__attribute__((unused)) static void mock_serial_feed_input(const uint8_t* data, size_t len) {
+    size_t copy_len = (len < sizeof(s_mock_serial_rx)) ? len : sizeof(s_mock_serial_rx);
+    memcpy(s_mock_serial_rx, data, copy_len);
+    s_mock_serial_rx_len = copy_len;
+    s_mock_serial_rx_pos = 0;
+}
+
+int UsbSerialDriver_read_bytes(uint8_t* buffer, size_t max_len) {
+    if (!buffer || max_len == 0) return -1;
+    size_t available = s_mock_serial_rx_len - s_mock_serial_rx_pos;
+    if (available == 0) return 0;
+    size_t count = (available < max_len) ? available : max_len;
+    memcpy(buffer, &s_mock_serial_rx[s_mock_serial_rx_pos], count);
+    s_mock_serial_rx_pos += count;
+    return (int)count;
+}
+
 int UsbSerialDriver_read_line(char* buffer, size_t max_len) {
     (void)buffer; (void)max_len; return 0;
 }
@@ -493,7 +533,7 @@ void test_companion_protocol(void) {
         }
     };
     CompanionProtocol_send_message(&cp, &cap_ready_msg);
-    assert(strcmp(s_last_serial_line, "CAPTURE_START rate=10000 pre=20 count=120 target=3 baseline=1900 noise=3 threshold=1925") == 0);
+    assert(strcmp(s_last_serial_line, "CAPTURE_START rate=10000 pre=20 count=120 target=3") == 0);
     assert(cp.capture_tx_active == true);
 
     /* Tick 1 sends line 1 (50 samples) */
@@ -829,7 +869,7 @@ void test_ignored_sensor_calibration_and_detection(void) {
         }
     };
     CompanionProtocol_send_message(&cp, &calib_msg_active);
-    assert(strcmp(s_last_serial_line, "CALIB success=1 target=0 baseline=1980 noise=2 threshold=2005 ignored=false") == 0);
+    assert(strcmp(s_last_serial_line, "CALIB success=1 target=0 repeated=false baseline=1980 noise=2 threshold=2005 ignored=false") == 0);
 
     Core0ToCore1Message calib_msg_ignored = {
         .type = MSG_CALIBRATION_RESULT,
@@ -844,9 +884,576 @@ void test_ignored_sensor_calibration_and_detection(void) {
         }
     };
     CompanionProtocol_send_message(&cp, &calib_msg_ignored);
-    assert(strcmp(s_last_serial_line, "CALIB success=1 target=1 baseline=50 noise=1 threshold=75 ignored=true") == 0);
+    assert(strcmp(s_last_serial_line, "CALIB success=1 target=1 repeated=false baseline=50 noise=1 threshold=75 ignored=true") == 0);
 
     printf("PASS: test_ignored_sensor_calibration_and_detection\n");
+}
+
+static size_t build_binary_frame(uint8_t* out_buf, uint8_t msg_type, uint8_t flags, const void* payload, uint16_t payload_len, uint16_t seq_id) {
+    BinaryHeader* hdr = (BinaryHeader*)out_buf;
+    hdr->sync = BINARY_SYNC_WORD;
+    hdr->version_flags = BINARY_PACK_VER_FLAGS(PROTOCOL_VERSION, flags);
+    hdr->msg_type = msg_type;
+    hdr->payload_len = payload_len;
+    hdr->seq_id = seq_id;
+
+    if (payload && payload_len > 0) {
+        memcpy(out_buf + sizeof(BinaryHeader), payload, payload_len);
+    }
+
+    uint16_t crc = crc16_ccitt(out_buf, sizeof(BinaryHeader) + payload_len);
+    out_buf[sizeof(BinaryHeader) + payload_len] = (uint8_t)(crc & 0xFFU);
+    out_buf[sizeof(BinaryHeader) + payload_len + 1] = (uint8_t)((crc >> 8) & 0xFFU);
+
+    return sizeof(BinaryHeader) + payload_len + 2;
+}
+
+void test_binary_crc16(void) {
+    /* Test standard CCITT vector "123456789" */
+    const uint8_t test_vec[] = "123456789";
+    uint16_t crc = crc16_ccitt(test_vec, 9);
+    assert(crc == 0x29B1);
+    assert(crc16_ccitt_verify(test_vec, 9, 0x29B1));
+    assert(!crc16_ccitt_verify(test_vec, 9, 0x0000));
+
+    /* Test incremental byte-by-byte update */
+    uint16_t running_crc = 0xFFFFU;
+    for (size_t i = 0; i < 9; ++i) {
+        running_crc = crc16_ccitt_update(running_crc, test_vec[i]);
+    }
+    assert(running_crc == 0x29B1);
+
+    /* Test piecewise partial buffer computation */
+    uint16_t part_crc = crc16_ccitt(test_vec, 4);
+    part_crc = crc16_ccitt_partial(part_crc, test_vec + 4, 5);
+    assert(part_crc == 0x29B1);
+
+    /* Test empty buffer */
+    assert(crc16_ccitt(NULL, 0) == 0xFFFFU);
+    assert(crc16_ccitt_verify(NULL, 0, 0xFFFFU));
+
+    printf("PASS: test_binary_crc16\n");
+}
+
+void test_binary_framing_constants_and_structs(void) {
+    assert(BINARY_SYNC_WORD == 0xAA55U);
+    assert(PROTOCOL_VERSION == 1U);
+    assert(PROTO_VERSION_MAJOR == 1U);
+    assert(PROTO_VERSION_MINOR == 0U);
+    assert(FW_VERSION_MAJOR == 1U);
+    assert(FW_VERSION_MINOR == 2U);
+    assert(FW_VERSION_PATCH == 0U);
+    assert(HARDWARE_GEN == 1U);
+    assert(HARDWARE_REV == 1U);
+
+    assert(sizeof(BinaryHeader) == 8);
+    assert(sizeof(CmdHandshakePayload) == 8);
+    assert(sizeof(CmdSetModePayload) == 1);
+    assert(sizeof(CmdSetParameterPayload) == 4);
+    assert(sizeof(CmdSetSensitivityPayload) == 4);
+    assert(sizeof(CmdCapturePayload) == 2);
+    assert(sizeof(MsgHandshakeAckPayload) == 20);
+    assert(sizeof(MsgSensorStatusPayload) == 2);
+    assert(sizeof(MsgCalibrationResultPayload) == 8);
+    assert(sizeof(MsgHitDetectedPayload) == 16);
+    assert(sizeof(MsgGameStatePayload) == 2);
+    assert(sizeof(MsgGameModePayload) == 8);
+    assert(sizeof(MsgScorePayload) == 4);
+    assert(sizeof(MsgTimerPayload) == 8);
+    assert(sizeof(MsgGameFinishedPayload) == 9);
+    assert(sizeof(MsgCaptureStartPayload) == 9);
+    assert(sizeof(MsgCaptureDataHeader) == 4);
+    assert(sizeof(MsgCaptureEndPayload) == 2);
+    assert(sizeof(MsgErrorHeader) == 7);
+
+    assert(BINARY_PACK_VER_FLAGS(1, 0) == 0x01);
+    assert(BINARY_PACK_VER_FLAGS(1, 1) == 0x11);
+    assert(BINARY_GET_VERSION(0x11) == 1);
+    assert(BINARY_GET_FLAGS(0x11) == 1);
+
+    printf("PASS: test_binary_framing_constants_and_structs\n");
+}
+
+void test_binary_handshake(void) {
+    OsalQueue q_to_core0;
+    OsalQueue_init(&q_to_core0, NULL, sizeof(Core1ToCore0Message), 16);
+    CommandHandler ch;
+    CommandHandler_init(&ch, &q_to_core0);
+    CompanionProtocol cp;
+    CompanionProtocol_init(&cp, &ch);
+
+    assert(cp.tx_encoding == PROTOCOL_ENCODING_ASCII);
+
+    /* 1. Send valid CMD_HANDSHAKE with TLV_MODE set */
+    CmdHandshakePayload hs = {
+        .client_proto_major = 1,
+        .client_proto_minor = 0,
+        .flags = HANDSHAKE_FLAG_TLV_MODE,
+        .client_nonce = 0xCAFEBABE
+    };
+    uint8_t frame[64];
+    size_t frame_len = build_binary_frame(frame, CMD_HANDSHAKE, 0, &hs, sizeof(hs), 1);
+
+    s_last_serial_bytes_len = 0;
+    CompanionProtocol_feed_bytes(&cp, frame, frame_len);
+
+    /* Verify encoding toggled to binary */
+    assert(cp.tx_encoding == PROTOCOL_ENCODING_BINARY);
+    assert(cp.active_client_nonce == 0xCAFEBABE);
+
+    /* Verify MSG_HANDSHAKE_ACK written to serial */
+    assert(s_last_serial_bytes_len == sizeof(BinaryHeader) + sizeof(MsgHandshakeAckPayload) + 2);
+    const BinaryHeader* ack_hdr = (const BinaryHeader*)s_last_serial_bytes;
+    assert(ack_hdr->sync == BINARY_SYNC_WORD);
+    assert(BINARY_GET_VERSION(ack_hdr->version_flags) == PROTOCOL_VERSION);
+    assert(ack_hdr->msg_type == MSG_HANDSHAKE_ACK);
+    assert(ack_hdr->payload_len == sizeof(MsgHandshakeAckPayload));
+
+    /* Check CRC of ack frame */
+    uint16_t rx_crc = (uint16_t)s_last_serial_bytes[sizeof(BinaryHeader) + sizeof(MsgHandshakeAckPayload)] |
+                      ((uint16_t)s_last_serial_bytes[sizeof(BinaryHeader) + sizeof(MsgHandshakeAckPayload) + 1] << 8);
+    uint16_t exp_crc = crc16_ccitt(s_last_serial_bytes, sizeof(BinaryHeader) + sizeof(MsgHandshakeAckPayload));
+    assert(rx_crc == exp_crc);
+
+    const MsgHandshakeAckPayload* ack = (const MsgHandshakeAckPayload*)(s_last_serial_bytes + sizeof(BinaryHeader));
+    assert(ack->hardware_gen == 1);
+    assert(ack->hardware_rev == 1);
+    assert(ack->proto_major == 1);
+    assert(ack->proto_minor == 0);
+    assert(ack->fw_major == 1);
+    assert(ack->fw_minor == 2);
+    assert(ack->fw_patch == 0);
+    assert(ack->status_code == HANDSHAKE_STATUS_OK);
+    assert(ack->client_nonce == 0xCAFEBABE);
+
+    /* Verify Core 0 received MSG_REQUEST_STATUS */
+    Core1ToCore0Message cmd_msg;
+    assert(OsalQueue_pop(&q_to_core0, &cmd_msg) == true);
+    assert(cmd_msg.type == MSG_REQUEST_STATUS);
+
+    /* 2. Version mismatch handshake */
+    CmdHandshakePayload hs_bad = {
+        .client_proto_major = 2,
+        .client_proto_minor = 0,
+        .flags = HANDSHAKE_FLAG_TLV_MODE,
+        .client_nonce = 0x11223344
+    };
+    frame_len = build_binary_frame(frame, CMD_HANDSHAKE, 0, &hs_bad, sizeof(hs_bad), 2);
+    s_last_serial_bytes_len = 0;
+    CompanionProtocol_feed_bytes(&cp, frame, frame_len);
+
+    const MsgHandshakeAckPayload* ack_bad = (const MsgHandshakeAckPayload*)(s_last_serial_bytes + sizeof(BinaryHeader));
+    assert(ack_bad->status_code == HANDSHAKE_STATUS_ERR_VERSION_MISMATCH);
+    assert(ack_bad->client_nonce == 0x11223344);
+    /* Should NOT trigger Core 0 status request on mismatch */
+    assert(OsalQueue_pop(&q_to_core0, &cmd_msg) == false);
+
+    printf("PASS: test_binary_handshake\n");
+}
+
+void test_binary_commands(void) {
+    OsalQueue q_to_core0;
+    OsalQueue_init(&q_to_core0, NULL, sizeof(Core1ToCore0Message), 16);
+    CommandHandler ch;
+    CommandHandler_init(&ch, &q_to_core0);
+    CompanionProtocol cp;
+    CompanionProtocol_init(&cp, &ch);
+
+    uint8_t frame[64];
+    size_t len;
+    Core1ToCore0Message msg;
+
+    /* CMD_START */
+    len = build_binary_frame(frame, CMD_START, 0, NULL, 0, 1);
+    CompanionProtocol_feed_bytes(&cp, frame, len);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_START_GAME);
+
+    /* CMD_RESET */
+    len = build_binary_frame(frame, CMD_RESET, 0, NULL, 0, 2);
+    CompanionProtocol_feed_bytes(&cp, frame, len);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_RESET_GAME);
+
+    /* CMD_CALIBRATE */
+    len = build_binary_frame(frame, CMD_CALIBRATE, 0, NULL, 0, 3);
+    CompanionProtocol_feed_bytes(&cp, frame, len);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_CALIBRATION);
+
+    /* CMD_STATUS */
+    len = build_binary_frame(frame, CMD_STATUS, 0, NULL, 0, 4);
+    CompanionProtocol_feed_bytes(&cp, frame, len);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_STATUS);
+
+    /* CMD_SET_MODE (mode = 2 / RACE) */
+    CmdSetModePayload m_payload = { .mode = 2 };
+    len = build_binary_frame(frame, CMD_SET_MODE, 0, &m_payload, sizeof(m_payload), 5);
+    CompanionProtocol_feed_bytes(&cp, frame, len);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_SET_GAME_MODE);
+    assert(msg.data.set_mode.mode == GAME_MODE_RACE);
+
+    /* CMD_SET_PARAMETER (parameter = 50) */
+    CmdSetParameterPayload p_payload = { .parameter = 50 };
+    len = build_binary_frame(frame, CMD_SET_PARAMETER, 0, &p_payload, sizeof(p_payload), 6);
+    CompanionProtocol_feed_bytes(&cp, frame, len);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_SET_GAME_PARAMETER);
+    assert(msg.data.set_parameter.parameter == 50);
+
+    /* CMD_SET_SENSITIVITY (noise_factor = 4.2f) */
+    CmdSetSensitivityPayload s_payload = { .noise_factor = 4.2f };
+    len = build_binary_frame(frame, CMD_SET_SENSITIVITY, 0, &s_payload, sizeof(s_payload), 7);
+    CompanionProtocol_feed_bytes(&cp, frame, len);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_SET_SENSITIVITY);
+    assert(msg.data.set_sensitivity.noise_factor > 4.19f && msg.data.set_sensitivity.noise_factor < 4.21f);
+
+    /* CMD_CAPTURE (action = 1, target = 1) */
+    CmdCapturePayload c_payload = { .action = 1, .target_sensor = 1 };
+    len = build_binary_frame(frame, CMD_CAPTURE, 0, &c_payload, sizeof(c_payload), 8);
+    CompanionProtocol_feed_bytes(&cp, frame, len);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_CAPTURE);
+    assert(msg.data.request_capture.enable == true);
+    assert(msg.data.request_capture.target == 1);
+
+    /* CMD_CAPTURE (action = 0, target = 0) */
+    CmdCapturePayload c_stop = { .action = 0, .target_sensor = 0 };
+    len = build_binary_frame(frame, CMD_CAPTURE, 0, &c_stop, sizeof(c_stop), 9);
+    CompanionProtocol_feed_bytes(&cp, frame, len);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_CAPTURE);
+    assert(msg.data.request_capture.enable == false);
+
+    printf("PASS: test_binary_commands\n");
+}
+
+void test_binary_telemetry_emission(void) {
+    CompanionProtocol cp;
+    CommandHandler ch;
+    CompanionProtocol_init(&cp, &ch);
+    cp.tx_encoding = PROTOCOL_ENCODING_BINARY;
+
+    /* 1. MSG_HIT_DETECTED */
+    Core0ToCore1Message hit_msg = {
+        .type = MSG_HIT_DETECTED,
+        .timestamp_us = 1000,
+        .data.hit = {
+            .hit_id = 42,
+            .sensor_id = 2,
+            .peak_value = 2500,
+            .intensity = 550,
+            .timestamp_us = 99999
+        }
+    };
+    s_last_serial_bytes_len = 0;
+    CompanionProtocol_send_message(&cp, &hit_msg);
+    assert(s_last_serial_bytes_len == sizeof(BinaryHeader) + sizeof(MsgHitDetectedPayload) + 2);
+    const BinaryHeader* h = (const BinaryHeader*)s_last_serial_bytes;
+    assert(h->sync == BINARY_SYNC_WORD);
+    assert(h->msg_type == BIN_MSG_HIT_DETECTED);
+    assert(h->payload_len == sizeof(MsgHitDetectedPayload));
+    assert(h->seq_id == 0);
+    uint16_t crc = crc16_ccitt(s_last_serial_bytes, sizeof(BinaryHeader) + sizeof(MsgHitDetectedPayload));
+    uint16_t wire_crc = (uint16_t)s_last_serial_bytes[sizeof(BinaryHeader) + sizeof(MsgHitDetectedPayload)] |
+                        ((uint16_t)s_last_serial_bytes[sizeof(BinaryHeader) + sizeof(MsgHitDetectedPayload) + 1] << 8);
+    assert(crc == wire_crc);
+    const MsgHitDetectedPayload* hp = (const MsgHitDetectedPayload*)(s_last_serial_bytes + sizeof(BinaryHeader));
+    assert(hp->hit_id == 42);
+    assert(hp->sensor_id == 2);
+    assert(hp->peak_value == 2500);
+    assert(hp->intensity == 550);
+    assert(hp->timestamp_us == 99999);
+
+    /* 2. MSG_GAME_STATE_CHANGED */
+    Core0ToCore1Message state_msg = {
+        .type = MSG_GAME_STATE_CHANGED,
+        .timestamp_us = 1001,
+        .data.game_state = {
+            .old_state = GAME_STATE_READY,
+            .new_state = GAME_STATE_RUNNING
+        }
+    };
+    s_last_serial_bytes_len = 0;
+    CompanionProtocol_send_message(&cp, &state_msg);
+    h = (const BinaryHeader*)s_last_serial_bytes;
+    assert(h->msg_type == MSG_GAME_STATE);
+    assert(h->payload_len == sizeof(MsgGameStatePayload));
+    assert(h->seq_id == 1);
+    const MsgGameStatePayload* sp = (const MsgGameStatePayload*)(s_last_serial_bytes + sizeof(BinaryHeader));
+    assert(sp->old_state == GAME_STATE_READY);
+    assert(sp->new_state == GAME_STATE_RUNNING);
+
+    /* 3. MSG_CALIBRATION_RESULT with repeated = true */
+    Core0ToCore1Message cal_msg = {
+        .type = MSG_CALIBRATION_RESULT,
+        .timestamp_us = 1002,
+        .data.calibration_result = {
+            .sensor_id = 1,
+            .success = true,
+            .ignored = true,
+            .repeated = true,
+            .baseline = 1850,
+            .noise = 15,
+            .threshold = 1920
+        }
+    };
+    s_last_serial_bytes_len = 0;
+    CompanionProtocol_send_message(&cp, &cal_msg);
+    h = (const BinaryHeader*)s_last_serial_bytes;
+    assert(h->msg_type == BIN_MSG_CALIBRATION_RESULT);
+    assert(h->payload_len == sizeof(MsgCalibrationResultPayload));
+    assert(h->seq_id == 2);
+    const MsgCalibrationResultPayload* cp_payload = (const MsgCalibrationResultPayload*)(s_last_serial_bytes + sizeof(BinaryHeader));
+    assert(cp_payload->flags == (CALIBRATION_FLAG_IGNORED | CALIBRATION_FLAG_REPEATED));
+    assert(cp_payload->sensor_id == 1);
+    assert(cp_payload->baseline == 1850);
+    assert(cp_payload->noise_span == 15);
+    assert(cp_payload->threshold == 1920);
+
+    /* 4. MSG_ERROR */
+    Core0ToCore1Message err_msg = {
+        .type = MSG_ERROR,
+        .timestamp_us = 1003,
+        .data.error = {
+            .error_code = 101,
+            .component = "ADC",
+            .message = "DMA timeout"
+        }
+    };
+    s_last_serial_bytes_len = 0;
+    CompanionProtocol_send_message(&cp, &err_msg);
+    h = (const BinaryHeader*)s_last_serial_bytes;
+    assert(h->msg_type == BIN_MSG_ERROR);
+    assert(BINARY_GET_FLAGS(h->version_flags) == BINARY_FLAG_IS_ERROR);
+    const MsgErrorHeader* ep = (const MsgErrorHeader*)(s_last_serial_bytes + sizeof(BinaryHeader));
+    assert(ep->error_code == 101);
+    assert(ep->component_id == 1); /* ADC */
+    assert(ep->msg_length == strlen("DMA timeout"));
+    assert(memcmp(s_last_serial_bytes + sizeof(BinaryHeader) + sizeof(MsgErrorHeader), "DMA timeout", ep->msg_length) == 0);
+
+    printf("PASS: test_binary_telemetry_emission\n");
+}
+
+void test_binary_capture_chunked_streaming(void) {
+    OsalQueue q_to_core0;
+    OsalQueue_init(&q_to_core0, NULL, sizeof(Core1ToCore0Message), 16);
+    CommandHandler ch;
+    CommandHandler_init(&ch, &q_to_core0);
+    CompanionProtocol cp;
+    CompanionProtocol_init(&cp, &ch);
+    cp.tx_encoding = PROTOCOL_ENCODING_BINARY;
+
+    uint16_t dummy_samples[300];
+    for (int i = 0; i < 300; ++i) dummy_samples[i] = (uint16_t)(1000 + i);
+
+    Core0ToCore1Message cap_msg = {
+        .type = MSG_CAPTURE_READY,
+        .timestamp_us = 1000,
+        .data.capture_ready = {
+            .sample_rate_hz = 10000,
+            .target = 3,
+            .pre_samples = 100,
+            .total_samples = 300,
+            .baseline = 1850,
+            .noise = 10,
+            .threshold = 1900,
+            .samples = dummy_samples
+        }
+    };
+
+    /* 1. Arm capture via MSG_CAPTURE_READY */
+    s_last_serial_bytes_len = 0;
+    CompanionProtocol_send_message(&cp, &cap_msg);
+    assert(cp.capture_tx_active == true);
+    const BinaryHeader* h = (const BinaryHeader*)s_last_serial_bytes;
+    assert(h->msg_type == MSG_CAPTURE_START);
+    assert(h->payload_len == sizeof(MsgCaptureStartPayload));
+    const MsgCaptureStartPayload* sp = (const MsgCaptureStartPayload*)(s_last_serial_bytes + sizeof(BinaryHeader));
+    assert(sp->sample_rate_hz == 10000);
+    assert(sp->pre_samples == 100);
+    assert(sp->total_samples == 300);
+    assert(sp->target_channel == 3);
+
+    /* 2. Tick 1: Chunk 0..127 */
+    s_last_serial_bytes_len = 0;
+    bool done = CompanionProtocol_tick_capture_tx(&cp);
+    assert(done == false);
+    h = (const BinaryHeader*)s_last_serial_bytes;
+    assert(h->msg_type == MSG_CAPTURE_DATA);
+    assert(h->payload_len == sizeof(MsgCaptureDataHeader) + 128 * sizeof(uint16_t));
+    const MsgCaptureDataHeader* chdr1 = (const MsgCaptureDataHeader*)(s_last_serial_bytes + sizeof(BinaryHeader));
+    assert(chdr1->offset == 0);
+    assert(chdr1->count == 128);
+    const uint16_t* s_ptr1 = (const uint16_t*)(s_last_serial_bytes + sizeof(BinaryHeader) + sizeof(MsgCaptureDataHeader));
+    assert(s_ptr1[0] == 1000);
+    assert(s_ptr1[127] == 1127);
+
+    /* 3. Tick 2: Chunk 128..255 */
+    s_last_serial_bytes_len = 0;
+    done = CompanionProtocol_tick_capture_tx(&cp);
+    assert(done == false);
+    h = (const BinaryHeader*)s_last_serial_bytes;
+    assert(h->msg_type == MSG_CAPTURE_DATA);
+    assert(h->payload_len == sizeof(MsgCaptureDataHeader) + 128 * sizeof(uint16_t));
+    const MsgCaptureDataHeader* chdr2 = (const MsgCaptureDataHeader*)(s_last_serial_bytes + sizeof(BinaryHeader));
+    assert(chdr2->offset == 128);
+    assert(chdr2->count == 128);
+
+    /* 4. Tick 3: Chunk 256..299 (44 samples) + MSG_CAPTURE_END */
+    s_last_serial_bytes_len = 0;
+    done = CompanionProtocol_tick_capture_tx(&cp);
+    assert(done == true);
+    assert(cp.capture_tx_active == false);
+
+    /* The last frame written should be MSG_CAPTURE_END */
+    h = (const BinaryHeader*)s_last_serial_bytes;
+    assert(h->msg_type == MSG_CAPTURE_END);
+    assert(h->payload_len == sizeof(MsgCaptureEndPayload));
+    const MsgCaptureEndPayload* end_p = (const MsgCaptureEndPayload*)(s_last_serial_bytes + sizeof(BinaryHeader));
+    assert(end_p->total_samples == 300);
+
+    /* Command to Core 0 to stop capture */
+    Core1ToCore0Message cmd_msg;
+    assert(OsalQueue_pop(&q_to_core0, &cmd_msg) == true);
+    assert(cmd_msg.type == MSG_REQUEST_CAPTURE);
+    assert(cmd_msg.data.request_capture.enable == false);
+
+    printf("PASS: test_binary_capture_chunked_streaming\n");
+}
+
+void test_dual_mode_streaming_parser(void) {
+    OsalQueue q_to_core0;
+    OsalQueue_init(&q_to_core0, NULL, sizeof(Core1ToCore0Message), 16);
+    CommandHandler ch;
+    CommandHandler_init(&ch, &q_to_core0);
+    CompanionProtocol cp;
+    CompanionProtocol_init(&cp, &ch);
+
+    Core1ToCore0Message msg;
+
+    /* 1. Feed ASCII line via mock USB driver and poll_input */
+    mock_serial_feed_input((const uint8_t*)"START\n", 6);
+    CompanionProtocol_poll_input(&cp);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_START_GAME);
+
+    /* 2. Feed Binary frame */
+    uint8_t bin_frame[32];
+    size_t bin_len = build_binary_frame(bin_frame, CMD_RESET, 0, NULL, 0, 10);
+    mock_serial_feed_input(bin_frame, bin_len);
+    CompanionProtocol_poll_input(&cp);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_RESET_GAME);
+
+    /* 3. Feed ASCII line immediately followed by Binary frame */
+    uint8_t combined[64];
+    memcpy(combined, "MODE:TIMED\n", 11);
+    size_t bin_len2 = build_binary_frame(combined + 11, CMD_STATUS, 0, NULL, 0, 11);
+    mock_serial_feed_input(combined, 11 + bin_len2);
+    CompanionProtocol_poll_input(&cp);
+
+    /* First command: mode */
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_SET_GAME_MODE);
+    assert(msg.data.set_mode.mode == GAME_MODE_TIMED);
+
+    /* Second command: status */
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_STATUS);
+
+    /* 4. Corrupted CRC frame should be discarded */
+    uint8_t corrupt_frame[32];
+    size_t corrupt_len = build_binary_frame(corrupt_frame, CMD_START, 0, NULL, 0, 12);
+    corrupt_frame[corrupt_len - 1] ^= 0xFF; /* corrupt CRC */
+    mock_serial_feed_input(corrupt_frame, corrupt_len);
+    CompanionProtocol_poll_input(&cp);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == false);
+
+    /* 5. Valid frame right after corrupted frame should be accepted */
+    uint8_t valid_frame[32];
+    size_t valid_len = build_binary_frame(valid_frame, CMD_START, 0, NULL, 0, 13);
+    mock_serial_feed_input(valid_frame, valid_len);
+    CompanionProtocol_poll_input(&cp);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_START_GAME);
+
+    /* 6. Fragmented byte-by-byte feed */
+    uint8_t frag_frame[32];
+    size_t frag_len = build_binary_frame(frag_frame, CMD_CALIBRATE, 0, NULL, 0, 14);
+    for (size_t i = 0; i < frag_len; ++i) {
+        CompanionProtocol_feed_byte(&cp, frag_frame[i]);
+    }
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_CALIBRATION);
+
+    printf("PASS: test_dual_mode_streaming_parser\n");
+}
+
+void test_pre_capture_repeated_calibration(void) {
+    /* 1. Verify GameController initial calibration produces repeated = false */
+    Config cfg;
+    Config_set_defaults(&cfg);
+    OsalQueue q0_to_q1;
+    OsalQueue_init(&q0_to_q1, NULL, sizeof(Core0ToCore1Message), 16);
+    GameController gc;
+    GameController_init(&gc, &cfg, &q0_to_q1);
+
+    uint16_t baselines[3] = {1800, 1850, 1900};
+    uint16_t noises[3] = {10, 12, 14};
+    uint16_t thresholds[3] = {1860, 1910, 1960};
+    bool ignored[3] = {false, false, false};
+
+    GameController_on_sensor_state(&gc, SENSOR_STATE_CALIBRATING, 3, baselines, noises, thresholds, ignored);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_ARMED, 3, baselines, noises, thresholds, ignored);
+
+    Core0ToCore1Message msg;
+    int calib_count = 0;
+    while (OsalQueue_pop(&q0_to_q1, &msg)) {
+        if (msg.type == MSG_CALIBRATION_RESULT) {
+            calib_count++;
+            assert(msg.data.calibration_result.repeated == false);
+        }
+    }
+    assert(calib_count == SENSOR_COUNT);
+
+    /* 2. Verify pre-capture repeated calibration emission formatting in CompanionProtocol */
+    CompanionProtocol cp;
+    CommandHandler ch;
+    CompanionProtocol_init(&cp, &ch);
+
+    /* Test ASCII format includes repeated=true */
+    Core0ToCore1Message rep_cal_msg = {
+        .type = MSG_CALIBRATION_RESULT,
+        .timestamp_us = 2000,
+        .data.calibration_result = {
+            .sensor_id = 2,
+            .success = true,
+            .ignored = false,
+            .repeated = true,
+            .baseline = 1880,
+            .noise = 8,
+            .threshold = 1925
+        }
+    };
+    CompanionProtocol_send_message(&cp, &rep_cal_msg);
+    assert(strcmp(s_last_serial_line, "CALIB success=1 target=2 repeated=true baseline=1880 noise=8 threshold=1925 ignored=false") == 0);
+
+    /* Test Binary format has CALIBRATION_FLAG_REPEATED set */
+    cp.tx_encoding = PROTOCOL_ENCODING_BINARY;
+    s_last_serial_bytes_len = 0;
+    CompanionProtocol_send_message(&cp, &rep_cal_msg);
+    assert(s_last_serial_bytes_len == sizeof(BinaryHeader) + sizeof(MsgCalibrationResultPayload) + 2);
+    const MsgCalibrationResultPayload* payload = (const MsgCalibrationResultPayload*)(s_last_serial_bytes + sizeof(BinaryHeader));
+    assert((payload->flags & CALIBRATION_FLAG_REPEATED) != 0);
+    assert((payload->flags & CALIBRATION_FLAG_IGNORED) == 0);
+    assert(payload->sensor_id == 2);
+    assert(payload->baseline == 1880);
+
+    printf("PASS: test_pre_capture_repeated_calibration\n");
 }
 
 int main(void) {
@@ -859,6 +1466,14 @@ int main(void) {
     test_button_controller_interrupts();
     test_display_presenter_capturing();
     test_ignored_sensor_calibration_and_detection();
-    printf("--- ALL 8 ARCHITECTURE TEST SUITES PASSED! ---\n");
+    test_binary_crc16();
+    test_binary_framing_constants_and_structs();
+    test_binary_handshake();
+    test_binary_commands();
+    test_binary_telemetry_emission();
+    test_binary_capture_chunked_streaming();
+    test_dual_mode_streaming_parser();
+    test_pre_capture_repeated_calibration();
+    printf("--- ALL 16 ARCHITECTURE TEST SUITES PASSED! ---\n");
     return 0;
 }

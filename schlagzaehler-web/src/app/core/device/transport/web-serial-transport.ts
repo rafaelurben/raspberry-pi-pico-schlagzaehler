@@ -2,28 +2,27 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { DEFAULT_SERIAL_CONFIG, SerialConfig } from '../../config/serial.config';
 import { ConnectionState } from '../models/connection-state.type';
 import { DeviceMetadata, TransportType } from '../models/device.model';
-import { DeviceTransport } from './device-transport.interface';
-import { NewlineEventParser } from './newline-event-parser';
+import { DeviceTransport, TransportEvent } from './device-transport.interface';
+import { DualEventParser } from './dual-event-parser';
 
 /**
  * Web Serial implementation of DeviceTransport.
- * Connects to a W3C Web Serial SerialPort and continuously streams newline-delimited lines.
+ * Connects to a W3C Web Serial SerialPort and continuously streams incoming binary frames and ASCII lines.
  */
 export class WebSerialTransport implements DeviceTransport {
   readonly transportType: TransportType = 'serial';
 
   private readonly stateSubject = new BehaviorSubject<ConnectionState>('disconnected');
-  private readonly eventsSubject = new Subject<string>();
+  private readonly eventsSubject = new Subject<TransportEvent>();
   private readonly errorsSubject = new Subject<Error>();
 
   readonly state$: Observable<ConnectionState> = this.stateSubject.asObservable();
-  readonly events$: Observable<string> = this.eventsSubject.asObservable();
+  readonly events$: Observable<TransportEvent> = this.eventsSubject.asObservable();
   readonly errors$: Observable<Error> = this.errorsSubject.asObservable();
 
-  private readonly parser = new NewlineEventParser();
+  private readonly parser = new DualEventParser();
   private readonly textEncoder = new TextEncoder();
-  private reader: ReadableStreamDefaultReader<string> | null = null;
-  private readableClosed: Promise<void> | null = null;
+  private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private isDisconnecting = false;
   private isReading = false;
 
@@ -81,9 +80,9 @@ export class WebSerialTransport implements DeviceTransport {
   }
 
   /**
-   * Writes a newline-delimited command/event string to the serial port.
+   * Writes a newline-delimited command string or raw binary packet to the serial port.
    */
-  async send(data: string): Promise<void> {
+  async send(data: string | Uint8Array): Promise<void> {
     if (this.stateSubject.value !== 'connected') {
       throw new Error('Cannot send data: device is not connected.');
     }
@@ -91,12 +90,15 @@ export class WebSerialTransport implements DeviceTransport {
       throw new Error('Serial port writable stream is not available.');
     }
 
-    const line = data.endsWith('\n') ? data : `${data}\n`;
-    const encoded = this.textEncoder.encode(line);
+    const bytes =
+      typeof data === 'string'
+        ? this.textEncoder.encode(data.endsWith('\n') ? data : `${data}\n`)
+        : data;
+
     const writer = this.port.writable.getWriter();
 
     try {
-      await writer.write(encoded);
+      await writer.write(bytes);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       this.errorsSubject.next(error);
@@ -120,15 +122,6 @@ export class WebSerialTransport implements DeviceTransport {
       this.cleanupReader();
     }
 
-    if (this.readableClosed) {
-      try {
-        await this.readableClosed;
-      } catch {
-        // Ignore pipe closure rejection
-      }
-      this.readableClosed = null;
-    }
-
     try {
       await this.port.close();
     } catch {
@@ -147,11 +140,7 @@ export class WebSerialTransport implements DeviceTransport {
     }
 
     this.isReading = true;
-    const textDecoder = new TextDecoderStream();
-    this.readableClosed = (this.port.readable as ReadableStream<BufferSource>).pipeTo(
-      textDecoder.writable,
-    );
-    this.reader = textDecoder.readable.getReader();
+    this.reader = this.port.readable.getReader() as ReadableStreamDefaultReader<Uint8Array>;
 
     void this.readLoop();
   }
@@ -164,9 +153,9 @@ export class WebSerialTransport implements DeviceTransport {
           break;
         }
         if (value) {
-          const lines = this.parser.push(value);
-          for (const line of lines) {
-            this.eventsSubject.next(line);
+          const events = this.parser.push(value);
+          for (const event of events) {
+            this.eventsSubject.next(event);
           }
         }
       }

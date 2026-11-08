@@ -158,6 +158,7 @@ void GameController_on_sensor_state(
                 .data.calibration_result = {
                     .success = true,
                     .ignored = ignored ? ignored[s] : false,
+                    .repeated = false,
                     .sensor_id = s,
                     .baseline = baselines ? baselines[s] : 0,
                     .noise = noises ? noises[s] : 0,
@@ -181,6 +182,7 @@ void GameController_on_sensor_state(
                 .data.calibration_result = {
                     .success = false,
                     .ignored = ignored ? ignored[s] : false,
+                    .repeated = false,
                     .sensor_id = s,
                     .baseline = baselines ? baselines[s] : 0,
                     .noise = noises ? noises[s] : 0,
