@@ -542,6 +542,7 @@ export class DeviceManagerService implements OnDestroy {
   private handleIncomingEvent(deviceId: string, event: TransportEvent): void {
     const now = Date.now();
     const msg = parseTransportEvent(event);
+    console.debug('Received incoming event - device:', deviceId, 'msg:', msg);
     if (!msg) {
       return;
     }

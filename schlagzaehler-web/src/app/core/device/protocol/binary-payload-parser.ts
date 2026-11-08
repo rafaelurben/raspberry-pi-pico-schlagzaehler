@@ -1,18 +1,15 @@
 import {
-  BinaryFrame,
-  BinaryMessageType,
-  CALIB_FLAG_IGNORED,
-  CALIB_FLAG_REPEATED,
-  HandshakeAckPayload,
-} from './binary-protocol.types';
-import {
   BINARY_COMPONENT_MAP,
   BINARY_END_REASON_MAP,
   BINARY_GAME_MODE_MAP,
   BINARY_GAME_STATE_MAP,
   BINARY_SENSOR_STATE_MAP,
-  UnifiedProtocolMessage,
-} from './companion-protocol.types';
+  BinaryFrame,
+  BinaryMessageType,
+  CALIB_FLAG_IGNORED,
+  CALIB_FLAG_REPEATED,
+} from './binary-protocol.types';
+import { HandshakeAckPayload, UnifiedProtocolMessage } from './companion-protocol.types';
 
 /**
  * Parses a raw BinaryFrame into a strongly typed UnifiedProtocolMessage with encoding='binary'.

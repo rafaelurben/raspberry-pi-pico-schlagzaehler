@@ -48,7 +48,7 @@ flowchart TD
   ```
 
 ### Layer 2: Protocol Decoders (Unified Protocol Message Normalization)
-- **`BinaryPayloadParser`**: Decodes raw `BinaryFrame` payload byte buffers into strongly typed payloads (`HandshakeAckPayload`, `ScorePayload`, `HitDetectedPayload`, `CalibrationResultPayload`, etc.) using DataView with strict length validation. Logs `console.warn` / `console.error` on malformed packets.
+- **`BinaryPayloadParser`**: Decodes raw `BinaryFrame` payload byte buffers into strongly typed payloads using DataView with strict length validation. Logs `console.warn` / `console.error` on malformed packets.
 - **`AsciiPayloadParser`**: Parses key-value ASCII lines into corresponding typed payloads.
 - **Normalization**: After Layer 2, **there is no more difference between ASCII and binary messages**, except for an attribute indicating how the message arrived (`encoding: 'binary' | 'ascii'`). Both streams converge into a single discriminated `UnifiedProtocolMessage` union.
 

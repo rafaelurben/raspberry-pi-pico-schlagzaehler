@@ -16,10 +16,7 @@ import {
   HANDSHAKE_FLAG_TLV_MODE,
   PROTOCOL_VERSION,
 } from './binary-protocol.types';
-import {
-  SensorCalibration,
-  UnifiedProtocolMessage,
-} from './companion-protocol.types';
+import { SensorCalibration, UnifiedProtocolMessage } from './companion-protocol.types';
 import { TransportEvent } from '../transport/device-transport.interface';
 
 export type { SensorCalibration, UnifiedProtocolMessage };

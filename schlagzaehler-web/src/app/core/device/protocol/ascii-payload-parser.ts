@@ -1,11 +1,11 @@
 import type { GameEndReason, GameMode, GameState, SensorState } from '../models/device.model';
+import { UnifiedProtocolMessage } from './companion-protocol.types';
 import {
-  UnifiedProtocolMessage,
   VALID_END_REASONS,
   VALID_GAME_MODES,
   VALID_GAME_STATES,
   VALID_SENSOR_STATES,
-} from './companion-protocol.types';
+} from './ascii-protocol.types';
 
 function parseKeyValuePairs(tokens: readonly string[]): Record<string, string> {
   const result: Record<string, string> = {};

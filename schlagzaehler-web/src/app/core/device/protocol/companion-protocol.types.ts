@@ -4,76 +4,7 @@ import type {
   CaptureEndMessage,
   CaptureStartMessage,
 } from '../models/piezo-capture.model';
-import type { HandshakeAckPayload } from './binary-protocol.types';
-
-// Validation Sets for protocol integrity
-export const VALID_GAME_MODES: ReadonlySet<GameMode> = new Set<GameMode>([
-  'COUNT',
-  'TIMED',
-  'RACE',
-  'UNKNOWN',
-]);
-
-export const VALID_GAME_STATES: ReadonlySet<GameState> = new Set<GameState>([
-  'BOOT',
-  'MENU',
-  'READY',
-  'RUNNING',
-  'FINISHED',
-  'CAPTURING',
-  'UNKNOWN',
-]);
-
-export const VALID_SENSOR_STATES: ReadonlySet<SensorState> = new Set<SensorState>([
-  'INIT',
-  'CALIBRATING',
-  'ARMED',
-  'LOCKOUT',
-  'CAPTURE_ARMED',
-  'CAPTURING',
-  'CAPTURE_TX_WAIT',
-  'ERROR',
-  'UNKNOWN',
-]);
-
-export const VALID_END_REASONS: ReadonlySet<GameEndReason> = new Set<GameEndReason>([
-  'NONE',
-  'TIME_LIMIT',
-  'TARGET_REACHED',
-  'ABORTED',
-]);
-
-// Enum mappings between binary integer representations and frontend string models
-export const BINARY_SENSOR_STATE_MAP: readonly SensorState[] = [
-  'INIT',
-  'CALIBRATING',
-  'ARMED',
-  'LOCKOUT',
-  'CAPTURE_ARMED',
-  'CAPTURING',
-  'CAPTURE_TX_WAIT',
-  'ERROR',
-];
-
-export const BINARY_GAME_STATE_MAP: readonly GameState[] = [
-  'BOOT',
-  'MENU',
-  'READY',
-  'RUNNING',
-  'FINISHED',
-  'CAPTURING',
-];
-
-export const BINARY_GAME_MODE_MAP: readonly GameMode[] = ['COUNT', 'TIMED', 'RACE'];
-
-export const BINARY_END_REASON_MAP: readonly GameEndReason[] = [
-  'NONE',
-  'TIME_LIMIT',
-  'TARGET_REACHED',
-  'ABORTED',
-];
-
-export const BINARY_COMPONENT_MAP: readonly string[] = ['SYSTEM', 'ADC', 'DMA', 'USB', 'DISPLAY'];
+import { HandshakeStatusCode } from './binary-protocol.types';
 
 /**
  * Normalized sensor calibration data common to binary and ASCII protocols.
@@ -91,6 +22,21 @@ export interface SensorCalibration {
  * Protocol message transport encoding indicating how the message arrived.
  */
 export type ProtocolMessageEncoding = 'binary' | 'ascii';
+
+// Telemetry Payloads
+export interface HandshakeAckPayload {
+  readonly hardwareGen: number;
+  readonly hardwareRev: number;
+  readonly protoMajor: number;
+  readonly protoMinor: number;
+  readonly fwMajor: number;
+  readonly fwMinor: number;
+  readonly fwPatch: number;
+  readonly statusCode: HandshakeStatusCode;
+  readonly reserved: number;
+  readonly clientNonce: number;
+  readonly uptimeMs: number;
+}
 
 /**
  * Discriminated union of Unified Protocol Messages.
