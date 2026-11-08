@@ -10,7 +10,11 @@ import type {
   CaptureEndMessage,
   CaptureStartMessage,
 } from '../models/piezo-capture.model';
-import { BinaryCaptureAction, BinaryGameMode, HandshakeStatusCode } from './binary-protocol.types';
+import {
+  BinaryCaptureAction,
+  BinaryGameMode,
+  HandshakeStatusCode,
+} from './binary/binary-protocol.types';
 
 /**
  * Normalized sensor calibration data common to binary and ASCII protocols.

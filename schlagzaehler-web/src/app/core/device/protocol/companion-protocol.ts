@@ -1,11 +1,11 @@
 import { DeviceState, GameState, SelectableGameMode, SensorState } from '../models/device.model';
-import { parseAsciiPayload, serializeAsciiCommand } from './ascii-payload-parser';
+import { parseAsciiPayload, serializeAsciiCommand } from './ascii/ascii-payload-parser';
 import {
   parseBinaryPayload,
   resetSequenceCounter,
   serializeBinaryCommand,
-} from './binary-payload-parser';
-import { BinaryCaptureAction, BinaryGameMode } from './binary-protocol.types';
+} from './binary/binary-payload-parser';
+import { BinaryCaptureAction, BinaryGameMode } from './binary/binary-protocol.types';
 import {
   HandshakeCommandPayload,
   SensorCalibration,

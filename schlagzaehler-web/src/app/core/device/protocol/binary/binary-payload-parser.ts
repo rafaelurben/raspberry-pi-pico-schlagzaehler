@@ -1,4 +1,4 @@
-import { serializeBinaryFrame } from './binary-frame-parser';
+import { serializeBinaryFrame } from '../parser/binary/binary-frame-parser';
 import {
   BINARY_COMPONENT_MAP,
   BINARY_END_REASON_MAP,
@@ -12,9 +12,13 @@ import {
   CALIB_FLAG_IGNORED,
   CALIB_FLAG_REPEATED,
   HANDSHAKE_FLAG_TLV_MODE,
-  PROTOCOL_VERSION
+  PROTOCOL_VERSION,
 } from './binary-protocol.types';
-import { HandshakeAckPayload, UnifiedProtocolCommand, UnifiedProtocolMessage } from './companion-protocol.types';
+import {
+  HandshakeAckPayload,
+  UnifiedProtocolCommand,
+  UnifiedProtocolMessage,
+} from '../companion-protocol.types';
 
 /**
  * Parses a raw BinaryFrame into a strongly typed UnifiedProtocolMessage with encoding='binary'.

@@ -1,6 +1,6 @@
-import { SYNC_BYTE_0, SYNC_BYTE_1 } from '../protocol/binary-protocol.types';
-import { BinaryFrameParser } from '../protocol/binary-frame-parser';
-import { TransportEvent } from './device-transport.interface';
+import { SYNC_BYTE_0, SYNC_BYTE_1 } from '../binary/binary-protocol.types';
+import { BinaryFrameParser } from './binary/binary-frame-parser';
+import { TransportEvent } from '../../transport/device-transport.interface';
 
 export type { TransportEvent };
 

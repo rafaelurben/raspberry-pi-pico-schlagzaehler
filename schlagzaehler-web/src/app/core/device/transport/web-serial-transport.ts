@@ -3,7 +3,7 @@ import { DEFAULT_SERIAL_CONFIG, SerialConfig } from '../../config/serial.config'
 import { ConnectionState } from '../models/connection-state.type';
 import { DeviceMetadata, TransportType } from '../models/device.model';
 import { DeviceTransport, TransportEvent } from './device-transport.interface';
-import { DualEventParser } from './dual-event-parser';
+import { DualEventParser } from '../protocol/parser/dual-event-parser';
 
 /**
  * Web Serial implementation of DeviceTransport.

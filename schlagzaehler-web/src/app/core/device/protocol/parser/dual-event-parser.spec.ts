@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { serializeBinaryFrame } from '../protocol/binary-frame-parser';
-import { BinaryCommandType, BinaryMessageType } from '../protocol/binary-protocol.types';
+import { serializeBinaryFrame } from './binary/binary-frame-parser';
+import { BinaryCommandType, BinaryMessageType } from '../binary/binary-protocol.types';
 import { DualEventParser } from './dual-event-parser';
 
 describe('DualEventParser', () => {

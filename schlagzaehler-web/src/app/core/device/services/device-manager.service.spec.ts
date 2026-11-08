@@ -9,7 +9,7 @@ import {
   BinaryMessageType,
   SYNC_BYTE_0,
   SYNC_BYTE_1,
-} from '../protocol/binary-protocol.types';
+} from '../protocol/binary/binary-protocol.types';
 import { DeviceTransport, TransportEvent } from '../transport/device-transport.interface';
 import { WebSerialTransportFactory } from '../transport/web-serial-transport-factory.service';
 import { DeviceManagerService } from './device-manager.service';
@@ -262,7 +262,7 @@ describe('DeviceManagerService', () => {
     await service.resetGame(dev2!.id);
     expect(transport2.sentPayloads).toEqual(['RESET']);
 
-    await service.sendCommandToDevices([dev1!.id, dev2!.id], {type: "CALIBRATE"});
+    await service.sendCommandToDevices([dev1!.id, dev2!.id], { type: 'CALIBRATE' });
     expect(transport1.sentPayloads).toContain('CALIB');
     expect(transport2.sentPayloads).toContain('CALIB');
 

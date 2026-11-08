@@ -2,7 +2,7 @@
  * Binary protocol definitions and frame structures for the Schlagzähler companion protocol.
  * Conforms to ICD Section 4, 5, and 6 in docs/protocol.md.
  */
-import type { GameEndReason, GameMode, GameState, SensorState } from '../models/device.model';
+import type { GameEndReason, GameMode, GameState, SensorState } from '../../models/device.model';
 
 // Header Constants
 export const SYNC_WORD = 0xaa55;

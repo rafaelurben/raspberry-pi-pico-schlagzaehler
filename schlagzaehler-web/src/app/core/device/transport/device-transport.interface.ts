@@ -1,7 +1,7 @@
 import { Observable } from 'rxjs';
 import { ConnectionState } from '../models/connection-state.type';
 import { DeviceMetadata, TransportType } from '../models/device.model';
-import { BinaryFrame } from '../protocol/binary-protocol.types';
+import { BinaryFrame } from '../protocol/binary/binary-protocol.types';
 
 export interface AsciiTransportEvent {
   readonly type: 'ascii';

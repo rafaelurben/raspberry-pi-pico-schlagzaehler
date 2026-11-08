@@ -1,5 +1,5 @@
-import type { GameEndReason, GameMode, GameState, SensorState } from '../models/device.model';
-import { UnifiedProtocolCommand, UnifiedProtocolMessage } from './companion-protocol.types';
+import type { GameEndReason, GameMode, GameState, SensorState } from '../../models/device.model';
+import { UnifiedProtocolCommand, UnifiedProtocolMessage } from '../companion-protocol.types';
 import {
   VALID_END_REASONS,
   VALID_GAME_MODES,

@@ -5,9 +5,9 @@ import { ConnectionState } from '../models/connection-state.type';
 import { DeviceEvent, EventDirection } from '../models/device-event.model';
 import { Device, DeviceState, SelectableGameMode } from '../models/device.model';
 import { CaptureProtocolMessage, PiezoCaptureResult } from '../models/piezo-capture.model';
-import { BinaryCommandType } from '../protocol/binary-protocol.types';
-import { serializeAsciiCommand } from '../protocol/ascii-payload-parser';
-import { serializeBinaryCommand } from '../protocol/binary-payload-parser';
+import { BinaryCommandType } from '../protocol/binary/binary-protocol.types';
+import { serializeAsciiCommand } from '../protocol/ascii/ascii-payload-parser';
+import { serializeBinaryCommand } from '../protocol/binary/binary-payload-parser';
 import {
   applyUnifiedMessageToDeviceState,
   CompanionCommands,

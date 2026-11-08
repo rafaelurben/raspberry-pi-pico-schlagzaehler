@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  parseAsciiPayload,
-  serializeAsciiCommand,
-} from './ascii-payload-parser';
+import { parseAsciiPayload, serializeAsciiCommand } from './ascii-payload-parser';
 
 describe('AsciiPayloadParser', () => {
   it('should parse STATE event', () => {

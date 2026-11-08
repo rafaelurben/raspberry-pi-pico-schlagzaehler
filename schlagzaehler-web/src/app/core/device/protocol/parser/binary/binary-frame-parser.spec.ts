@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { BinaryFrameParser, serializeBinaryFrame } from './binary-frame-parser';
-import { BinaryCommandType, BinaryMessageType } from './binary-protocol.types';
+import { BinaryCommandType, BinaryMessageType } from '../../binary/binary-protocol.types';
 
 describe('BinaryFrameParser', () => {
   let parser: BinaryFrameParser;

@@ -6,7 +6,7 @@ import {
   PROTOCOL_VERSION,
   SYNC_BYTE_0,
   SYNC_BYTE_1,
-} from './binary-protocol.types';
+} from '../../binary/binary-protocol.types';
 import { computeCrc16 } from './crc16';
 
 /**

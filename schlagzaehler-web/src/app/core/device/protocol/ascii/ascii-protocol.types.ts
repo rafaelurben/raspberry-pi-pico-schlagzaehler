@@ -1,5 +1,5 @@
 // Validation Sets for protocol integrity
-import type { GameEndReason, GameMode, GameState, SensorState } from '../models/device.model';
+import type { GameEndReason, GameMode, GameState, SensorState } from '../../models/device.model';
 
 export const VALID_GAME_MODES: ReadonlySet<GameMode> = new Set<GameMode>([
   'COUNT',

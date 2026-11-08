@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { serializeAsciiCommand } from './ascii-payload-parser';
+import { serializeAsciiCommand } from './ascii/ascii-payload-parser';
 import { CompanionCommands } from './companion-protocol';
 
 describe('companion-protocol', () => {
