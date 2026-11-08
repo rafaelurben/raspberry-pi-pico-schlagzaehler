@@ -4,7 +4,7 @@ This document describes the 3-tier architecture used in `schlagzaehler-web` to r
 
 ---
 
-## 3-Tier Architecture Diagram
+## Inbound Messages - Architecture
 
 ```mermaid
 flowchart TD
@@ -31,10 +31,6 @@ flowchart TD
     end
 ```
 
----
-
-## Architecture Overview
-
 ### Layer 1: Transport & Stream Demultiplexing
 - **`DualEventParser` / `BinaryFrameParser`**: Consumes incoming raw `Uint8Array` byte chunks from the `WebSerialTransport`.
 - Distinguishes binary frames (prefixed by `0xAA55` sync word) from ASCII lines (terminated by `\n`).
@@ -57,3 +53,39 @@ flowchart TD
 - Updates authoritative `DeviceState` and `DeviceMetadata` in a single reducer without duplicate branches for ASCII vs. binary.
 - Routes waveform chunks (`CAPTURE_START`, `CAPTURE_DATA`, `CAPTURE_END`) directly into the capture builder.
 - Formats clean, human-readable representations for the Live Event Log, guaranteeing zero unprintable characters.
+
+---
+
+## Outbound Commands - Architecture
+
+Just as inbound telemetry is normalized across ASCII and binary into `UnifiedProtocolMessage`, outbound commands follow a symmetrical, encoding-agnostic flow:
+
+```mermaid
+flowchart TD
+    subgraph Layer 3: Application Logic
+        CMD["CompanionCommands<br/>(start, reset, calibrate, status, setMode, setParameter, setSensitivity, capture, handshake)"]
+        CMD --> UPC["UnifiedProtocolCommand<br/>({type, payload?})"]
+    end
+
+    subgraph Layer 2: Protocol Encoders
+        UPC --> DMS["DeviceManagerService.sendCommand()"]
+        DMS -->|device.state.protoMajor !== undefined| BPP["BinaryPayloadParser.serializeBinaryCommand()"]
+        DMS -->|ASCII fallback| APP["AsciiPayloadParser.serializeAsciiCommand()"]
+        BPP --> Frame["Uint8Array Binary Frame (Sync, CRC-16)"]
+        APP --> Line["ASCII String"]
+    end
+
+    subgraph Layer 1: Transport
+        Frame --> Serial["Web Serial Port"]
+        Line --> Serial
+    end
+```
+
+### Command Flow Details:
+
+1. **`CompanionCommands`**: Simple, declarative factory producing `UnifiedProtocolCommand` objects.
+2. **`DeviceManagerService.sendCommand(deviceId, command)`**: Automatically detects whether the target device has negotiated binary mode (`device.state.protoMajor !== undefined`).
+3. **`BinaryPayloadParser.serializeBinaryCommand(cmd, seq?)`**: Builds packed binary frames with sequence tracking and CRC-16 checksums.
+4. **`AsciiPayloadParser.serializeAsciiCommand(cmd)`**: Formats ASCII command strings (e.g., `START`, `MODE:COUNT`, `SENS:2.0`).
+5. **`companion-protocol.ts`**: Remains lean and declarative, delegating low-level serialization to the respective payload parser.
+

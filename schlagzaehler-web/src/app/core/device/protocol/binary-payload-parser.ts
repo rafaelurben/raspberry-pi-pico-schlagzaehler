@@ -1,15 +1,20 @@
+import { serializeBinaryFrame } from './binary-frame-parser';
 import {
   BINARY_COMPONENT_MAP,
   BINARY_END_REASON_MAP,
   BINARY_GAME_MODE_MAP,
   BINARY_GAME_STATE_MAP,
   BINARY_SENSOR_STATE_MAP,
+  BinaryCaptureAction,
+  BinaryCommandType,
   BinaryFrame,
   BinaryMessageType,
   CALIB_FLAG_IGNORED,
   CALIB_FLAG_REPEATED,
+  HANDSHAKE_FLAG_TLV_MODE,
+  PROTOCOL_VERSION
 } from './binary-protocol.types';
-import { HandshakeAckPayload, UnifiedProtocolMessage } from './companion-protocol.types';
+import { HandshakeAckPayload, UnifiedProtocolCommand, UnifiedProtocolMessage } from './companion-protocol.types';
 
 /**
  * Parses a raw BinaryFrame into a strongly typed UnifiedProtocolMessage with encoding='binary'.
@@ -323,5 +328,126 @@ export function parseBinaryPayload(frame: BinaryFrame): UnifiedProtocolMessage |
         `[BinaryPayloadParser] Unknown binary message type 0x${type.toString(16).padStart(2, '0')}`,
       );
       return null;
+  }
+}
+
+let outgoingSeqCounter = 0;
+
+/**
+ * Returns the next 16-bit outgoing sequence number.
+ */
+export function getNextSeq(): number {
+  outgoingSeqCounter = (outgoingSeqCounter + 1) & 0xffff;
+  return outgoingSeqCounter;
+}
+
+/**
+ * Resets the outgoing sequence counter back to 0.
+ */
+export function resetSequenceCounter(): void {
+  outgoingSeqCounter = 0;
+}
+
+/**
+ * Generates a non-zero 32-bit random client nonce.
+ */
+export function generateRandomNonce(): number {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const arr = new Uint32Array(1);
+    crypto.getRandomValues(arr);
+    return arr[0] || 0x12345678;
+  }
+  return (Math.floor(Math.random() * 0xffffffff) + 1) >>> 0;
+}
+
+/**
+ * Serializes a UnifiedProtocolCommand into a raw binary frame Uint8Array (ICD Section 5).
+ */
+export function serializeBinaryCommand(command: UnifiedProtocolCommand, seq?: number): Uint8Array {
+  const sequenceNumber = seq ?? getNextSeq();
+  switch (command.type) {
+    case 'HANDSHAKE': {
+      const payload = new Uint8Array(8);
+      const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+      const major = command.payload?.clientProtoMajor ?? PROTOCOL_VERSION;
+      const minor = command.payload?.clientProtoMinor ?? 0;
+      const tlv = command.payload?.tlvMode ?? true;
+      const flags = tlv ? HANDSHAKE_FLAG_TLV_MODE : 0;
+      const nonce = command.payload?.clientNonce ?? generateRandomNonce();
+      view.setUint8(0, major);
+      view.setUint8(1, minor);
+      view.setUint16(2, flags, true);
+      view.setUint32(4, nonce, true);
+      return serializeBinaryFrame(BinaryCommandType.CMD_HANDSHAKE, payload, 0, sequenceNumber);
+    }
+    case 'START':
+      return serializeBinaryFrame(
+        BinaryCommandType.CMD_START,
+        new Uint8Array(0),
+        0,
+        sequenceNumber,
+      );
+    case 'RESET':
+      return serializeBinaryFrame(
+        BinaryCommandType.CMD_RESET,
+        new Uint8Array(0),
+        0,
+        sequenceNumber,
+      );
+    case 'CALIBRATE':
+      return serializeBinaryFrame(
+        BinaryCommandType.CMD_CALIBRATE,
+        new Uint8Array(0),
+        0,
+        sequenceNumber,
+      );
+    case 'STATUS':
+      return serializeBinaryFrame(
+        BinaryCommandType.CMD_STATUS,
+        new Uint8Array(0),
+        0,
+        sequenceNumber,
+      );
+    case 'SET_MODE': {
+      let modeVal: number;
+      if (typeof command.payload.mode === 'string') {
+        modeVal = command.payload.mode === 'COUNT' ? 0 : command.payload.mode === 'TIMED' ? 1 : 2;
+      } else {
+        modeVal = command.payload.mode;
+      }
+      const payload = new Uint8Array([modeVal & 0xff]);
+      return serializeBinaryFrame(BinaryCommandType.CMD_SET_MODE, payload, 0, sequenceNumber);
+    }
+    case 'SET_PARAMETER': {
+      const sanitized = Math.max(1, Math.floor(command.payload.parameter));
+      const payload = new Uint8Array(4);
+      const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+      view.setUint32(0, sanitized, true);
+      return serializeBinaryFrame(BinaryCommandType.CMD_SET_PARAMETER, payload, 0, sequenceNumber);
+    }
+    case 'SET_SENSITIVITY': {
+      const payload = new Uint8Array(4);
+      const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+      view.setFloat32(0, command.payload.noiseFactor, true);
+      return serializeBinaryFrame(
+        BinaryCommandType.CMD_SET_SENSITIVITY,
+        payload,
+        0,
+        sequenceNumber,
+      );
+    }
+    case 'CAPTURE': {
+      const actionVal =
+        command.payload.action === 'start' || command.payload.action === BinaryCaptureAction.START
+          ? 1
+          : 0;
+      let targetVal = 255;
+      const target = command.payload.target;
+      if (typeof target === 'number' && target >= 0 && target <= 2) {
+        targetVal = target;
+      }
+      const payload = new Uint8Array([actionVal, targetVal, 0, 0]);
+      return serializeBinaryFrame(BinaryCommandType.CMD_CAPTURE, payload, 0, sequenceNumber);
+    }
   }
 }

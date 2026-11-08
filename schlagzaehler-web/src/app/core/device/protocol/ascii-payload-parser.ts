@@ -1,5 +1,5 @@
 import type { GameEndReason, GameMode, GameState, SensorState } from '../models/device.model';
-import { UnifiedProtocolMessage } from './companion-protocol.types';
+import { UnifiedProtocolCommand, UnifiedProtocolMessage } from './companion-protocol.types';
 import {
   VALID_END_REASONS,
   VALID_GAME_MODES,
@@ -241,5 +241,52 @@ export function parseAsciiPayload(rawLine: string): UnifiedProtocolMessage | nul
     default:
       console.warn(`[AsciiPayloadParser] Unrecognized ASCII message: ${trimmed}`);
       return null;
+  }
+}
+
+/**
+ * Serializes a UnifiedProtocolCommand into an ASCII command line (ICD Section 7.1).
+ */
+export function serializeAsciiCommand(command: UnifiedProtocolCommand): string {
+  switch (command.type) {
+    case 'START':
+      return 'START';
+    case 'RESET':
+      return 'RESET';
+    case 'CALIBRATE':
+      return 'CALIB';
+    case 'STATUS':
+      return 'STATUS';
+    case 'SET_MODE': {
+      let modeStr: string;
+      if (typeof command.payload.mode === 'number') {
+        modeStr =
+          command.payload.mode === 0 ? 'COUNT' : command.payload.mode === 1 ? 'TIMED' : 'RACE';
+      } else {
+        modeStr = command.payload.mode;
+      }
+      return `MODE:${modeStr}`;
+    }
+    case 'SET_PARAMETER':
+      return `PARAM:${Math.max(1, Math.floor(command.payload.parameter))}`;
+    case 'SET_SENSITIVITY':
+      return `SENS:${command.payload.noiseFactor}`;
+    case 'CAPTURE': {
+      const isStop = command.payload.action === 'stop' || command.payload.action === 0;
+      if (isStop) {
+        return 'CAPTURE:STOP';
+      }
+      const target = command.payload.target;
+      if (target === 'all') {
+        return 'CAPTURE:all';
+      }
+      if (typeof target === 'number' && target >= 0 && target <= 2) {
+        return `CAPTURE:${target}`;
+      }
+      return 'CAPTURE';
+    }
+    case 'HANDSHAKE':
+      // ASCII protocol has no handshake command
+      return '';
   }
 }

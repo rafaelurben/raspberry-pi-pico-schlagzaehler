@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseAsciiPayload } from './ascii-payload-parser';
+import {
+  parseAsciiPayload,
+  serializeAsciiCommand,
+} from './ascii-payload-parser';
 
 describe('AsciiPayloadParser', () => {
   it('should parse STATE event', () => {
@@ -136,5 +139,63 @@ describe('AsciiPayloadParser', () => {
     expect(result).toBeNull();
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  describe('serializeAsciiCommand', () => {
+    it('should serialize simple commands without payloads', () => {
+      expect(serializeAsciiCommand({ type: 'START' })).toBe('START');
+      expect(serializeAsciiCommand({ type: 'RESET' })).toBe('RESET');
+      expect(serializeAsciiCommand({ type: 'CALIBRATE' })).toBe('CALIB');
+      expect(serializeAsciiCommand({ type: 'STATUS' })).toBe('STATUS');
+      expect(serializeAsciiCommand({ type: 'HANDSHAKE' })).toBe('');
+    });
+
+    it('should serialize SET_MODE with string and numeric modes', () => {
+      expect(serializeAsciiCommand({ type: 'SET_MODE', payload: { mode: 'COUNT' } })).toBe(
+        'MODE:COUNT',
+      );
+      expect(serializeAsciiCommand({ type: 'SET_MODE', payload: { mode: 'TIMED' } })).toBe(
+        'MODE:TIMED',
+      );
+      expect(serializeAsciiCommand({ type: 'SET_MODE', payload: { mode: 'RACE' } })).toBe(
+        'MODE:RACE',
+      );
+      expect(serializeAsciiCommand({ type: 'SET_MODE', payload: { mode: 0 } })).toBe('MODE:COUNT');
+      expect(serializeAsciiCommand({ type: 'SET_MODE', payload: { mode: 1 } })).toBe('MODE:TIMED');
+      expect(serializeAsciiCommand({ type: 'SET_MODE', payload: { mode: 2 } })).toBe('MODE:RACE');
+    });
+
+    it('should serialize SET_PARAMETER and enforce positive integers', () => {
+      expect(serializeAsciiCommand({ type: 'SET_PARAMETER', payload: { parameter: 45 } })).toBe(
+        'PARAM:45',
+      );
+      expect(serializeAsciiCommand({ type: 'SET_PARAMETER', payload: { parameter: 0 } })).toBe(
+        'PARAM:1',
+      );
+      expect(serializeAsciiCommand({ type: 'SET_PARAMETER', payload: { parameter: -10 } })).toBe(
+        'PARAM:1',
+      );
+    });
+
+    it('should serialize SET_SENSITIVITY', () => {
+      expect(
+        serializeAsciiCommand({ type: 'SET_SENSITIVITY', payload: { noiseFactor: 2.25 } }),
+      ).toBe('SENS:2.25');
+    });
+
+    it('should serialize CAPTURE commands', () => {
+      expect(serializeAsciiCommand({ type: 'CAPTURE', payload: { action: 'start' } })).toBe(
+        'CAPTURE',
+      );
+      expect(
+        serializeAsciiCommand({ type: 'CAPTURE', payload: { action: 'start', target: 1 } }),
+      ).toBe('CAPTURE:1');
+      expect(
+        serializeAsciiCommand({ type: 'CAPTURE', payload: { action: 'start', target: 'all' } }),
+      ).toBe('CAPTURE:all');
+      expect(serializeAsciiCommand({ type: 'CAPTURE', payload: { action: 'stop' } })).toBe(
+        'CAPTURE:STOP',
+      );
+    });
   });
 });

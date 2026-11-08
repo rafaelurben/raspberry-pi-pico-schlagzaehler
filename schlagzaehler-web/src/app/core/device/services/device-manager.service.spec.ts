@@ -262,7 +262,7 @@ describe('DeviceManagerService', () => {
     await service.resetGame(dev2!.id);
     expect(transport2.sentPayloads).toEqual(['RESET']);
 
-    await service.sendCommandToDevices([dev1!.id, dev2!.id], 'CALIB');
+    await service.sendCommandToDevices([dev1!.id, dev2!.id], {type: "CALIBRATE"});
     expect(transport1.sentPayloads).toContain('CALIB');
     expect(transport2.sentPayloads).toContain('CALIB');
 

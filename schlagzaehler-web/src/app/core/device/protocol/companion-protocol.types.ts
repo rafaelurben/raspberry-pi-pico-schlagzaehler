@@ -1,10 +1,16 @@
-import type { GameEndReason, GameMode, GameState, SensorState } from '../models/device.model';
+import type {
+  GameEndReason,
+  GameMode,
+  GameState,
+  SelectableGameMode,
+  SensorState,
+} from '../models/device.model';
 import type {
   CaptureDataMessage,
   CaptureEndMessage,
   CaptureStartMessage,
 } from '../models/piezo-capture.model';
-import { HandshakeStatusCode } from './binary-protocol.types';
+import { BinaryCaptureAction, BinaryGameMode, HandshakeStatusCode } from './binary-protocol.types';
 
 /**
  * Normalized sensor calibration data common to binary and ASCII protocols.
@@ -136,3 +142,43 @@ export type UnifiedProtocolMessage =
       };
       readonly rawText: string;
     };
+
+// Command Payloads
+export interface HandshakeCommandPayload {
+  readonly clientNonce?: number;
+  readonly clientProtoMajor?: number;
+  readonly clientProtoMinor?: number;
+  readonly tlvMode?: boolean;
+}
+
+export interface SetModeCommandPayload {
+  readonly mode: SelectableGameMode | BinaryGameMode;
+}
+
+export interface SetParameterCommandPayload {
+  readonly parameter: number;
+}
+
+export interface SetSensitivityCommandPayload {
+  readonly noiseFactor: number;
+}
+
+export interface CaptureCommandPayload {
+  readonly action: 'start' | 'stop' | BinaryCaptureAction;
+  readonly target?: number | 'all';
+}
+
+/**
+ * Discriminated union of Unified Protocol Commands.
+ * Defines high-level commands independently of transport encoding (ASCII vs binary).
+ */
+export type UnifiedProtocolCommand =
+  | { readonly type: 'HANDSHAKE'; readonly payload?: HandshakeCommandPayload }
+  | { readonly type: 'START'; readonly payload?: undefined }
+  | { readonly type: 'RESET'; readonly payload?: undefined }
+  | { readonly type: 'CALIBRATE'; readonly payload?: undefined }
+  | { readonly type: 'STATUS'; readonly payload?: undefined }
+  | { readonly type: 'SET_MODE'; readonly payload: SetModeCommandPayload }
+  | { readonly type: 'SET_PARAMETER'; readonly payload: SetParameterCommandPayload }
+  | { readonly type: 'SET_SENSITIVITY'; readonly payload: SetSensitivityCommandPayload }
+  | { readonly type: 'CAPTURE'; readonly payload: CaptureCommandPayload };

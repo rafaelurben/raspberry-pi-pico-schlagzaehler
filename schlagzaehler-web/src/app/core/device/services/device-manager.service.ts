@@ -6,12 +6,14 @@ import { DeviceEvent, EventDirection } from '../models/device-event.model';
 import { Device, DeviceState, SelectableGameMode } from '../models/device.model';
 import { CaptureProtocolMessage, PiezoCaptureResult } from '../models/piezo-capture.model';
 import { BinaryCommandType } from '../protocol/binary-protocol.types';
+import { serializeAsciiCommand } from '../protocol/ascii-payload-parser';
+import { serializeBinaryCommand } from '../protocol/binary-payload-parser';
 import {
   applyUnifiedMessageToDeviceState,
-  BinaryCompanionCommands,
   CompanionCommands,
   parseTransportEvent,
   SensorCalibration,
+  UnifiedProtocolCommand,
   UnifiedProtocolMessage,
 } from '../protocol/companion-protocol';
 import { DeviceTransport, TransportEvent } from '../transport/device-transport.interface';
@@ -45,14 +47,6 @@ const BINARY_CMD_NAME_MAP: Record<number, string> = {
   [BinaryCommandType.CMD_SET_SENSITIVITY]: 'CMD_SET_SENSITIVITY',
   [BinaryCommandType.CMD_CAPTURE]: 'CMD_CAPTURE',
 };
-
-function formatBinaryCommandForLog(bytes: Uint8Array): string {
-  if (bytes.length >= 4 && bytes[0] === 0x55 && bytes[1] === 0xaa) {
-    const msgType = bytes[3];
-    return BINARY_CMD_NAME_MAP[msgType] ?? `[CMD 0x${msgType.toString(16).padStart(2, '0')}]`;
-  }
-  return `[BINARY ${bytes.length}B]`;
-}
 
 @Injectable({ providedIn: 'root' })
 export class DeviceManagerService implements OnDestroy {
@@ -275,9 +269,11 @@ export class DeviceManagerService implements OnDestroy {
   }
 
   /**
-   * Sends a string command or binary packet to a single connected device and logs it in the event stream.
+   * Sends a command to a single connected device and logs it in the event stream. It is
+   * automatically serialized to binary or ASCII based on whether the device has established
+   * a binary protocol handshake.
    */
-  async sendCommand(deviceId: string, command: string | Uint8Array): Promise<void> {
+  async sendCommand(deviceId: string, command: UnifiedProtocolCommand): Promise<void> {
     const entry = this.activeDevices.get(deviceId);
     if (!entry) {
       const error = new Error(`Device ${deviceId} is not found.`);
@@ -285,10 +281,23 @@ export class DeviceManagerService implements OnDestroy {
       throw error;
     }
 
+    const device = this.getDevice(deviceId);
+    let payloadToSend: string | Uint8Array;
+    let logText: string;
+
+    const isBinary =
+      command.type === 'HANDSHAKE' ||
+      (device?.state.protoMajor !== undefined && device.state.protoMajor > 0);
+    if (isBinary) {
+      payloadToSend = serializeBinaryCommand(command);
+      logText = `[CMD_${command.type}]`;
+    } else {
+      payloadToSend = serializeAsciiCommand(command);
+      logText = payloadToSend;
+    }
+
     try {
-      await entry.transport.send(command);
-      const logText =
-        typeof command === 'string' ? command.trim() : formatBinaryCommandForLog(command);
+      await entry.transport.send(payloadToSend);
       this.appendEvent(deviceId, logText, 'sent');
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -298,11 +307,11 @@ export class DeviceManagerService implements OnDestroy {
   }
 
   /**
-   * Sends a command or binary packet to one or multiple devices concurrently.
+   * Sends a command, string, or binary packet to one or multiple devices concurrently.
    */
   async sendCommandToDevices(
     deviceIds: readonly string[],
-    command: string | Uint8Array,
+    command: UnifiedProtocolCommand,
   ): Promise<void> {
     if (deviceIds.length === 0) {
       return;
@@ -502,8 +511,7 @@ export class DeviceManagerService implements OnDestroy {
 
     if (connectionState === 'connected' && prevConnectionState !== 'connected') {
       // Negotiate binary mode via CMD_HANDSHAKE with TLV_MODE = 1
-      const handshakePacket = BinaryCompanionCommands.handshake({ tlvMode: true });
-      void this.sendCommand(deviceId, handshakePacket).catch((e) =>
+      void this.sendCommand(deviceId, CompanionCommands.handshake({ tlvMode: true })).catch((e) =>
         console.error(`Failed to send handshake to device ${deviceId}:`, e),
       );
     }

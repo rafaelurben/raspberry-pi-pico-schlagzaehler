@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseBinaryPayload } from './binary-payload-parser';
 import {
+  getNextSeq,
+  parseBinaryPayload,
+  resetSequenceCounter,
+  serializeBinaryCommand,
+} from './binary-payload-parser';
+import {
+  BinaryCommandType,
   BinaryComponentId,
   BinaryFrame,
   BinaryGameEndReason,
@@ -10,6 +16,10 @@ import {
   BinarySensorState,
   CALIB_FLAG_IGNORED,
   CALIB_FLAG_REPEATED,
+  HANDSHAKE_FLAG_TLV_MODE,
+  PROTOCOL_VERSION,
+  SYNC_BYTE_0,
+  SYNC_BYTE_1,
 } from './binary-protocol.types';
 
 describe('BinaryPayloadParser', () => {
@@ -346,5 +356,124 @@ describe('BinaryPayloadParser', () => {
     expect(result).toBeNull();
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  describe('sequence counter', () => {
+    it('should increment sequence numbers and allow reset', () => {
+      resetSequenceCounter();
+      expect(getNextSeq()).toBe(1);
+      expect(getNextSeq()).toBe(2);
+      resetSequenceCounter();
+      expect(getNextSeq()).toBe(1);
+    });
+  });
+
+  describe('serializeBinaryCommand', () => {
+    it('should serialize CMD_HANDSHAKE packet', () => {
+      const packet = serializeBinaryCommand(
+        {
+          type: 'HANDSHAKE',
+          payload: {
+            clientNonce: 0xaabbccdd,
+            clientProtoMajor: 1,
+            clientProtoMinor: 0,
+            tlvMode: true,
+          },
+        },
+        7,
+      );
+
+      expect(packet[0]).toBe(SYNC_BYTE_0);
+      expect(packet[1]).toBe(SYNC_BYTE_1);
+      expect(packet[2] & 0x0f).toBe(PROTOCOL_VERSION);
+      expect(packet[3]).toBe(BinaryCommandType.CMD_HANDSHAKE);
+      expect(packet[4]).toBe(8); // payload length
+      expect(packet[5]).toBe(0);
+
+      const view = new DataView(packet.buffer, packet.byteOffset + 8, 8);
+      expect(view.getUint8(0)).toBe(1); // major
+      expect(view.getUint8(1)).toBe(0); // minor
+      expect(view.getUint16(2, true)).toBe(HANDSHAKE_FLAG_TLV_MODE);
+      expect(view.getUint32(4, true)).toBe(0xaabbccdd);
+    });
+
+    it('should serialize empty commands (START, RESET, CALIBRATE, STATUS)', () => {
+      const start = serializeBinaryCommand({ type: 'START' }, 1);
+      expect(start[3]).toBe(BinaryCommandType.CMD_START);
+      expect(start[4]).toBe(0);
+
+      const reset = serializeBinaryCommand({ type: 'RESET' }, 2);
+      expect(reset[3]).toBe(BinaryCommandType.CMD_RESET);
+      expect(reset[4]).toBe(0);
+
+      const calib = serializeBinaryCommand({ type: 'CALIBRATE' }, 3);
+      expect(calib[3]).toBe(BinaryCommandType.CMD_CALIBRATE);
+      expect(calib[4]).toBe(0);
+
+      const status = serializeBinaryCommand({ type: 'STATUS' }, 4);
+      expect(status[3]).toBe(BinaryCommandType.CMD_STATUS);
+      expect(status[4]).toBe(0);
+    });
+
+    it('should serialize CMD_SET_MODE', () => {
+      const countPacket = serializeBinaryCommand(
+        { type: 'SET_MODE', payload: { mode: 'COUNT' } },
+        10,
+      );
+      expect(countPacket[3]).toBe(BinaryCommandType.CMD_SET_MODE);
+      expect(countPacket[8]).toBe(0);
+
+      const timedPacket = serializeBinaryCommand(
+        { type: 'SET_MODE', payload: { mode: 'TIMED' } },
+        11,
+      );
+      expect(timedPacket[8]).toBe(1);
+
+      const racePacket = serializeBinaryCommand(
+        { type: 'SET_MODE', payload: { mode: 'RACE' } },
+        12,
+      );
+      expect(racePacket[8]).toBe(2);
+    });
+
+    it('should serialize CMD_SET_PARAMETER', () => {
+      const packet = serializeBinaryCommand(
+        { type: 'SET_PARAMETER', payload: { parameter: 120 } },
+        15,
+      );
+      expect(packet[3]).toBe(BinaryCommandType.CMD_SET_PARAMETER);
+      const view = new DataView(packet.buffer, packet.byteOffset + 8, 4);
+      expect(view.getUint32(0, true)).toBe(120);
+    });
+
+    it('should serialize CMD_SET_SENSITIVITY', () => {
+      const packet = serializeBinaryCommand(
+        { type: 'SET_SENSITIVITY', payload: { noiseFactor: 3.5 } },
+        20,
+      );
+      expect(packet[3]).toBe(BinaryCommandType.CMD_SET_SENSITIVITY);
+      const view = new DataView(packet.buffer, packet.byteOffset + 8, 4);
+      expect(view.getFloat32(0, true)).toBeCloseTo(3.5, 5);
+    });
+
+    it('should serialize CMD_CAPTURE', () => {
+      const startAll = serializeBinaryCommand(
+        { type: 'CAPTURE', payload: { action: 'start', target: 'all' } },
+        25,
+      );
+      expect(startAll[3]).toBe(BinaryCommandType.CMD_CAPTURE);
+      expect(startAll[8]).toBe(1); // action=start
+      expect(startAll[9]).toBe(255); // target=all
+
+      const startSensor1 = serializeBinaryCommand(
+        { type: 'CAPTURE', payload: { action: 'start', target: 1 } },
+        26,
+      );
+      expect(startSensor1[8]).toBe(1);
+      expect(startSensor1[9]).toBe(1);
+
+      const stop = serializeBinaryCommand({ type: 'CAPTURE', payload: { action: 'stop' } }, 27);
+      expect(stop[8]).toBe(0);
+    });
   });
 });
