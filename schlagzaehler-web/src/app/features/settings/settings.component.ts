@@ -54,9 +54,12 @@ export class SettingsComponent {
 
   async onSendRawCommand(event: SendRawCommandEvent): Promise<void> {
     try {
-      await this.deviceManager.sendCommandToDevices(event.deviceIds, event.payload);
-    } catch {
-      // Errors are reflected on the affected device(s)
+      await this.deviceManager.sendCommandToDevices(event.deviceIds, {
+        type: '_RAW',
+        payload: event.payload,
+      });
+    } catch (e) {
+      console.warn('Failed to send raw command', event, e);
     }
   }
 

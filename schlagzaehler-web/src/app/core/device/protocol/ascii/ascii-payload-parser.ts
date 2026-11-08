@@ -288,5 +288,7 @@ export function serializeAsciiCommand(command: UnifiedProtocolCommand): string {
     case 'HANDSHAKE':
       // ASCII protocol has no handshake command
       return '';
+    case '_RAW':
+      return command.payload;
   }
 }

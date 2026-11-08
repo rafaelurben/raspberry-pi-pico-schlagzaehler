@@ -286,8 +286,9 @@ export class DeviceManagerService implements OnDestroy {
     let logText: string;
 
     const isBinary =
-      command.type === 'HANDSHAKE' ||
-      (device?.state.protoMajor !== undefined && device.state.protoMajor > 0);
+      (command.type === 'HANDSHAKE' ||
+        (device?.state.protoMajor !== undefined && device.state.protoMajor > 0)) &&
+      command.type !== '_RAW';
     if (isBinary) {
       payloadToSend = serializeBinaryCommand(command);
       logText = `[CMD_${command.type}]`;

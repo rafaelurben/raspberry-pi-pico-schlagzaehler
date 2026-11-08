@@ -185,4 +185,5 @@ export type UnifiedProtocolCommand =
   | { readonly type: 'SET_MODE'; readonly payload: SetModeCommandPayload }
   | { readonly type: 'SET_PARAMETER'; readonly payload: SetParameterCommandPayload }
   | { readonly type: 'SET_SENSITIVITY'; readonly payload: SetSensitivityCommandPayload }
-  | { readonly type: 'CAPTURE'; readonly payload: CaptureCommandPayload };
+  | { readonly type: 'CAPTURE'; readonly payload: CaptureCommandPayload }
+  | { readonly type: '_RAW'; readonly payload: string };
