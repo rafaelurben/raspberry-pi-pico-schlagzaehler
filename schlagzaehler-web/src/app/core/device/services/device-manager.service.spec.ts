@@ -604,4 +604,44 @@ describe('DeviceManagerService', () => {
     expect(cap.peak).toBe(2200);
     expect(cap.samples).toEqual([1850, 1852, 2200, 1860]);
   });
+
+  it('should respond to ASCII BOOT message with a Handshake command and update state', async () => {
+    setupService();
+    const transport = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport];
+
+    const dev = await service.connectSerialDevice('Pico Test');
+    const deviceId = dev!.id;
+
+    // Clear initial handshake sent upon connect
+    transport.sentPayloads.length = 0;
+
+    // Simulate device emitting ASCII BOOT message
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'BOOT success=1 msg=OK',
+    });
+
+    // Device state should be updated to BOOT
+    const updatedDev = service.getDevice(deviceId);
+    expect(updatedDev?.state.gameState).toBe('BOOT');
+    expect(updatedDev?.state.sensorState).toBe('INIT');
+
+    // A Handshake packet should have been sent to the transport
+    expect(transport.sentPayloads).toHaveLength(1);
+    const sent = transport.sentPayloads[0];
+    expect(sent).toBeInstanceOf(Uint8Array);
+    if (sent instanceof Uint8Array) {
+      expect(sent[3]).toBe(BinaryCommandType.CMD_HANDSHAKE);
+    }
+
+    // Event log should contain the received BOOT message and sent CMD_HANDSHAKE
+    const events = service.events();
+    expect(
+      events.some((e) => e.payload === 'BOOT success=1 msg=OK' && e.direction === 'received'),
+    ).toBe(true);
+    expect(events.some((e) => e.payload === '[CMD_HANDSHAKE]' && e.direction === 'sent')).toBe(
+      true,
+    );
+  });
 });

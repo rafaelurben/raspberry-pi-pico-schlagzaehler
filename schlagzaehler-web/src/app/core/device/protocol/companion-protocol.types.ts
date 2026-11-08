@@ -33,7 +33,11 @@ export interface SensorCalibration {
  */
 export type ProtocolMessageEncoding = 'binary' | 'ascii';
 
-// Telemetry Payloads
+export interface BootPayload {
+  readonly success: boolean;
+  readonly message: string;
+}
+
 export interface HandshakeAckPayload {
   readonly hardwareGen: number;
   readonly hardwareRev: number;
@@ -54,6 +58,12 @@ export interface HandshakeAckPayload {
  * except for the `encoding` attribute showing how the message arrived.
  */
 export type UnifiedProtocolMessage =
+  | {
+      readonly encoding: ProtocolMessageEncoding;
+      readonly type: 'BOOT';
+      readonly payload: BootPayload;
+      readonly rawText: string;
+    }
   | {
       readonly encoding: ProtocolMessageEncoding;
       readonly type: 'HANDSHAKE_ACK';

@@ -2,6 +2,32 @@ import { describe, expect, it, vi } from 'vitest';
 import { parseAsciiPayload, serializeAsciiCommand } from './ascii-payload-parser';
 
 describe('AsciiPayloadParser', () => {
+  it('should parse BOOT event', () => {
+    const resultSuccess = parseAsciiPayload('BOOT success=1 msg=OK');
+    expect(resultSuccess).not.toBeNull();
+    expect(resultSuccess?.type).toBe('BOOT');
+    expect(resultSuccess?.encoding).toBe('ascii');
+    if (resultSuccess?.type === 'BOOT') {
+      expect(resultSuccess.payload.success).toBe(true);
+      expect(resultSuccess.payload.message).toBe('OK');
+      expect(resultSuccess.rawText).toBe('BOOT success=1 msg=OK');
+    }
+
+    const resultReady = parseAsciiPayload('BOOT success=1 msg=Ready');
+    expect(resultReady?.type).toBe('BOOT');
+    if (resultReady?.type === 'BOOT') {
+      expect(resultReady.payload.success).toBe(true);
+      expect(resultReady.payload.message).toBe('Ready');
+    }
+
+    const resultFail = parseAsciiPayload('BOOT success=0 msg=Sensor initialization failed');
+    expect(resultFail?.type).toBe('BOOT');
+    if (resultFail?.type === 'BOOT') {
+      expect(resultFail.payload.success).toBe(false);
+      expect(resultFail.payload.message).toBe('Sensor initialization failed');
+    }
+  });
+
   it('should parse STATE event', () => {
     const result = parseAsciiPayload('STATE old=READY new=RUNNING');
     expect(result).not.toBeNull();

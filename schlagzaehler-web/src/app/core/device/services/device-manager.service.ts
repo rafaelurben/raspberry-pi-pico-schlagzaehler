@@ -603,6 +603,13 @@ export class DeviceManagerService implements OnDestroy {
 
     // 4. Record sanitized / formatted message in event log
     this.appendEvent(deviceId, msg.rawText, 'received', now);
+
+    // 5. Respond to BOOT message with Handshake command to establish/negotiate protocol
+    if (msg.type === 'BOOT') {
+      void this.sendCommand(deviceId, CompanionCommands.handshake({ tlvMode: true })).catch((e) =>
+        console.error(`Failed to send handshake after BOOT to device ${deviceId}:`, e),
+      );
+    }
   }
 
   private handleCaptureProtocolMessage(

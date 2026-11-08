@@ -35,6 +35,22 @@ export function parseAsciiPayload(rawLine: string): UnifiedProtocolMessage | nul
   const kv = parseKeyValuePairs(parts.slice(1));
 
   switch (type) {
+    case 'BOOT': {
+      const successVal = kv['success'];
+      const success = successVal === '1' || successVal === 'true';
+      const msgMatch = trimmed.match(/(?:msg|message)=(.*)$/);
+      const message = msgMatch ? msgMatch[1] : (kv['msg'] ?? kv['message'] ?? '');
+      return {
+        encoding: 'ascii',
+        type: 'BOOT',
+        payload: {
+          success,
+          message,
+        },
+        rawText: trimmed,
+      };
+    }
+
     case 'STATE': {
       const rawNew = (kv['new'] ?? kv['state']) as GameState | undefined;
       const rawOld = (kv['old'] ?? kv['previous']) as GameState | undefined;

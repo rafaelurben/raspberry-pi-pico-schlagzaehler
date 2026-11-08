@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { DeviceState } from '../models/device.model';
 import { serializeAsciiCommand } from './ascii/ascii-payload-parser';
-import { CompanionCommands } from './companion-protocol';
+import { applyUnifiedMessageToDeviceState, CompanionCommands } from './companion-protocol';
 
 describe('companion-protocol', () => {
   it('should generate UnifiedProtocolCommand objects via CompanionCommands', () => {
@@ -64,5 +65,39 @@ describe('companion-protocol', () => {
     expect(serializeAsciiCommand(CompanionCommands.captureStart(1))).toBe('CAPTURE:1');
     expect(serializeAsciiCommand(CompanionCommands.captureStart('all'))).toBe('CAPTURE:all');
     expect(serializeAsciiCommand(CompanionCommands.captureStop())).toBe('CAPTURE:STOP');
+  });
+
+  it('should update DeviceState on BOOT message', () => {
+    const initialState = new DeviceState({
+      connectionState: 'connected',
+      gameState: 'RUNNING',
+      score: 5,
+      protoMajor: 1,
+      protoMinor: 0,
+      isReady: true,
+    });
+
+    const bootSuccess = applyUnifiedMessageToDeviceState(initialState, {
+      encoding: 'ascii',
+      type: 'BOOT',
+      payload: { success: true, message: 'Ready' },
+      rawText: 'BOOT success=1 msg=Ready',
+    });
+
+    expect(bootSuccess.gameState).toBe('BOOT');
+    expect(bootSuccess.sensorState).toBe('INIT');
+    expect(bootSuccess.score).toBe(0);
+    expect(bootSuccess.isReady).toBe(false);
+    expect(bootSuccess.protoMajor).toBeUndefined();
+
+    const bootFail = applyUnifiedMessageToDeviceState(initialState, {
+      encoding: 'ascii',
+      type: 'BOOT',
+      payload: { success: false, message: 'Failed' },
+      rawText: 'BOOT success=0 msg=Failed',
+    });
+
+    expect(bootFail.gameState).toBe('BOOT');
+    expect(bootFail.sensorState).toBe('ERROR');
   });
 });

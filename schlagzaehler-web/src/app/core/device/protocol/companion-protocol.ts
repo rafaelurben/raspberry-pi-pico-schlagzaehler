@@ -7,6 +7,7 @@ import {
 } from './binary/binary-payload-parser';
 import { BinaryCaptureAction, BinaryGameMode } from './binary/binary-protocol.types';
 import {
+  BootPayload,
   HandshakeCommandPayload,
   SensorCalibration,
   UnifiedProtocolCommand,
@@ -16,6 +17,7 @@ import { TransportEvent } from '../transport/device-transport.interface';
 
 export { resetSequenceCounter, serializeAsciiCommand, serializeBinaryCommand };
 export type {
+  BootPayload,
   HandshakeCommandPayload,
   SensorCalibration,
   UnifiedProtocolCommand,
@@ -95,6 +97,23 @@ export function applyUnifiedMessageToDeviceState(
   nowMs: number = Date.now(),
 ): DeviceState {
   switch (msg.type) {
+    case 'BOOT': {
+      const isSuccess = msg.payload.success;
+      return new DeviceState({
+        ...currentState,
+        gameState: 'BOOT',
+        sensorState: isSuccess ? 'INIT' : 'ERROR',
+        score: 0,
+        elapsedMs: 0,
+        remainingMs: 0,
+        endReason: 'NONE',
+        lastTimerUpdatedAt: null,
+        isReady: false,
+        protoMajor: undefined,
+        protoMinor: undefined,
+      });
+    }
+
     case 'GAME_STATE': {
       const newState = msg.payload.state;
       if (newState === 'UNKNOWN') return currentState;
