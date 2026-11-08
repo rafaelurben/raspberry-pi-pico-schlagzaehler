@@ -36,10 +36,10 @@ typedef enum {
     SENSOR_STATE_CALIBRATING     = 1,
     SENSOR_STATE_ARMED           = 2,
     SENSOR_STATE_HIT_LOCKOUT     = 3,
-    SENSOR_STATE_ERROR           = 4,
-    SENSOR_STATE_CAPTURE_ARMED   = 5,
-    SENSOR_STATE_CAPTURING       = 6,
-    SENSOR_STATE_CAPTURE_TX_WAIT = 7
+    SENSOR_STATE_CAPTURE_ARMED   = 4,
+    SENSOR_STATE_CAPTURING       = 5,
+    SENSOR_STATE_CAPTURE_TX_WAIT = 6,
+    SENSOR_STATE_ERROR           = 7
 } SensorState;
 
 static inline const char* GameMode_to_string(GameMode mode) {
