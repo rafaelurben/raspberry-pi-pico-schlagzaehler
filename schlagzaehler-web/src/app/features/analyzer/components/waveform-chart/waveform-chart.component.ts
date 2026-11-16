@@ -8,7 +8,12 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { PiezoCaptureResult } from '../../../../core/device/models/piezo-capture.model';
+import {
+  PiezoCaptureResult,
+  SensorCalibrationData,
+  getCaptureSensorCalibrations,
+  isAllSensorsTarget,
+} from '../../../../core/device/models/piezo-capture.model';
 
 export type ZoomPreset = 'full' | 'ringdown' | 'impact';
 export type YAxisScale = 'auto' | 'full12bit';
@@ -17,6 +22,7 @@ interface HoverPoint {
   readonly sampleRel: number;
   readonly timeMs: number;
   readonly adcValue: number;
+  readonly sensorId?: number;
 }
 
 @Component({
@@ -27,6 +33,11 @@ export class WaveformChartComponent implements AfterViewInit {
   readonly capture = input.required<PiezoCaptureResult>();
   readonly zoom = input<ZoomPreset>('full');
   readonly yScale = input<YAxisScale>('auto');
+
+  readonly sensorCalibrations = computed<readonly SensorCalibrationData[]>(() =>
+    getCaptureSensorCalibrations(this.capture()),
+  );
+  readonly isAllSensors = computed(() => isAllSensorsTarget(this.capture().target));
 
   private readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('chartCanvas');
   readonly hoverPoint = signal<HoverPoint | null>(null);
@@ -93,8 +104,13 @@ export class WaveformChartComponent implements AfterViewInit {
     const rate = cap.sampleRateHz > 0 ? cap.sampleRateHz : 10000;
     const timeMs = (sampleRel * 1000) / rate;
     const adcValue = cap.samples[idx] ?? 0;
+    const sensorId = this.isAllSensors()
+      ? idx % 3
+      : typeof cap.target === 'number'
+        ? cap.target
+        : 0;
 
-    this.hoverPoint.set({ sampleRel, timeMs, adcValue });
+    this.hoverPoint.set({ sampleRel, timeMs, adcValue, sensorId });
   }
 
   onMouseLeave(): void {
@@ -156,6 +172,10 @@ export class WaveformChartComponent implements AfterViewInit {
     if (this.yScale() === 'auto' && samples.length > 0) {
       let minVal = cap.baseline;
       let maxVal = Math.max(cap.threshold, cap.peak);
+      for (const c of this.sensorCalibrations()) {
+        if (c.baseline < minVal) minVal = c.baseline;
+        if (c.threshold > maxVal) maxVal = c.threshold;
+      }
       for (let i = start; i <= end && i < samples.length; i++) {
         const v = samples[i];
         if (v < minVal) minVal = v;
@@ -218,25 +238,53 @@ export class WaveformChartComponent implements AfterViewInit {
     ctx.rect(padLeft, padTop, plotW, plotH);
     ctx.clip();
 
-    // Baseline reference line
-    const yBase = yToPx(cap.baseline);
-    ctx.strokeStyle = '#34d399';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(padLeft, yBase);
-    ctx.lineTo(padLeft + plotW, yBase);
-    ctx.stroke();
+    // Baseline and Threshold reference lines
+    if (this.isAllSensors()) {
+      const colors = ['#38bdf8', '#34d399', '#f59e0b'];
+      for (const calib of this.sensorCalibrations()) {
+        const sColor = colors[calib.sensorId] ?? '#818cf8';
 
-    // Threshold reference line
-    const yThresh = yToPx(cap.threshold);
-    ctx.strokeStyle = '#fbbf24';
-    ctx.lineWidth = 1.25;
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    ctx.moveTo(padLeft, yThresh);
-    ctx.lineTo(padLeft + plotW, yThresh);
-    ctx.stroke();
+        // Baseline for this sensor
+        const yBase = yToPx(calib.baseline);
+        ctx.strokeStyle = sColor;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(padLeft, yBase);
+        ctx.lineTo(padLeft + plotW, yBase);
+        ctx.stroke();
+
+        // Threshold for this sensor
+        const yThresh = yToPx(calib.threshold);
+        ctx.strokeStyle = sColor;
+        ctx.lineWidth = 1.25;
+        ctx.setLineDash([8, 4]);
+        ctx.beginPath();
+        ctx.moveTo(padLeft, yThresh);
+        ctx.lineTo(padLeft + plotW, yThresh);
+        ctx.stroke();
+      }
+    } else {
+      // Baseline reference line
+      const yBase = yToPx(cap.baseline);
+      ctx.strokeStyle = '#34d399';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padLeft, yBase);
+      ctx.lineTo(padLeft + plotW, yBase);
+      ctx.stroke();
+
+      // Threshold reference line
+      const yThresh = yToPx(cap.threshold);
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 1.25;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padLeft, yThresh);
+      ctx.lineTo(padLeft + plotW, yThresh);
+      ctx.stroke();
+    }
 
     // Trigger vertical line (sample = preSamples)
     if (cap.preSamples >= start && cap.preSamples <= end) {
@@ -254,7 +302,7 @@ export class WaveformChartComponent implements AfterViewInit {
 
     // Waveform path
     if (samples.length > 0 && end >= start) {
-      if (cap.target === 255) {
+      if (this.isAllSensors()) {
         // Multi-channel interleaved mode: draw 3 distinct colored sensor curves
         const colors = ['#38bdf8', '#34d399', '#f59e0b'];
         for (let s = 0; s < 3; s++) {

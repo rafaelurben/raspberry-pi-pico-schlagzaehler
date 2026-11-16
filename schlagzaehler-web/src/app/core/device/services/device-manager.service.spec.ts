@@ -605,6 +605,73 @@ describe('DeviceManagerService', () => {
     expect(cap.samples).toEqual([1850, 1852, 2200, 1860]);
   });
 
+  it('should maintain distinct calibrations for all three sensors in ALL mode capture', async () => {
+    setupService();
+    const transport = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport];
+
+    const dev = await service.connectSerialDevice('Pico 3-Sensor');
+    const deviceId = dev!.id;
+
+    // Send 3 distinct calibration results for Sensor 0, 1, 2
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CALIB success=1 target=0 repeated=false baseline=1800 noise=10 threshold=1850',
+    });
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CALIB success=1 target=1 repeated=false baseline=1900 noise=15 threshold=1960',
+    });
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CALIB success=1 target=2 repeated=false baseline=2000 noise=20 threshold=2070',
+    });
+
+    expect(service.getSensorCalibration(deviceId, 0)?.baseline).toBe(1800);
+    expect(service.getSensorCalibration(deviceId, 1)?.baseline).toBe(1900);
+    expect(service.getSensorCalibration(deviceId, 2)?.baseline).toBe(2000);
+
+    // Start ALL mode capture (target=255)
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_START rate=10000 pre=3 count=6 target=255',
+    });
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_DATA offset=0 values=1801,1902,2003,2100,1905,2002',
+    });
+    transport.eventsSubject.next({
+      type: 'ascii',
+      content: 'CAPTURE_END count=6',
+    });
+
+    const captures = service.captures();
+    expect(captures).toHaveLength(1);
+    const cap = captures[0];
+    expect(cap.target).toBe(255);
+    expect(cap.sensors).toBeDefined();
+    expect(cap.sensors).toHaveLength(3);
+
+    expect(cap.sensors![0]).toEqual({
+      sensorId: 0,
+      baseline: 1800,
+      noise: 10,
+      threshold: 1850,
+    });
+    expect(cap.sensors![1]).toEqual({
+      sensorId: 1,
+      baseline: 1900,
+      noise: 15,
+      threshold: 1960,
+    });
+    expect(cap.sensors![2]).toEqual({
+      sensorId: 2,
+      baseline: 2000,
+      noise: 20,
+      threshold: 2070,
+    });
+  });
+
   it('should respond to ASCII BOOT message with a Handshake command and update state', async () => {
     setupService();
     const transport = new MockDeviceTransport();

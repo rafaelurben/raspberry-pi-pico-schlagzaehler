@@ -4,7 +4,12 @@ import { MAX_RETAINED_EVENTS, SerialConfig } from '../../config/serial.config';
 import { ConnectionState } from '../models/connection-state.type';
 import { DeviceEvent, EventDirection } from '../models/device-event.model';
 import { Device, DeviceState, SelectableGameMode } from '../models/device.model';
-import { CaptureProtocolMessage, PiezoCaptureResult } from '../models/piezo-capture.model';
+import {
+  CaptureProtocolMessage,
+  PiezoCaptureResult,
+  SensorCalibrationData,
+  isAllSensorsTarget,
+} from '../models/piezo-capture.model';
 import { serializeAsciiCommand } from '../protocol/ascii/ascii-payload-parser';
 import { serializeBinaryCommand } from '../protocol/binary/binary-payload-parser';
 import {
@@ -31,6 +36,7 @@ interface InProgressCapture {
   readonly noise: number;
   readonly threshold: number;
   readonly target?: number;
+  readonly sensors?: readonly SensorCalibrationData[];
   readonly samples: Uint16Array;
   receivedCount: number;
 }
@@ -606,10 +612,37 @@ export class DeviceManagerService implements OnDestroy {
     now: number,
   ): void {
     if (msg.type === 'CAPTURE_START') {
-      const cached = this.resolveCachedCalibration(deviceId, msg.target);
-      const baseline = cached.baseline;
-      const noise = cached.noise;
-      const threshold = cached.threshold;
+      const devCalibs = this.sensorCalibrations.get(deviceId);
+      const isAllTarget = isAllSensorsTarget(msg.target);
+
+      let sensors: SensorCalibrationData[];
+      if (isAllTarget) {
+        sensors = [0, 1, 2].map((id) => {
+          const calib = devCalibs?.get(id);
+          const fallback = devCalibs?.get(0) ?? devCalibs?.values().next().value;
+          return {
+            sensorId: id,
+            baseline: calib?.baseline ?? fallback?.baseline ?? 0,
+            noise: calib?.noise ?? fallback?.noise ?? 0,
+            threshold: calib?.threshold ?? fallback?.threshold ?? 0,
+          };
+        });
+      } else {
+        const ch = msg.target !== undefined && msg.target >= 0 && msg.target <= 2 ? msg.target : 0;
+        const calib = devCalibs?.get(ch) ?? devCalibs?.values().next().value;
+        sensors = [
+          {
+            sensorId: ch,
+            baseline: calib?.baseline ?? 0,
+            noise: calib?.noise ?? 0,
+            threshold: calib?.threshold ?? 0,
+          },
+        ];
+      }
+
+      const baseline = sensors[0]?.baseline ?? 0;
+      const noise = sensors[0]?.noise ?? 0;
+      const threshold = sensors[0]?.threshold ?? 0;
 
       const samples = new Uint16Array(msg.totalSamples);
       samples.fill(baseline);
@@ -622,6 +655,7 @@ export class DeviceManagerService implements OnDestroy {
         noise,
         threshold,
         target: msg.target,
+        sensors,
         samples,
         receivedCount: 0,
       });
@@ -685,6 +719,7 @@ export class DeviceManagerService implements OnDestroy {
           noise: active.noise,
           threshold: active.threshold,
           target: active.target,
+          sensors: active.sensors,
           peak,
           samples: Array.from(active.samples),
         };

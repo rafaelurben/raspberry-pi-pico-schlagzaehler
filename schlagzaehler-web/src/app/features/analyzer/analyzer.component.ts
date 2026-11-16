@@ -2,7 +2,12 @@ import { DatePipe } from '@angular/common';
 import { Component, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { PiezoCaptureResult } from '../../core/device/models/piezo-capture.model';
+import {
+  PiezoCaptureResult,
+  SensorCalibrationData,
+  getCaptureSensorCalibrations,
+  isAllSensorsTarget,
+} from '../../core/device/models/piezo-capture.model';
 import { DeviceManagerService } from '../../core/device/services/device-manager.service';
 import {
   WaveformChartComponent,
@@ -135,6 +140,14 @@ export class AnalyzerComponent {
       return `Sensor ${target}`;
     }
     return 'Sensor 0';
+  }
+
+  isAllTarget(target: unknown): boolean {
+    return isAllSensorsTarget(target);
+  }
+
+  getSensorCalibrations(cap: PiezoCaptureResult): readonly SensorCalibrationData[] {
+    return getCaptureSensorCalibrations(cap);
   }
 
   async onArmCapture(): Promise<void> {
