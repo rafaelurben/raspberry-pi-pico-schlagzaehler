@@ -142,35 +142,13 @@ The RP2040's two ARM Cortex-M0+ cores have strictly separated responsibilities a
 
 ## 5. USB CDC Companion Protocol
 
-Communication with `schlagzaehler-web` uses newline-delimited (`\n`) ASCII messages at `115200` baud.
+The Pico firmware communicates with `schlagzaehler-web` and serial terminals over USB CDC Serial (`115200` baud) using a dual-mode architecture:
+- **Framed Binary Protocol (TLV)**: Packet-based with 16-bit CRC for high-speed raw ADC capture streaming and low-overhead telemetry.
+- **ASCII Protocol**: Kept side-by-side for CLI terminal debugging (`minicom`, screen, Arduino Serial Monitor).
 
-### Outgoing Events (Core 1 -> Companion Web App)
+For the authoritative specification of wire framing, binary packet diagrams, command/telemetry payloads, session handshakes, and inter-core IPC messages, consult the Interface Control Document:
+- [**Interface Control Document (ICD): Companion Protocol & Inter-Core IPC (`docs/protocol.md`)**](../docs/protocol.md)
 
-- `BOOT success=<0|1> msg=<text>`
-- `SENSOR status=<INIT|CALIBRATING|ARMED|LOCKOUT|CAPTURE_ARMED|CAPTURING|TRANSMITTING|ERROR>`
-- `CALIB success=<0|1> target=<0|1|2> baseline=<u16> noise=<u16> threshold=<u16> ignored=<true|false>`
-- `HIT id=<u32> target=<0|1|2> peak=<u16> intensity=<u16>`
-- `STATE old=<BOOT|MENU|READY|RUNNING|FINISHED|CAPTURING> new=<...>`
-- `MODE active=<COUNT|TIMED|RACE> param=<u32>`
-- `SCORE value=<u32>`
-- `TIMER elapsed=<u32> remaining=<u32>`
-- `RESULT score=<u32> time_ms=<u32> reason=<NONE|TIME_LIMIT|TARGET_REACHED|ABORTED>`
-- `CAPTURE_START rate=<u32> pre=<u16> count=<u16> target=<0|1|2|all> baseline=<u16> noise=<u16> threshold=<u16>`
-- `CAPTURE_DATA offset=<u16> values=<v0>,<v1>,...`
-- `CAPTURE_END count=<u16>`
-- `ERROR code=<u32> comp=<name> msg=<text>`
-
-### Incoming Commands (Companion Web App -> Core 1)
-
-- `START`: Start game (if in `MENU` or `READY`) or restart (if `FINISHED`).
-- `RESET`: Abort/reset current game back to `READY` with score 0 (also cancels active capture).
-- `CALIB`: Trigger sensor recalibration for all sensors.
-- `STATUS`: Broadcast a full state snapshot (`SENSOR`, `STATE`, `MODE`, `SCORE`, `TIMER`).
-- `CAPTURE [target=<0|1|2|all>]` (or `CAPTURE:START ...`): Arm single-shot raw piezo waveform capture for a target piezo or all piezos (`1,000` pre + `20,000` post samples at `10 kHz`).
-- `CAPTURE:STOP`: Cancel armed or ongoing raw piezo waveform capture.
-- `MODE:<COUNT|TIMED|RACE|0|1|2>`: Switch active game mode.
-- `PARAM:<u32>`: Set mode parameter (seconds for `TIMED`, target hits for `RACE`).
-- `SENS:<float>`: Set piezo sensitivity (`noise_factor`, clamped to `1.0`–`20.0`) for all sensors.
 
 ---
 

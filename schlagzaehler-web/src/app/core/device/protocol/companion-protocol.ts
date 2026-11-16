@@ -1,52 +1,68 @@
+import { DeviceState, GameState, SelectableGameMode, SensorState } from '../models/device.model';
+import { parseAsciiPayload, serializeAsciiCommand } from './ascii/ascii-payload-parser';
 import {
-  DeviceState,
-  GameEndReason,
-  GameMode,
-  GameState,
-  SelectableGameMode,
-  SensorState,
-} from '../models/device.model';
-import { CaptureProtocolMessage } from '../models/piezo-capture.model';
+  parseBinaryPayload,
+  resetSequenceCounter,
+  serializeBinaryCommand,
+} from './binary/binary-payload-parser';
+import { BinaryCaptureAction, BinaryGameMode } from './binary/binary-protocol.types';
+import {
+  BootPayload,
+  HandshakeCommandPayload,
+  SensorCalibration,
+  UnifiedProtocolCommand,
+  UnifiedProtocolMessage,
+} from './companion-protocol.types';
+import { TransportEvent } from '../transport/device-transport.interface';
 
-const VALID_GAME_MODES = new Set<GameMode>(['COUNT', 'TIMED', 'RACE', 'UNKNOWN']);
-const VALID_GAME_STATES = new Set<GameState>([
-  'BOOT',
-  'MENU',
-  'READY',
-  'RUNNING',
-  'FINISHED',
-  'CAPTURING',
-  'UNKNOWN',
-]);
-const VALID_SENSOR_STATES = new Set<SensorState>([
-  'INIT',
-  'CALIBRATING',
-  'ARMED',
-  'LOCKOUT',
-  'CAPTURE_ARMED',
-  'CAPTURING',
-  'CAPTURE_TX_WAIT',
-  'ERROR',
-  'UNKNOWN',
-]);
-const VALID_END_REASONS = new Set<GameEndReason>([
-  'NONE',
-  'TIME_LIMIT',
-  'TARGET_REACHED',
-  'ABORTED',
-]);
+export { resetSequenceCounter, serializeAsciiCommand, serializeBinaryCommand };
+export type {
+  BootPayload,
+  HandshakeCommandPayload,
+  SensorCalibration,
+  UnifiedProtocolCommand,
+  UnifiedProtocolMessage,
+};
 
+/**
+ * Command builder generating UnifiedProtocolCommand objects.
+ */
 export const CompanionCommands = {
-  start: (): string => 'START',
-  reset: (): string => 'RESET',
-  calibrate: (): string => 'CALIB',
-  status: (): string => 'STATUS',
-  captureStart: (target?: number | 'all'): string =>
-    target !== undefined ? `CAPTURE:${target}` : 'CAPTURE',
-  captureStop: (): string => 'CAPTURE:STOP',
-  setMode: (mode: SelectableGameMode): string => `MODE:${mode}`,
-  setParameter: (param: number): string => `PARAM:${Math.max(1, Math.floor(param))}`,
-  setSensitivity: (sensitivity: number): string => `SENS:${sensitivity}`,
+  start: (): UnifiedProtocolCommand => ({ type: 'START' }),
+  reset: (): UnifiedProtocolCommand => ({ type: 'RESET' }),
+  calibrate: (): UnifiedProtocolCommand => ({ type: 'CALIBRATE' }),
+  status: (): UnifiedProtocolCommand => ({ type: 'STATUS' }),
+  setMode: (mode: SelectableGameMode | BinaryGameMode): UnifiedProtocolCommand => ({
+    type: 'SET_MODE',
+    payload: { mode },
+  }),
+  setParameter: (param: number): UnifiedProtocolCommand => ({
+    type: 'SET_PARAMETER',
+    payload: { parameter: Math.max(1, Math.floor(param)) },
+  }),
+  setSensitivity: (noiseFactor: number): UnifiedProtocolCommand => ({
+    type: 'SET_SENSITIVITY',
+    payload: { noiseFactor },
+  }),
+  capture: (
+    action: 'start' | 'stop' | BinaryCaptureAction,
+    target?: number | 'all',
+  ): UnifiedProtocolCommand => ({
+    type: 'CAPTURE',
+    payload: { action, target },
+  }),
+  captureStart: (target?: number | 'all'): UnifiedProtocolCommand => ({
+    type: 'CAPTURE',
+    payload: { action: 'start', target },
+  }),
+  captureStop: (): UnifiedProtocolCommand => ({
+    type: 'CAPTURE',
+    payload: { action: 'stop' },
+  }),
+  handshake: (payload?: HandshakeCommandPayload): UnifiedProtocolCommand => ({
+    type: 'HANDSHAKE',
+    payload,
+  }),
 } as const;
 
 function computeIsReady(
@@ -60,112 +76,47 @@ function computeIsReady(
   return gameState === 'READY' || gameState === 'RUNNING' || sensorState === 'ARMED';
 }
 
-function parseKeyValuePairs(tokens: readonly string[]): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const token of tokens) {
-    const eqIdx = token.indexOf('=');
-    if (eqIdx > 0) {
-      const key = token.slice(0, eqIdx);
-      const val = token.slice(eqIdx + 1);
-      result[key] = val;
-    }
+/**
+ * Universal protocol parser converting any neutral TransportEvent (binary frame or ASCII line)
+ * into a strongly typed UnifiedProtocolMessage.
+ */
+export function parseTransportEvent(event: TransportEvent): UnifiedProtocolMessage | null {
+  if (event.type === 'binary') {
+    return parseBinaryPayload(event.content);
   }
-  return result;
+  return parseAsciiPayload(event.content);
 }
 
 /**
- * Parses CAPTURE_START, CAPTURE_DATA, or CAPTURE_END messages if matched.
+ * Core application state reducer that applies any UnifiedProtocolMessage to a DeviceState.
+ * After Layer 2, there is zero difference between ASCII and binary message handling.
  */
-export function parseCaptureMessage(rawLine: string): CaptureProtocolMessage | null {
-  const trimmed = rawLine.trim();
-  if (!trimmed.startsWith('CAPTURE_')) {
-    return null;
-  }
-
-  const parts = trimmed.split(/\s+/);
-  const type = parts[0];
-  const kv = parseKeyValuePairs(parts.slice(1));
-
-  if (type === 'CAPTURE_START') {
-    const sampleRateHz = Number.parseInt(kv['rate'] ?? '10000', 10);
-    const preSamples = Number.parseInt(kv['pre'] ?? '1000', 10);
-    const totalSamples = Number.parseInt(kv['count'] ?? '21000', 10);
-    const baseline = Number.parseInt(kv['baseline'] ?? '0', 10);
-    const noise = Number.parseInt(kv['noise'] ?? '0', 10);
-    const threshold = Number.parseInt(kv['threshold'] ?? '0', 10);
-    const targetParsed = Number.parseInt(kv['target'] ?? '', 10);
-    const target = Number.isNaN(targetParsed) ? undefined : targetParsed;
-
-    if (Number.isNaN(totalSamples) || totalSamples <= 0) {
-      return null;
-    }
-
-    return {
-      type: 'CAPTURE_START',
-      sampleRateHz: Number.isNaN(sampleRateHz) ? 10000 : sampleRateHz,
-      preSamples: Number.isNaN(preSamples) ? 0 : preSamples,
-      totalSamples,
-      baseline: Number.isNaN(baseline) ? 0 : baseline,
-      noise: Number.isNaN(noise) ? 0 : noise,
-      threshold: Number.isNaN(threshold) ? 0 : threshold,
-      target,
-    };
-  }
-
-  if (type === 'CAPTURE_DATA') {
-    const offset = Number.parseInt(kv['offset'] ?? '0', 10);
-    const rawValues = kv['values'] ?? '';
-    if (Number.isNaN(offset) || offset < 0 || !rawValues) {
-      return null;
-    }
-    const values: number[] = [];
-    for (const part of rawValues.split(',')) {
-      const n = Number.parseInt(part, 10);
-      if (!Number.isNaN(n)) {
-        values.push(n);
-      }
-    }
-    return {
-      type: 'CAPTURE_DATA',
-      offset,
-      values,
-    };
-  }
-
-  if (type === 'CAPTURE_END') {
-    const totalSamples = Number.parseInt(kv['count'] ?? '0', 10);
-    return {
-      type: 'CAPTURE_END',
-      totalSamples: Number.isNaN(totalSamples) ? 0 : totalSamples,
-    };
-  }
-
-  return null;
-}
-
-/**
- * Parses a single newline-delimited message from the Pico companion protocol
- * and returns an updated DeviceState.
- */
-export function parseCompanionMessage(
-  rawLine: string,
+export function applyUnifiedMessageToDeviceState(
   currentState: DeviceState,
+  msg: UnifiedProtocolMessage,
   nowMs: number = Date.now(),
 ): DeviceState {
-  const trimmed = rawLine.trim();
-  if (!trimmed) {
-    return currentState;
-  }
+  switch (msg.type) {
+    case 'BOOT': {
+      const isSuccess = msg.payload.success;
+      return new DeviceState({
+        ...currentState,
+        gameState: 'BOOT',
+        sensorState: isSuccess ? 'INIT' : 'ERROR',
+        score: 0,
+        elapsedMs: 0,
+        remainingMs: 0,
+        endReason: 'NONE',
+        lastTimerUpdatedAt: null,
+        isReady: false,
+        protoMajor: undefined,
+        protoMinor: undefined,
+      });
+    }
 
-  const parts = trimmed.split(/\s+/);
-  const type = parts[0];
-  const kv = parseKeyValuePairs(parts.slice(1));
-
-  switch (type) {
-    case 'STATE': {
-      const rawNew = kv['new'] as GameState | undefined;
-      const newState: GameState =
-        rawNew && VALID_GAME_STATES.has(rawNew) ? rawNew : currentState.gameState;
+    case 'GAME_STATE': {
+      const newState = msg.payload.state;
+      if (newState === 'UNKNOWN') return currentState;
 
       let elapsedMs = currentState.elapsedMs;
       let remainingMs = currentState.remainingMs;
@@ -206,12 +157,8 @@ export function parseCompanionMessage(
       });
     }
 
-    case 'MODE': {
-      const rawMode = kv['active'] as GameMode | undefined;
-      const mode: GameMode = rawMode && VALID_GAME_MODES.has(rawMode) ? rawMode : currentState.mode;
-      const paramParsed = Number.parseInt(kv['param'] ?? '', 10);
-      const parameter = Number.isNaN(paramParsed) ? currentState.parameter : paramParsed;
-
+    case 'GAME_MODE': {
+      const { mode, parameter } = msg.payload;
       const isRunning = currentState.gameState === 'RUNNING';
       const elapsedMs = isRunning ? currentState.elapsedMs : 0;
       const remainingMs = isRunning
@@ -230,24 +177,14 @@ export function parseCompanionMessage(
     }
 
     case 'SCORE': {
-      const scoreParsed = Number.parseInt(kv['value'] ?? '', 10);
-      if (Number.isNaN(scoreParsed)) {
-        return currentState;
-      }
       return new DeviceState({
         ...currentState,
-        score: scoreParsed,
+        score: msg.payload.score,
       });
     }
 
     case 'TIMER': {
-      const elapsedParsed = Number.parseInt(kv['elapsed'] ?? '', 10);
-      const remainingParsed = Number.parseInt(kv['remaining'] ?? '', 10);
-      const elapsedMs = Number.isNaN(elapsedParsed) ? currentState.elapsedMs : elapsedParsed;
-      const remainingMs = Number.isNaN(remainingParsed)
-        ? currentState.remainingMs
-        : remainingParsed;
-
+      const { elapsedMs, remainingMs } = msg.payload;
       return new DeviceState({
         ...currentState,
         elapsedMs,
@@ -256,33 +193,25 @@ export function parseCompanionMessage(
       });
     }
 
-    case 'RESULT': {
-      const scoreParsed = Number.parseInt(kv['score'] ?? '', 10);
-      const timeParsed = Number.parseInt(kv['time_ms'] ?? '', 10);
-      const rawReason = kv['reason'] as GameEndReason | undefined;
-
-      const score = Number.isNaN(scoreParsed) ? currentState.score : scoreParsed;
-      const elapsedMs = Number.isNaN(timeParsed) ? currentState.elapsedMs : timeParsed;
-      const endReason: GameEndReason =
-        rawReason && VALID_END_REASONS.has(rawReason) ? rawReason : currentState.endReason;
-      const remainingMs = endReason === 'TIME_LIMIT' ? 0 : currentState.remainingMs;
+    case 'GAME_FINISHED': {
+      const { finalScore, totalTimeMs, reason } = msg.payload;
+      const remainingMs = reason === 'TIME_LIMIT' ? 0 : currentState.remainingMs;
 
       return new DeviceState({
         ...currentState,
         gameState: 'FINISHED',
-        score,
-        elapsedMs,
+        score: finalScore,
+        elapsedMs: totalTimeMs,
         remainingMs,
-        endReason,
+        endReason: reason,
         lastTimerUpdatedAt: null,
         isReady: computeIsReady(currentState.connectionState, 'FINISHED', currentState.sensorState),
       });
     }
 
-    case 'SENSOR': {
-      const rawStatus = kv['status'] as SensorState | undefined;
-      const sensorState: SensorState =
-        rawStatus && VALID_SENSOR_STATES.has(rawStatus) ? rawStatus : currentState.sensorState;
+    case 'SENSOR_STATUS': {
+      const sensorState = msg.payload.state;
+      if (sensorState === 'UNKNOWN') return currentState;
 
       return new DeviceState({
         ...currentState,
@@ -291,9 +220,11 @@ export function parseCompanionMessage(
       });
     }
 
-    case 'CALIB': {
-      const success = kv['success'] === '1';
-      const sensorState: SensorState = success ? 'ARMED' : 'ERROR';
+    case 'CALIBRATION_RESULT': {
+      if (msg.payload.repeated) {
+        return currentState;
+      }
+      const sensorState: SensorState = msg.payload.ignored ? 'ERROR' : 'ARMED';
       return new DeviceState({
         ...currentState,
         sensorState,
@@ -301,13 +232,16 @@ export function parseCompanionMessage(
       });
     }
 
-    case 'BOOT': {
-      const gameState: GameState =
-        currentState.gameState === 'UNKNOWN' ? 'BOOT' : currentState.gameState;
+    case 'HANDSHAKE_ACK': {
+      const ack = msg.payload;
       return new DeviceState({
         ...currentState,
-        gameState,
-        isReady: computeIsReady(currentState.connectionState, gameState, currentState.sensorState),
+        hardwareGen: ack.hardwareGen,
+        hardwareRev: ack.hardwareRev,
+        protoMajor: ack.protoMajor,
+        protoMinor: ack.protoMinor,
+        fwVersion: `${ack.fwMajor}.${ack.fwMinor}.${ack.fwPatch}`,
+        uptimeMs: ack.uptimeMs,
       });
     }
 

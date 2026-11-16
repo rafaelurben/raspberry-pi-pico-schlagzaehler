@@ -23,9 +23,10 @@ Schlagzähler is a piezo-based hit detection and interactive game system. One or
 
 ## 2. System Integration (Companion Protocol)
 
-The Pico firmware (`CompanionProtocol`) and the Angular web app (`companion-protocol.ts`) communicate over USB CDC Serial (`115200` baud, newline-delimited `\n` ASCII messages):
-
-- **Telemetry (`Pico -> Web`)**: `BOOT`, `SENSOR`, `CALIB`, `HIT`, `STATE`, `MODE`, `SCORE`, `TIMER`, `RESULT`, `CAPTURE_START`, `CAPTURE_DATA`, `CAPTURE_END`, `ERROR`.
-- **Commands (`Web -> Pico`)**: `START`, `RESET`, `CALIB`, `STATUS`, `CAPTURE [target=<0|1|2|all>]`, `CAPTURE:STOP`, `MODE:<COUNT|TIMED|RACE>`, `PARAM:<u32>`, `SENS:<float>`.
+The Pico firmware and the companion application communicate over USB CDC Serial (`115200` baud) using a dual-mode protocol (Framed Binary TLV with side-by-side ASCII support).
 
 The hardware device on Core 0 is always the authoritative source of truth for sensor calibration, hit detection, game state transitions, scores, and timers.
+
+For the authoritative specification of wire framing, binary packet diagrams, command/telemetry payloads, session handshakes, and inter-core IPC messages, consult the Interface Control Document:
+- **[`docs/protocol.md`](./docs/protocol.md)**
+

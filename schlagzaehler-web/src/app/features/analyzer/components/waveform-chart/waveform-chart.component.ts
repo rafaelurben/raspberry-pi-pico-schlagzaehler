@@ -254,7 +254,7 @@ export class WaveformChartComponent implements AfterViewInit {
 
     // Waveform path
     if (samples.length > 0 && end >= start) {
-      if (cap.target === 3) {
+      if (cap.target === 255) {
         // Multi-channel interleaved mode: draw 3 distinct colored sensor curves
         const colors = ['#38bdf8', '#34d399', '#f59e0b'];
         for (let s = 0; s < 3; s++) {

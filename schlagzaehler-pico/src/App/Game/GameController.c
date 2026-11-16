@@ -92,7 +92,7 @@ void GameController_init(GameController* gc, const Config* config, OsalQueue* qu
 
     gc->queue_to_core1 = queue_to_core1;
     gc->last_sensor_state = SENSOR_STATE_INIT;
-    gc->capture_target = 3;
+    gc->capture_target = 255;
     gc->pre_capture_state = GAME_STATE_READY;
     gc->last_timer_broadcast_us = 0;
 
@@ -158,6 +158,7 @@ void GameController_on_sensor_state(
                 .data.calibration_result = {
                     .success = true,
                     .ignored = ignored ? ignored[s] : false,
+                    .repeated = false,
                     .sensor_id = s,
                     .baseline = baselines ? baselines[s] : 0,
                     .noise = noises ? noises[s] : 0,
@@ -181,6 +182,7 @@ void GameController_on_sensor_state(
                 .data.calibration_result = {
                     .success = false,
                     .ignored = ignored ? ignored[s] : false,
+                    .repeated = false,
                     .sensor_id = s,
                     .baseline = baselines ? baselines[s] : 0,
                     .noise = noises ? noises[s] : 0,

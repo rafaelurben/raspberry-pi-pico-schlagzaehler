@@ -148,7 +148,7 @@ SensorState HitDetector_get_state(const HitDetector* detector) {
 }
 
 uint8_t HitDetector_get_capture_target(const HitDetector* detector) {
-    return detector ? (uint8_t)detector->capture.target : 3;
+    return detector ? (uint8_t)detector->capture.target : 255;
 }
 
 uint8_t HitDetector_get_calibration_progress(const HitDetector* detector) {

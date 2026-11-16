@@ -27,7 +27,7 @@ void DisplayPresenter_init(DisplayPresenter* presenter) {
     presenter->calib_percent = 0;
     presenter->baseline = 0;
     presenter->threshold = 0;
-    presenter->capture_target = 3;
+    presenter->capture_target = 255;
 
     presenter->needs_full_redraw = true;
     presenter->needs_score_redraw = false;

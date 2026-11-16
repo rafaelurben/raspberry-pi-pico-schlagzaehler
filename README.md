@@ -180,39 +180,13 @@ The RP2040's dual ARM Cortex-M0+ cores run strictly separated roles communicatin
 
 ## 5. System Integration (Companion Protocol)
 
-Communication over USB CDC Serial runs at `115200` baud using newline-delimited (`\n`) ASCII messages:
+Communication between the Raspberry Pi Pico W firmware and companion software runs over USB CDC Serial (`115200` baud) using a dual-mode protocol:
+- **Framed Binary Protocol (TLV)**: High-efficiency packet-based communication with 16-bit CRC, supporting fast raw ADC waveform streaming, structured telemetry, and runtime capability negotiation.
+- **ASCII Protocol**: Human-readable, line-delimited format maintained side-by-side for serial terminals (`minicom`, Arduino Serial Monitor) and simple scripting.
 
-### Telemetry (`Pico -> Web`)
+For the complete protocol specification, packet diagrams, session handshake lifecycle, and payload definitions, see:
+- [**Interface Control Document (ICD): Companion Protocol & Inter-Core IPC (`docs/protocol.md`)**](./docs/protocol.md)
 
-| Message | Format / Parameters | Description |
-| --- | --- | --- |
-| `BOOT` | `BOOT success=<0\|1> msg=<text>` | Initial firmware boot status. |
-| `SENSOR` | `SENSOR status=<INIT\|CALIBRATING\|ARMED\|LOCKOUT\|CAPTURE_ARMED\|CAPTURING\|TRANSMITTING\|ERROR>` | Current sensor state. |
-| `CALIB` | `CALIB success=<0\|1> baseline=<u16> noise=<u16> threshold=<u16>` | Calibration results. |
-| `HIT` | `HIT id=<u32> peak=<u16> intensity=<u16>` | Registered piezo hit event. |
-| `STATE` | `STATE old=<state> new=<state>` | Authoritative game state transition. |
-| `MODE` | `MODE active=<mode> param=<u32>` | Active game mode and parameter. |
-| `SCORE` | `SCORE value=<u32>` | Current score update. |
-| `TIMER` | `TIMER elapsed=<ms> remaining=<ms>` | Periodic timer update (active games). |
-| `RESULT` | `RESULT score=<u32> time_ms=<u32> reason=<reason>` | Final game result on completion. |
-| `CAPTURE_START` | `CAPTURE_START rate=<hz> pre=<u16> count=<u16> baseline=<u16> noise=<u16> threshold=<u16>` | Header for raw signal capture. |
-| `CAPTURE_DATA` | `CAPTURE_DATA offset=<u16> values=<v0>,<v1>,...` | Chunk of 50 raw ADC waveform samples. |
-| `CAPTURE_END` | `CAPTURE_END count=<u16>` | Terminal message for waveform transfer. |
-| `ERROR` | `ERROR code=<u32> comp=<component> msg=<text>` | System error notice. |
-
-### Commands (`Web -> Pico`)
-
-| Command | Syntax | Description |
-| --- | --- | --- |
-| `START` | `START` | Starts game from `READY` state. |
-| `RESET` | `RESET` | Resets game to `READY` state and stops active capture. |
-| `CALIB` | `CALIB` | Triggers sensor recalibration (1.5 s). |
-| `STATUS` | `STATUS` | Requests immediate telemetry broadcast. |
-| `CAPTURE` | `CAPTURE` or `CAPTURE:START` | Arms raw piezo signal capture mode. |
-| `CAPTURE:STOP` | `CAPTURE:STOP` | Cancels raw piezo signal capture mode. |
-| `MODE` | `MODE:<COUNT\|TIMED\|RACE>` | Sets game mode. |
-| `PARAM` | `PARAM:<u32>` | Sets game parameter (seconds for `TIMED`, hits for `RACE`). |
-| `SENS` | `SENS:<float>` | Sets sensor noise factor multiplier (1.0 to 30.0). |
 
 ---
 

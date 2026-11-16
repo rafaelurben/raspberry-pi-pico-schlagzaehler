@@ -24,6 +24,12 @@ export type GameEndReason = 'NONE' | 'TIME_LIMIT' | 'TARGET_REACHED' | 'ABORTED'
 export interface DeviceMetadata {
   readonly usbVendorId?: number;
   readonly usbProductId?: number;
+  readonly hardwareGen?: number;
+  readonly hardwareRev?: number;
+  readonly protoMajor?: number;
+  readonly protoMinor?: number;
+  readonly fwVersion?: string;
+  readonly uptimeMs?: number;
   readonly [key: string]: unknown;
 }
 
@@ -42,6 +48,12 @@ export class DeviceState {
   readonly remainingMs: number = 0;
   readonly endReason: GameEndReason = 'NONE';
   readonly lastTimerUpdatedAt: number | null = null;
+  readonly hardwareGen?: number;
+  readonly hardwareRev?: number;
+  readonly protoMajor?: number;
+  readonly protoMinor?: number;
+  readonly fwVersion?: string;
+  readonly uptimeMs?: number;
 
   constructor(init?: Partial<DeviceState>) {
     if (init) {
