@@ -12,7 +12,7 @@ function isPrintableAscii(str: string): boolean {
   if (str.length === 0) return false;
   for (let i = 0; i < str.length; i++) {
     const code = str.charCodeAt(i);
-    if ((code < 0x20 && code !== 0x09) || code === 0x7f) {
+    if ((code < 0x20 && code !== 0x09) || code >= 0x7f) {
       return false;
     }
   }
@@ -49,7 +49,7 @@ export class DualEventParser {
     while (this.buffer.length > 0) {
       // 0. Skip leading control / non-printable noise bytes (except \r, \n, \t)
       const b0 = this.buffer[0];
-      if ((b0 < 0x20 && b0 !== 0x09 && b0 !== 0x0a && b0 !== 0x0d) || b0 === 0x7f) {
+      if ((b0 < 0x20 && b0 !== 0x09 && b0 !== 0x0a && b0 !== 0x0d) || b0 >= 0x7f) {
         this.buffer = this.buffer.slice(1);
         continue;
       }
@@ -74,9 +74,25 @@ export class DualEventParser {
           this.buffer = this.buffer.slice(result.totalLength);
           continue;
         } else {
-          // CRC mismatch: error already logged by BinaryFrameParser.
-          // Advance 1 byte and resume scanning to find subsequent sync word or newline
-          this.buffer = this.buffer.slice(1);
+          // CRC mismatch: frame starting at index 0 is corrupted.
+          // Seek directly to the next binary sync word (0x55, 0xAA) to resynchronize,
+          // rather than falling back into ASCII newline scanning over binary payload data.
+          let nextSync = -1;
+          for (let i = 2; i < this.buffer.length - 1; i++) {
+            if (this.buffer[i] === SYNC_BYTE_0 && this.buffer[i + 1] === SYNC_BYTE_1) {
+              nextSync = i;
+              break;
+            }
+          }
+
+          if (nextSync !== -1) {
+            this.buffer = this.buffer.slice(nextSync);
+          } else {
+            // No subsequent sync word in buffer. If the last byte could be the start
+            // of a sync word (0x55), retain it; otherwise discard the corrupted frame data.
+            this.buffer =
+              this.buffer.at(-1) === SYNC_BYTE_0 ? this.buffer.slice(-1) : new Uint8Array(0);
+          }
           continue;
         }
       }
@@ -93,26 +109,32 @@ export class DualEventParser {
       }
 
       if (nlIdx !== -1 && (syncIdx === -1 || nlIdx < syncIdx)) {
-        // Full ASCII line found before any sync word
+        // Line feed found before any sync word. Check if it's valid printable ASCII.
         const lineBytes = this.buffer.subarray(0, nlIdx);
-        this.buffer = this.buffer.slice(nlIdx + 1);
-
         let line = this.textDecoder.decode(lineBytes);
         if (line.endsWith('\r')) {
           line = line.slice(0, -1);
         }
         line = line.trim();
-        if (line.length > 0) {
-          if (isPrintableAscii(line)) {
-            events.push({
-              type: 'ascii',
-              content: line,
-            });
-          } else {
-            console.warn('[DualEventParser] Discarded corrupt/non-printable ASCII line:', line);
-          }
+
+        if (isPrintableAscii(line)) {
+          this.buffer = this.buffer.slice(nlIdx + 1);
+          events.push({
+            type: 'ascii',
+            content: line,
+          });
+          continue;
+        } else if (syncIdx !== -1) {
+          // The data before nlIdx is not printable ASCII (likely binary garbage) and a sync word exists ahead.
+          // Skip directly to the sync word to resynchronize on the binary stream.
+          this.buffer = this.buffer.slice(syncIdx);
+          continue;
+        } else {
+          // Non-printable garbage before nlIdx and no sync word yet.
+          this.buffer = this.buffer.slice(nlIdx + 1);
+          console.warn('[DualEventParser] Discarded corrupt/non-printable ASCII line:', line);
+          continue;
         }
-        continue;
       }
 
       if (syncIdx !== -1 && (nlIdx === -1 || syncIdx < nlIdx)) {
