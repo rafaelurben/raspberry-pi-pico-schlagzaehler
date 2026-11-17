@@ -895,6 +895,108 @@ void test_ignored_sensor_calibration_and_detection(void) {
     printf("PASS: test_ignored_sensor_calibration_and_detection\n");
 }
 
+void test_all_sensors_ignored_transitions_to_error(void) {
+    Config cfg;
+    Config_set_defaults(&cfg);
+    cfg.calibration_duration_ms = 100;
+    cfg.calibration_min_samples = 300; /* 100 per sensor */
+    cfg.min_threshold_delta = 25;
+    cfg.lockout_duration_ms = 100;
+    cfg.min_baseline_for_active_sensor = 128;
+
+    HitDetector hd;
+    HitDetector_init(&hd, &cfg);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_INIT);
+
+    /* Feed quiet samples where ALL 3 sensors have baseline < min_baseline_for_active_sensor */
+    uint16_t samples[384];
+    for (int t = 0; t < 128; ++t) {
+        samples[t * 3 + 0] = 50 + (t % 2);
+        samples[t * 3 + 1] = 60 + (t % 2);
+        samples[t * 3 + 2] = 40 + (t % 2);
+    }
+
+    HitEvent ev;
+    HitDetector_process_buffer(&hd, samples, 384, &ev);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_CALIBRATING);
+
+    s_mock_time_us += 120000;
+    HitDetector_process_buffer(&hd, samples, 384, &ev);
+
+    /* When all 3 sensors are ignored, sensor state MUST be SENSOR_STATE_ERROR */
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_ERROR);
+    assert(HitDetector_is_sensor_ignored(&hd, 0) == true);
+    assert(HitDetector_is_sensor_ignored(&hd, 1) == true);
+    assert(HitDetector_is_sensor_ignored(&hd, 2) == true);
+
+    /* Ensure start_capture is rejected in SENSOR_STATE_ERROR */
+    assert(HitDetector_start_capture(&hd, 0) == false);
+    assert(HitDetector_start_capture(&hd, CAPTURE_TARGET_ALL) == false);
+
+    /* Ensure process_buffer rejects hits in SENSOR_STATE_ERROR */
+    samples[2 * 3 + 0] = 3000;
+    assert(HitDetector_process_buffer(&hd, samples, 384, &ev) == false);
+
+    /* Test integration with GameController: state stays in BOOT and calibration results are marked failed */
+    OsalQueue q0_to_1;
+    MockQueueStorage q0_storage;
+    OsalQueue_init(&q0_to_1, &q0_storage, sizeof(Core0ToCore1Message), 16);
+    GameController gc;
+    GameController_init(&gc, &cfg, &q0_to_1);
+    assert(GameController_get_state(&gc)->state == GAME_STATE_BOOT);
+
+    uint16_t baselines[3] = {50, 60, 40};
+    uint16_t noises[3] = {1, 1, 1};
+    uint16_t thresholds[3] = {75, 85, 65};
+    bool ignored[3] = {true, true, true};
+    GameController_on_sensor_state(&gc, SENSOR_STATE_CALIBRATING, 0, NULL, NULL, NULL, NULL);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_ERROR, 0, baselines, noises, thresholds, ignored);
+
+    /* Game state should remain GAME_STATE_BOOT (not transition to READY) */
+    assert(GameController_get_state(&gc)->state == GAME_STATE_BOOT);
+
+    /* Verify messages popped from q0_to_1 include status change to ERROR and calibration failures */
+    bool found_status_error = false;
+    int calib_failure_count = 0;
+    Core0ToCore1Message msg;
+    while (OsalQueue_pop(&q0_to_1, &msg)) {
+        if (msg.type == MSG_SENSOR_STATUS_CHANGED) {
+            if (msg.data.sensor_status.state == SENSOR_STATE_ERROR) {
+                found_status_error = true;
+            }
+        } else if (msg.type == MSG_CALIBRATION_RESULT) {
+            if (!msg.data.calibration_result.success && msg.data.calibration_result.ignored) {
+                calib_failure_count++;
+            }
+        }
+    }
+    assert(found_status_error);
+    assert(calib_failure_count == 3);
+
+    /* Test DisplayPresenter rendering on SENSOR_STATE_ERROR */
+    DisplayPresenter dp;
+    DisplayPresenter_init(&dp);
+    s_display_string_count = 0;
+    Core0ToCore1Message status_msg = {
+        .type = MSG_SENSOR_STATUS_CHANGED,
+        .timestamp_us = 1000,
+        .data.sensor_status = {
+            .state = SENSOR_STATE_ERROR,
+            .target = 0
+        }
+    };
+    DisplayPresenter_handle_message(&dp, &status_msg);
+    DisplayPresenter_render(&dp);
+
+    bool found_sensor_error = false;
+    for (int i = 0; i < s_display_string_count; i++) {
+        if (strcmp(s_last_display_strings[i], "SENSOR FEHLER!") == 0) found_sensor_error = true;
+    }
+    assert(found_sensor_error);
+
+    printf("PASS: test_all_sensors_ignored_transitions_to_error\n");
+}
+
 static size_t build_binary_frame(uint8_t* out_buf, uint8_t msg_type, uint8_t flags, const void* payload, uint16_t payload_len, uint16_t seq_id) {
     BinaryHeader* hdr = (BinaryHeader*)out_buf;
     hdr->sync = BINARY_SYNC_WORD;
@@ -1481,6 +1583,7 @@ int main(void) {
     test_button_controller_interrupts();
     test_display_presenter_capturing();
     test_ignored_sensor_calibration_and_detection();
+    test_all_sensors_ignored_transitions_to_error();
     test_binary_crc16();
     test_binary_framing_constants_and_structs();
     test_binary_handshake();
@@ -1489,6 +1592,6 @@ int main(void) {
     test_binary_capture_chunked_streaming();
     test_dual_mode_streaming_parser();
     test_pre_capture_repeated_calibration();
-    printf("--- ALL 16 ARCHITECTURE TEST SUITES PASSED! ---\n");
+    printf("--- ALL 17 ARCHITECTURE TEST SUITES PASSED! ---\n");
     return 0;
 }
