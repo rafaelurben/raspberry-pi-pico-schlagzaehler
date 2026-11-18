@@ -1,8 +1,13 @@
 import { DatePipe } from '@angular/common';
-import { Component, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { Component, computed, inject, linkedSignal, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { PiezoCaptureResult } from '../../core/device/models/piezo-capture.model';
+import {
+  PiezoCaptureResult,
+  SensorCalibrationData,
+  getCaptureSensorCalibrations,
+  isAllSensorsTarget,
+} from '../../core/device/models/piezo-capture.model';
 import { DeviceManagerService } from '../../core/device/services/device-manager.service';
 import {
   WaveformChartComponent,
@@ -35,7 +40,25 @@ export class AnalyzerComponent {
   ];
 
   readonly selectedDeviceId = signal<string>('');
-  readonly selectedCaptureId = signal<string>('');
+  readonly selectedCaptureId = linkedSignal<readonly PiezoCaptureResult[], string>({
+    source: () => this.deviceManager.captures(),
+    computation: (captures, previous) => {
+      if (captures.length === 0) {
+        return '';
+      }
+      if (!previous) {
+        return captures[0].id;
+      }
+      const isNewRun = !previous.source.some((c) => c.id === captures[0].id);
+      if (isNewRun) {
+        return captures[0].id;
+      }
+      if (previous.value && captures.some((c) => c.id === previous.value)) {
+        return previous.value;
+      }
+      return captures[0].id;
+    },
+  });
   readonly selectedTarget = signal<CaptureTargetOption>('all');
   readonly zoomPreset = signal<ZoomPreset>('full');
   readonly yAxisScale = signal<YAxisScale>('auto');
@@ -87,15 +110,6 @@ export class AnalyzerComponent {
     return list.find((c) => c.id === id) ?? list[0];
   });
 
-  constructor() {
-    effect(() => {
-      const list = this.deviceManager.captures();
-      if (list.length > 0 && !this.selectedCaptureId()) {
-        this.selectedCaptureId.set(list[0].id);
-      }
-    });
-  }
-
   onSelectDevice(deviceId: string): void {
     this.selectedDeviceId.set(deviceId);
   }
@@ -135,6 +149,14 @@ export class AnalyzerComponent {
       return `Sensor ${target}`;
     }
     return 'Sensor 0';
+  }
+
+  isAllTarget(target: unknown): boolean {
+    return isAllSensorsTarget(target);
+  }
+
+  getSensorCalibrations(cap: PiezoCaptureResult): readonly SensorCalibrationData[] {
+    return getCaptureSensorCalibrations(cap);
   }
 
   async onArmCapture(): Promise<void> {

@@ -75,6 +75,9 @@ pico_set_program_version(schlagzaehler "0.2")
 pico_enable_stdio_uart(schlagzaehler 1)
 pico_enable_stdio_usb(schlagzaehler 1)
 
+# Disable CRLF translation by default to prevent corruption of binary protocol frames
+target_compile_definitions(schlagzaehler PRIVATE PICO_STDIO_DEFAULT_CRLF=0)
+
 # Add standard and hardware libraries to the build
 target_link_libraries(schlagzaehler
     pico_stdlib

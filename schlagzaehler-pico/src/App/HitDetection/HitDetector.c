@@ -237,6 +237,7 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
         }
 
         if (elapsed_ms >= duration_ms && samples_ready) {
+            size_t ignored_count = 0;
             for (size_t s = 0; s < SENSOR_COUNT; ++s) {
                 HitDetectorChannel* ch = &detector->channels[s];
                 double mean = (double)ch->calib_sample_sum / (double)ch->calib_sample_count;
@@ -250,6 +251,7 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
 
                 if (ch->baseline < detector->config.min_baseline_for_active_sensor) {
                     ch->ignored = true;
+                    ignored_count++;
                 } else {
                     ch->ignored = false;
                     /* Plausibility check for active sensors: 12-bit ADC range 0..4095 */
@@ -269,6 +271,11 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
 
                 ch->base_threshold = (uint16_t)thresh;
                 ch->dynamic_threshold = (float)ch->base_threshold;
+            }
+
+            if (ignored_count == SENSOR_COUNT) {
+                detector->state = SENSOR_STATE_ERROR;
+                return false;
             }
 
             detector->state = SENSOR_STATE_ARMED;

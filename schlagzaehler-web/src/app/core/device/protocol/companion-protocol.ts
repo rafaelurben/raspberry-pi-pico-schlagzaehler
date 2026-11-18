@@ -221,10 +221,13 @@ export function applyUnifiedMessageToDeviceState(
     }
 
     case 'CALIBRATION_RESULT': {
-      if (msg.payload.repeated) {
+      if (msg.payload.repeated || msg.payload.ignored) {
         return currentState;
       }
-      const sensorState: SensorState = msg.payload.ignored ? 'ERROR' : 'ARMED';
+      const sensorState: SensorState =
+        currentState.sensorState === 'CALIBRATING' || currentState.sensorState === 'UNKNOWN'
+          ? 'ARMED'
+          : currentState.sensorState;
       return new DeviceState({
         ...currentState,
         sensorState,

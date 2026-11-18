@@ -100,4 +100,58 @@ describe('companion-protocol', () => {
     expect(bootFail.gameState).toBe('BOOT');
     expect(bootFail.sensorState).toBe('ERROR');
   });
+
+  it('should update sensorState on SENSOR_STATUS with or without target', () => {
+    const initialState = new DeviceState({
+      connectionState: 'connected',
+      gameState: 'READY',
+      sensorState: 'INIT',
+    });
+
+    const withoutTarget = applyUnifiedMessageToDeviceState(initialState, {
+      encoding: 'ascii',
+      type: 'SENSOR_STATUS',
+      payload: { state: 'ARMED', target: undefined },
+      rawText: 'SENSOR status=ARMED',
+    });
+    expect(withoutTarget.sensorState).toBe('ARMED');
+    expect(withoutTarget.isReady).toBe(true);
+
+    const withTarget = applyUnifiedMessageToDeviceState(initialState, {
+      encoding: 'binary',
+      type: 'SENSOR_STATUS',
+      payload: { state: 'CAPTURE_ARMED', target: 255 },
+      rawText: 'SENSOR status=CAPTURE_ARMED',
+    });
+    expect(withTarget.sensorState).toBe('CAPTURE_ARMED');
+  });
+
+  it('should not set sensorState to ERROR when a sensor is ignored in CALIBRATION_RESULT', () => {
+    const initialState = new DeviceState({
+      connectionState: 'connected',
+      gameState: 'READY',
+      sensorState: 'ARMED',
+      isReady: true,
+    });
+
+    // Sensor 1 ignored (e.g. disconnected)
+    const ignoredResult = applyUnifiedMessageToDeviceState(initialState, {
+      encoding: 'ascii',
+      type: 'CALIBRATION_RESULT',
+      payload: {
+        sensorId: 1,
+        baseline: 0,
+        noise: 0,
+        threshold: 0,
+        ignored: true,
+        repeated: false,
+      },
+      rawText:
+        'CALIB success=1 target=1 repeated=false baseline=0 noise=0 threshold=0 ignored=true',
+    });
+
+    // Should remain ARMED and NOT become ERROR
+    expect(ignoredResult.sensorState).toBe('ARMED');
+    expect(ignoredResult.isReady).toBe(true);
+  });
 });

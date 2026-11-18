@@ -183,12 +183,52 @@
                 <span class="font-semibold text-indigo-300">{{
                   formatTargetLabel(cap.target)
                 }}</span>
-                | Peak: <span class="font-semibold text-white">{{ cap.peak }}</span> | Threshold:
-                <span class="text-amber-300">{{ cap.threshold }}</span> | Baseline:
-                <span class="text-emerald-300">{{ cap.baseline }}</span> | Noise:
-                <span class="text-slate-300">&plusmn;{{ cap.noise }}</span> | Rate:
+                | Peak: <span class="font-semibold text-white">{{ cap.peak }}</span> | Rate:
                 <span class="text-slate-300">{{ cap.sampleRateHz }} Hz</span>
+                @if (!isAllTarget(cap.target)) {
+                  | Threshold: <span class="text-amber-300">{{ cap.threshold }}</span> | Baseline:
+                  <span class="text-emerald-300">{{ cap.baseline }}</span> | Noise:
+                  <span class="text-slate-300">&plusmn;{{ cap.noise }}</span>
+                }
               </p>
+
+              @if (isAllTarget(cap.target)) {
+                <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  @for (sensor of getSensorCalibrations(cap); track sensor.sensorId) {
+                    <div
+                      class="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-800/60 px-2.5 py-1"
+                    >
+                      <span
+                        class="h-2 w-2 rounded-full"
+                        [class.bg-sky-400]="sensor.sensorId === 0"
+                        [class.bg-emerald-400]="sensor.sensorId === 1"
+                        [class.bg-amber-400]="sensor.sensorId === 2"
+                      ></span>
+                      <span
+                        class="font-medium"
+                        [class.text-sky-300]="sensor.sensorId === 0"
+                        [class.text-emerald-300]="sensor.sensorId === 1"
+                        [class.text-amber-300]="sensor.sensorId === 2"
+                      >
+                        Sensor {{ sensor.sensorId }}:
+                      </span>
+                      <span class="text-slate-400">
+                        Threshold:
+                        <span class="font-mono font-medium text-amber-300">{{
+                          sensor.threshold
+                        }}</span>
+                      </span>
+                      <span class="text-slate-400">
+                        Baseline:
+                        <span class="font-mono font-medium text-emerald-300">{{
+                          sensor.baseline
+                        }}</span>
+                      </span>
+                      <span class="font-mono text-slate-400">(&plusmn;{{ sensor.noise }})</span>
+                    </div>
+                  }
+                </div>
+              }
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
@@ -332,7 +372,25 @@
                   </div>
                   <div class="mt-1 text-[11px] text-slate-300">
                     Peak: <span class="font-semibold text-indigo-300">{{ item.peak }}</span> |
-                    Thresh: {{ item.threshold }}
+                    @if (isAllTarget(item.target)) {
+                      <span
+                        >Thresh:
+                        @for (
+                          s of getSensorCalibrations(item);
+                          track s.sensorId;
+                          let last = $last
+                        ) {
+                          <span
+                            [class.text-sky-300]="s.sensorId === 0"
+                            [class.text-emerald-300]="s.sensorId === 1"
+                            [class.text-amber-300]="s.sensorId === 2"
+                            >{{ s.threshold }}</span
+                          >{{ !last ? '/' : '' }}
+                        }
+                      </span>
+                    } @else {
+                      <span>Thresh: {{ item.threshold }}</span>
+                    }
                   </div>
                 </button>
                 <button

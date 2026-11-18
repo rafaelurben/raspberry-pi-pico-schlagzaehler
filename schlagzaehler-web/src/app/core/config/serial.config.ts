@@ -14,7 +14,7 @@ export const DEFAULT_SERIAL_CONFIG: SerialConfig = {
   dataBits: 8,
   stopBits: 1,
   parity: 'none',
-  bufferSize: 4096,
+  bufferSize: 65536,
 };
 
 /**

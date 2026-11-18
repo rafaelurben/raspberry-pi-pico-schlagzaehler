@@ -1,5 +1,7 @@
 #include "../../inc/Board.h"
 #include "pico/stdlib.h"
+#include "pico/stdio_usb.h"
+#include "pico/stdio_uart.h"
 
 #ifdef CYW43_WL_GPIO_LED_PIN
 #include "pico/cyw43_arch.h"
@@ -9,6 +11,8 @@ static bool s_led_state = false;
 
 void Board_init(void) {
     stdio_init_all();
+    stdio_set_translate_crlf(&stdio_usb, false);
+    stdio_set_translate_crlf(&stdio_uart, false);
 #if defined(PICO_DEFAULT_LED_PIN)
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);

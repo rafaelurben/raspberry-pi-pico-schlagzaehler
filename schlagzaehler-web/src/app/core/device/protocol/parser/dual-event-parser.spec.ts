@@ -93,4 +93,60 @@ describe('DualEventParser', () => {
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe('binary');
   });
+
+  it('should resynchronize on subsequent binary frame when a frame has corrupted CRC', () => {
+    // Frame 1 with corrupted CRC
+    const badFrame = serializeBinaryFrame(
+      BinaryMessageType.MSG_SCORE,
+      new Uint8Array([5, 0, 0, 0]),
+      0,
+      1,
+    );
+    badFrame[badFrame.length - 1] ^= 0xff; // corrupt CRC
+
+    // Frame 2 is valid
+    const goodFrame = serializeBinaryFrame(
+      BinaryMessageType.MSG_SCORE,
+      new Uint8Array([10, 0, 0, 0]),
+      0,
+      2,
+    );
+
+    const merged = new Uint8Array(badFrame.length + goodFrame.length);
+    merged.set(badFrame, 0);
+    merged.set(goodFrame, badFrame.length);
+
+    const events = parser.push(merged);
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('binary');
+    if (events[0].type === 'binary') {
+      expect(events[0].content.seq).toBe(2);
+      expect(Array.from(events[0].content.payload)).toEqual([10, 0, 0, 0]);
+    }
+  });
+
+  it('should not treat non-printable binary noise containing 0x0A as ASCII lines before sync word', () => {
+    // Non-printable binary noise that happens to contain 0x0A ('\n')
+    const binaryNoise = new Uint8Array([0x81, 0x02, 0x0a, 0xff, 0xfe]);
+    const validFrame = serializeBinaryFrame(
+      BinaryMessageType.MSG_SCORE,
+      new Uint8Array([1, 0, 0, 0]),
+      0,
+      3,
+    );
+
+    const merged = new Uint8Array(binaryNoise.length + validFrame.length);
+    merged.set(binaryNoise, 0);
+    merged.set(validFrame, binaryNoise.length);
+
+    const events = parser.push(merged);
+
+    // Should not emit any false ascii events
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('binary');
+    if (events[0].type === 'binary') {
+      expect(events[0].content.seq).toBe(3);
+    }
+  });
 });
