@@ -42,6 +42,21 @@ typedef enum {
     SENSOR_STATE_ERROR           = 7
 } SensorState;
 
+typedef enum {
+    CAPTURE_ACTION_STOP    = 0,
+    CAPTURE_ACTION_START   = 1,
+    CAPTURE_ACTION_TRIGGER = 2
+} CaptureAction;
+
+static inline const char* CaptureAction_to_string(CaptureAction action) {
+    switch (action) {
+        case CAPTURE_ACTION_STOP:    return "STOP";
+        case CAPTURE_ACTION_START:   return "START";
+        case CAPTURE_ACTION_TRIGGER: return "TRIGGER";
+        default:                     return "UNKNOWN";
+    }
+}
+
 static inline const char* GameMode_to_string(GameMode mode) {
     switch (mode) {
         case GAME_MODE_COUNT: return "COUNT";

@@ -140,6 +140,7 @@ export const BINARY_COMPONENT_MAP: readonly string[] = [
 export enum BinaryCaptureAction {
   STOP = 0,
   START = 1,
+  TRIGGER = 2,
 }
 
 /**

@@ -441,10 +441,13 @@ export function serializeBinaryCommand(command: UnifiedProtocolCommand, seq?: nu
       );
     }
     case 'CAPTURE': {
-      const actionVal =
-        command.payload.action === 'start' || command.payload.action === BinaryCaptureAction.START
-          ? 1
-          : 0;
+      let actionVal = 0;
+      const act = command.payload.action;
+      if (act === 'start' || act === BinaryCaptureAction.START) {
+        actionVal = 1;
+      } else if (act === 'trigger' || act === BinaryCaptureAction.TRIGGER) {
+        actionVal = 2;
+      }
       let targetVal = 255;
       const target = command.payload.target;
       if (typeof target === 'number' && target >= 0 && target <= 2) {

@@ -171,6 +171,18 @@ export class AnalyzerComponent {
     }
   }
 
+  async onTriggerCapture(): Promise<void> {
+    const dev = this.activeDevice();
+    if (!dev) {
+      return;
+    }
+    try {
+      await this.deviceManager.triggerCapture(dev.id, this.selectedTarget());
+    } catch {
+      // Handled by deviceManager state
+    }
+  }
+
   async onStopCapture(): Promise<void> {
     const dev = this.activeDevice();
     if (!dev) {

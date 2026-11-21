@@ -216,6 +216,12 @@ describe('AsciiPayloadParser', () => {
       expect(
         serializeAsciiCommand({ type: 'CAPTURE', payload: { action: 'start', target: 'all' } }),
       ).toBe('CAPTURE:all');
+      expect(serializeAsciiCommand({ type: 'CAPTURE', payload: { action: 'trigger' } })).toBe(
+        'CAPTURE:TRIGGER',
+      );
+      expect(
+        serializeAsciiCommand({ type: 'CAPTURE', payload: { action: 'trigger', target: 0 } }),
+      ).toBe('CAPTURE:TRIGGER:0');
       expect(serializeAsciiCommand({ type: 'CAPTURE', payload: { action: 'stop' } })).toBe(
         'CAPTURE:STOP',
       );

@@ -248,7 +248,7 @@ packet
 ---
 
 ### 5.9 `CMD_CAPTURE` (`0x09`)
-Arms or cancels raw high-frequency piezo signal capture.
+Arms, triggers manually, or cancels raw high-frequency piezo signal capture.
 
 ```mermaid
 ---
@@ -261,7 +261,7 @@ packet
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `action` | `uint8_t` | `0` = `STOP` / cancel capture, `1` = `START` / arm capture. |
+| `action` | `uint8_t` | `0` = `STOP` / cancel capture, `1` = `START` / arm capture (waits for hit), `2` = `FORCE_TRIGGER` / manual trigger (immediate recording without requiring hit). |
 | `target_sensor` | `uint8_t` | `0`, `1`, `2` for a single channel, or `255` for `ALL` channels. |
 
 ---
@@ -577,6 +577,7 @@ Newline-delimited (`\n` or `\r\n`):
 | `PARAM:<u32>` | `CMD_SET_PARAMETER` | Sets mode duration (s) or target hits. |
 | `SENS:<float>` | `CMD_SET_SENSITIVITY` | Updates sensor noise multiplier factor. |
 | `CAPTURE` or `CAPTURE:START` | `CMD_CAPTURE (1)` | Arms raw waveform capture engine. |
+| `CAPTURE:TRIGGER` or `CAPTURE:NOW` | `CMD_CAPTURE (2)` | Manually triggers raw waveform capture immediately without hit. |
 | `CAPTURE:STOP` | `CMD_CAPTURE (0)` | Cancels raw waveform capture engine. |
 
 ### 7.2 ASCII Telemetry (Pico $\rightarrow$ Host)

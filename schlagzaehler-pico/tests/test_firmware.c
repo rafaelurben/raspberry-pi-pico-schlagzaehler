@@ -520,6 +520,21 @@ void test_companion_protocol(void) {
     assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
     assert(msg.type == MSG_REQUEST_CAPTURE);
     assert(msg.data.request_capture.enable == false);
+    assert(msg.data.request_capture.action == CAPTURE_ACTION_STOP);
+
+    CompanionProtocol_parse_line(&cp, "CAPTURE:TRIGGER");
+    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_CAPTURE);
+    assert(msg.data.request_capture.enable == true);
+    assert(msg.data.request_capture.action == CAPTURE_ACTION_TRIGGER);
+    assert(msg.data.request_capture.target == 255);
+
+    CompanionProtocol_parse_line(&cp, "CAPTURE:TRIGGER:2");
+    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_CAPTURE);
+    assert(msg.data.request_capture.enable == true);
+    assert(msg.data.request_capture.action == CAPTURE_ACTION_TRIGGER);
+    assert(msg.data.request_capture.target == 2);
 
     /* Chunked capture transmission */
     uint16_t dummy_samples[120];
@@ -674,6 +689,54 @@ void test_signal_capture(void) {
     assert(captured[SIGNAL_CAPTURE_PRE_SAMPLES_ALL + 2] == 3100);
 
     /* Stop capture */
+    HitDetector_stop_capture(&hd);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_ARMED);
+
+    /* -------------------------------------------------------------
+     * Test 3: Manual Force Trigger without Hit (SignalCapture & HitDetector)
+     * ------------------------------------------------------------- */
+    assert(HitDetector_start_capture(&hd, 1) == true);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_CAPTURE_ARMED);
+
+    /* Feed 20 baseline buffers (1500 on S1, threshold is 2000). No hit occurs! */
+    for (int b = 0; b < 20; ++b) {
+        for (int t = 0; t < 100; ++t) {
+            raw_buf[t * 3 + 0] = 1980;
+            raw_buf[t * 3 + 1] = 1500;
+            raw_buf[t * 3 + 2] = 2200;
+        }
+        assert(HitDetector_process_buffer(&hd, raw_buf, 300, &ev) == false);
+    }
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_CAPTURE_ARMED);
+
+    /* Initiate capture manually via button press or companion trigger */
+    assert(HitDetector_force_trigger(&hd) == true);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_CAPTURING);
+
+    /* Subsequent trigger while already capturing should return false */
+    assert(HitDetector_force_trigger(&hd) == false);
+
+    /* Continue feeding quiescent baseline buffers until capture completes (20,000 post samples) */
+    /* 100 triplets per buffer, 5:1 decimation = 20 post samples per buffer. Need 1000 buffers */
+    for (int b = 0; b < 1000; ++b) {
+        HitDetector_process_buffer(&hd, raw_buf, 300, &ev);
+        if (b == 999) {
+            assert(HitDetector_get_state(&hd) == SENSOR_STATE_CAPTURE_TX_WAIT);
+        }
+    }
+
+    MsgCaptureReady manual_ready;
+    assert(HitDetector_take_completed_capture(&hd, &manual_ready) == true);
+    assert(manual_ready.total_samples == SIGNAL_CAPTURE_TOTAL_SAMPLES);
+    assert(manual_ready.pre_samples == SIGNAL_CAPTURE_PRE_SAMPLES);
+    assert(manual_ready.samples[SIGNAL_CAPTURE_PRE_SAMPLES] == 1500); /* Unrolled baseline correctly */
+
+    HitDetector_stop_capture(&hd);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_ARMED);
+
+    /* One-step arm and trigger on ALL sensors */
+    assert(HitDetector_trigger_capture(&hd, CAPTURE_TARGET_ALL) == true);
+    assert(HitDetector_get_state(&hd) == SENSOR_STATE_CAPTURING);
     HitDetector_stop_capture(&hd);
     assert(HitDetector_get_state(&hd) == SENSOR_STATE_ARMED);
 
@@ -1228,22 +1291,34 @@ void test_binary_commands(void) {
     assert(msg.data.request_capture.enable == true);
     assert(msg.data.request_capture.target == 1);
 
-    /* CMD_CAPTURE (action = 1, target = 255 for ALL) */
-    CmdCapturePayload c_payload_all = { .action = 1, .target_sensor = 255 };
+    /* CMD_CAPTURE (action = CAPTURE_ACTION_START, target = 255 for ALL) */
+    CmdCapturePayload c_payload_all = { .action = CAPTURE_ACTION_START, .target_sensor = 255 };
     len = build_binary_frame(frame, CMD_CAPTURE, 0, &c_payload_all, sizeof(c_payload_all), 9);
     CompanionProtocol_feed_bytes(&cp, frame, len);
     assert(OsalQueue_pop(&q_to_core0, &msg) == true);
     assert(msg.type == MSG_REQUEST_CAPTURE);
     assert(msg.data.request_capture.enable == true);
+    assert(msg.data.request_capture.action == CAPTURE_ACTION_START);
     assert(msg.data.request_capture.target == 255);
 
-    /* CMD_CAPTURE (action = 0, target = 0) */
-    CmdCapturePayload c_stop = { .action = 0, .target_sensor = 0 };
+    /* CMD_CAPTURE (action = CAPTURE_ACTION_STOP, target = 0) */
+    CmdCapturePayload c_stop = { .action = CAPTURE_ACTION_STOP, .target_sensor = 0 };
     len = build_binary_frame(frame, CMD_CAPTURE, 0, &c_stop, sizeof(c_stop), 10);
     CompanionProtocol_feed_bytes(&cp, frame, len);
     assert(OsalQueue_pop(&q_to_core0, &msg) == true);
     assert(msg.type == MSG_REQUEST_CAPTURE);
     assert(msg.data.request_capture.enable == false);
+    assert(msg.data.request_capture.action == CAPTURE_ACTION_STOP);
+
+    /* CMD_CAPTURE (action = CAPTURE_ACTION_TRIGGER, target = 1) */
+    CmdCapturePayload c_trigger = { .action = CAPTURE_ACTION_TRIGGER, .target_sensor = 1 };
+    len = build_binary_frame(frame, CMD_CAPTURE, 0, &c_trigger, sizeof(c_trigger), 11);
+    CompanionProtocol_feed_bytes(&cp, frame, len);
+    assert(OsalQueue_pop(&q_to_core0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_CAPTURE);
+    assert(msg.data.request_capture.enable == true);
+    assert(msg.data.request_capture.action == CAPTURE_ACTION_TRIGGER);
+    assert(msg.data.request_capture.target == 1);
 
     printf("PASS: test_binary_commands\n");
 }

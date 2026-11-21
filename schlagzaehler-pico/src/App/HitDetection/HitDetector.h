@@ -57,6 +57,8 @@ typedef struct {
 void HitDetector_init(HitDetector* detector, const Config* config);
 void HitDetector_start_calibration(HitDetector* detector);
 bool HitDetector_start_capture(HitDetector* detector, uint8_t target);
+bool HitDetector_trigger_capture(HitDetector* detector, uint8_t target);
+bool HitDetector_force_trigger(HitDetector* detector);
 void HitDetector_stop_capture(HitDetector* detector);
 bool HitDetector_take_completed_capture(HitDetector* detector, MsgCaptureReady* out_ready);
 void HitDetector_reset_to_armed(HitDetector* detector);

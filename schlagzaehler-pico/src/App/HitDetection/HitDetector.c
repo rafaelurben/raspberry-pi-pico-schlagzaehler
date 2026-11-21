@@ -89,6 +89,25 @@ bool HitDetector_start_capture(HitDetector* detector, uint8_t target) {
     return true;
 }
 
+bool HitDetector_trigger_capture(HitDetector* detector, uint8_t target) {
+    if (!detector) return false;
+    if (detector->state == SENSOR_STATE_ARMED) {
+        if (!HitDetector_start_capture(detector, target)) {
+            return false;
+        }
+    }
+    if (detector->state != SENSOR_STATE_CAPTURE_ARMED) return false;
+    if (SignalCapture_force_trigger(&detector->capture)) {
+        detector->state = SENSOR_STATE_CAPTURING;
+        return true;
+    }
+    return false;
+}
+
+bool HitDetector_force_trigger(HitDetector* detector) {
+    return HitDetector_trigger_capture(detector, HitDetector_get_capture_target(detector));
+}
+
 void HitDetector_stop_capture(HitDetector* detector) {
     if (!detector) return;
     if (detector->state == SENSOR_STATE_CAPTURE_ARMED ||

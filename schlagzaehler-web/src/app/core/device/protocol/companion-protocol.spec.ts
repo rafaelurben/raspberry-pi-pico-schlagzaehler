@@ -64,6 +64,8 @@ describe('companion-protocol', () => {
     expect(serializeAsciiCommand(CompanionCommands.captureStart())).toBe('CAPTURE');
     expect(serializeAsciiCommand(CompanionCommands.captureStart(1))).toBe('CAPTURE:1');
     expect(serializeAsciiCommand(CompanionCommands.captureStart('all'))).toBe('CAPTURE:all');
+    expect(serializeAsciiCommand(CompanionCommands.captureTrigger())).toBe('CAPTURE:TRIGGER');
+    expect(serializeAsciiCommand(CompanionCommands.captureTrigger(2))).toBe('CAPTURE:TRIGGER:2');
     expect(serializeAsciiCommand(CompanionCommands.captureStop())).toBe('CAPTURE:STOP');
   });
 

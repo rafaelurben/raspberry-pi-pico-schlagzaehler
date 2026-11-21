@@ -217,7 +217,24 @@ void App_run_core0(App* app) {
     ButtonEvent btn_event;
     while (ButtonController_pop_event(&app->button_controller, &btn_event)) {
         SensorState s = HitDetector_get_state(&app->hit_detector);
-        if (s == SENSOR_STATE_CAPTURE_ARMED || s == SENSOR_STATE_CAPTURING || s == SENSOR_STATE_CAPTURE_TX_WAIT) {
+        if (s == SENSOR_STATE_CAPTURE_ARMED) {
+            if (btn_event.button == BTN_ID_RIGHT) {
+                /* Manually trigger armed capture via physical RIGHT button */
+                if (HitDetector_force_trigger(&app->hit_detector)) {
+                    Board_set_led(true);
+                    App_notify_sensor_state(app);
+                    continue;
+                }
+            } else if (btn_event.button == BTN_ID_LEFT) {
+                /* Cancel armed capture */
+                HitDetector_stop_capture(&app->hit_detector);
+                Board_set_led(false);
+                App_notify_sensor_state(app);
+            } else {
+                /* Maintain armed state if other navigation buttons are pressed */
+                continue;
+            }
+        } else if (s == SENSOR_STATE_CAPTURING || s == SENSOR_STATE_CAPTURE_TX_WAIT) {
             HitDetector_stop_capture(&app->hit_detector);
             Board_set_led(false);
             App_notify_sensor_state(app);
@@ -242,13 +259,15 @@ void App_run_core0(App* app) {
             app->hit_detector.config.noise_factor = cmd.data.set_sensitivity.noise_factor;
         } else if (cmd.type == MSG_REQUEST_CAPTURE) {
             SensorState old_s = HitDetector_get_state(&app->hit_detector);
-            if (cmd.data.request_capture.enable) {
+            if (cmd.data.request_capture.action == CAPTURE_ACTION_TRIGGER) {
+                HitDetector_trigger_capture(&app->hit_detector, cmd.data.request_capture.target);
+            } else if (cmd.data.request_capture.action == CAPTURE_ACTION_START || cmd.data.request_capture.enable) {
                 HitDetector_start_capture(&app->hit_detector, cmd.data.request_capture.target);
             } else {
                 HitDetector_stop_capture(&app->hit_detector);
             }
             if (HitDetector_get_state(&app->hit_detector) != old_s) {
-                Board_set_led(false);
+                Board_set_led(HitDetector_get_state(&app->hit_detector) == SENSOR_STATE_CAPTURING);
                 App_notify_sensor_state(app);
             }
         } else if (cmd.type == MSG_RESET_GAME) {

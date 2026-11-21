@@ -154,6 +154,7 @@ typedef struct {
 typedef struct {
     bool enable;
     uint8_t target; /* 0, 1, 2, or 255 for ALL */
+    CaptureAction action;
 } MsgRequestCapture;
 
 typedef struct {

@@ -84,6 +84,25 @@ void SignalCapture_reset(SignalCapture* cap) {
     cap->write_index = 0;
 }
 
+static void unroll_pre_ring_single(SignalCapture* cap);
+static void unroll_pre_ring_all(SignalCapture* cap);
+
+bool SignalCapture_force_trigger(SignalCapture* cap) {
+    if (!cap || cap->collecting_post_trigger || cap->completed || cap->buffer_ready) {
+        return false;
+    }
+
+    if (cap->target == CAPTURE_TARGET_ALL) {
+        unroll_pre_ring_all(cap);
+    } else {
+        unroll_pre_ring_single(cap);
+    }
+
+    cap->write_index = cap->pre_samples;
+    cap->collecting_post_trigger = true;
+    return true;
+}
+
 const uint16_t* SignalCapture_get_samples(const SignalCapture* cap) {
     return cap ? cap->buffer : NULL;
 }

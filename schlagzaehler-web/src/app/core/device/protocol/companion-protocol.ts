@@ -45,7 +45,7 @@ export const CompanionCommands = {
     payload: { noiseFactor },
   }),
   capture: (
-    action: 'start' | 'stop' | BinaryCaptureAction,
+    action: 'start' | 'stop' | 'trigger' | BinaryCaptureAction,
     target?: number | 'all',
   ): UnifiedProtocolCommand => ({
     type: 'CAPTURE',
@@ -54,6 +54,10 @@ export const CompanionCommands = {
   captureStart: (target?: number | 'all'): UnifiedProtocolCommand => ({
     type: 'CAPTURE',
     payload: { action: 'start', target },
+  }),
+  captureTrigger: (target?: number | 'all'): UnifiedProtocolCommand => ({
+    type: 'CAPTURE',
+    payload: { action: 'trigger', target },
   }),
   captureStop: (): UnifiedProtocolCommand => ({
     type: 'CAPTURE',

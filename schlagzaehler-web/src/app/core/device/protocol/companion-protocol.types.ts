@@ -178,7 +178,7 @@ export interface SetSensitivityCommandPayload {
 }
 
 export interface CaptureCommandPayload {
-  readonly action: 'start' | 'stop' | BinaryCaptureAction;
+  readonly action: 'start' | 'stop' | 'trigger' | BinaryCaptureAction;
   readonly target?: number | 'all';
 }
 

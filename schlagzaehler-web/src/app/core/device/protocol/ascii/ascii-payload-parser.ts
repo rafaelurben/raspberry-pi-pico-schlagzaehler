@@ -1,5 +1,6 @@
 import type { GameEndReason, GameMode, GameState, SensorState } from '../../models/device.model';
 import { UnifiedProtocolCommand, UnifiedProtocolMessage } from '../companion-protocol.types';
+import { BinaryCaptureAction } from '../binary/binary-protocol.types';
 import {
   VALID_END_REASONS,
   VALID_GAME_MODES,
@@ -288,9 +289,16 @@ export function serializeAsciiCommand(command: UnifiedProtocolCommand): string {
     case 'SET_SENSITIVITY':
       return `SENS:${command.payload.noiseFactor}`;
     case 'CAPTURE': {
-      const isStop = command.payload.action === 'stop' || command.payload.action === 0;
-      if (isStop) {
+      const action = command.payload.action;
+      if (action === 'stop' || action === BinaryCaptureAction.STOP) {
         return 'CAPTURE:STOP';
+      }
+      if (action === 'trigger' || action === BinaryCaptureAction.TRIGGER) {
+        const target = command.payload.target;
+        if (typeof target === 'number' && target >= 0 && target <= 2) {
+          return `CAPTURE:TRIGGER:${target}`;
+        }
+        return 'CAPTURE:TRIGGER';
       }
       const target = command.payload.target;
       if (target === 'all') {

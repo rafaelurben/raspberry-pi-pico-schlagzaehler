@@ -472,6 +472,13 @@ describe('BinaryPayloadParser', () => {
       expect(startSensor1[8]).toBe(1);
       expect(startSensor1[9]).toBe(1);
 
+      const trigger = serializeBinaryCommand(
+        { type: 'CAPTURE', payload: { action: 'trigger', target: 2 } },
+        28,
+      );
+      expect(trigger[8]).toBe(2); // action=trigger
+      expect(trigger[9]).toBe(2); // target=2
+
       const stop = serializeBinaryCommand({ type: 'CAPTURE', payload: { action: 'stop' } }, 27);
       expect(stop[8]).toBe(0);
     });

@@ -151,7 +151,7 @@ typedef struct __attribute__((packed)) {
 
 /* CMD_CAPTURE (0x09) - 2 bytes */
 typedef struct __attribute__((packed)) {
-    uint8_t action;         /* 0 = STOP, 1 = START */
+    uint8_t action;         /* CaptureAction: 0=STOP, 1=START, 2=TRIGGER */
     uint8_t target_sensor;  /* 0, 1, 2, or 255 for ALL */
 } CmdCapturePayload;
 

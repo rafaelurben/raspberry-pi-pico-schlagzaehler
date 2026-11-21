@@ -107,6 +107,15 @@ describe('AnalyzerComponent', () => {
     await component.onArmCapture();
 
     expect(startCaptureSpy).toHaveBeenCalledWith('test-pico', 'all');
+
+    const triggerCaptureSpy = vi
+      .spyOn(deviceManager, 'triggerCapture')
+      .mockImplementation(async () => {
+        /* empty */
+      });
+    component.onSelectTarget('2');
+    await component.onTriggerCapture();
+    expect(triggerCaptureSpy).toHaveBeenCalledWith('test-pico', 2);
   });
 
   it('should display separate thresholds and baselines for all 3 sensors in ALL mode', () => {

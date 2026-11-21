@@ -93,19 +93,34 @@ void CompanionProtocol_parse_line(CompanionProtocol* proto, const char* line) {
                strcmp(line, "CAPTURE:255") == 0 || strcmp(line, "CAPTURE:START:255") == 0 ||
                strcmp(line, "CAPTURE:START:ALL") == 0 || strcmp(line, "CAPTURE:START:all") == 0) {
         CompanionProtocol_cancel_capture_tx(proto);
-        CommandHandler_handle_request_capture(proto->command_handler, true, 255);
+        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_START, 255);
+    } else if (strcmp(line, "CAPTURE:TRIGGER") == 0 || strcmp(line, "CAPTURE:NOW") == 0 ||
+               strcmp(line, "CAPTURE:FORCE") == 0 ||
+               strcmp(line, "CAPTURE:TRIGGER:ALL") == 0 || strcmp(line, "CAPTURE:TRIGGER:all") == 0 ||
+               strcmp(line, "CAPTURE:TRIGGER:255") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
+        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_TRIGGER, 255);
+    } else if (strcmp(line, "CAPTURE:TRIGGER:0") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
+        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_TRIGGER, 0);
+    } else if (strcmp(line, "CAPTURE:TRIGGER:1") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
+        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_TRIGGER, 1);
+    } else if (strcmp(line, "CAPTURE:TRIGGER:2") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
+        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_TRIGGER, 2);
     } else if (strcmp(line, "CAPTURE:0") == 0 || strcmp(line, "CAPTURE:START:0") == 0) {
         CompanionProtocol_cancel_capture_tx(proto);
-        CommandHandler_handle_request_capture(proto->command_handler, true, 0);
+        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_START, 0);
     } else if (strcmp(line, "CAPTURE:1") == 0 || strcmp(line, "CAPTURE:START:1") == 0) {
         CompanionProtocol_cancel_capture_tx(proto);
-        CommandHandler_handle_request_capture(proto->command_handler, true, 1);
+        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_START, 1);
     } else if (strcmp(line, "CAPTURE:2") == 0 || strcmp(line, "CAPTURE:START:2") == 0) {
         CompanionProtocol_cancel_capture_tx(proto);
-        CommandHandler_handle_request_capture(proto->command_handler, true, 2);
+        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_START, 2);
     } else if (strcmp(line, "CAPTURE:STOP") == 0) {
         CompanionProtocol_cancel_capture_tx(proto);
-        CommandHandler_handle_request_capture(proto->command_handler, false, 0);
+        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_STOP, 0);
     } else if (strncmp(line, "MODE:", 5) == 0) {
         const char* val = line + 5;
         if (strcmp(val, "COUNT") == 0 || strcmp(val, "0") == 0) {
@@ -215,7 +230,7 @@ void CompanionProtocol_parse_binary_frame(CompanionProtocol* proto, const Binary
             if (header->payload_len >= sizeof(CmdCapturePayload) && payload) {
                 const CmdCapturePayload* p = (const CmdCapturePayload*)payload;
                 CompanionProtocol_cancel_capture_tx(proto);
-                CommandHandler_handle_request_capture(proto->command_handler, p->action != 0, p->target_sensor);
+                CommandHandler_handle_request_capture_action(proto->command_handler, (CaptureAction)p->action, p->target_sensor);
             }
             break;
 
@@ -610,7 +625,7 @@ bool CompanionProtocol_tick_capture_tx(CompanionProtocol* proto) {
             send_binary_frame(proto, MSG_CAPTURE_END, 0, &end_payload, sizeof(end_payload));
             CompanionProtocol_cancel_capture_tx(proto);
             if (proto->command_handler) {
-                CommandHandler_handle_request_capture(proto->command_handler, false, 0);
+                CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_STOP, 0);
             }
             return true;
         }
@@ -655,7 +670,7 @@ bool CompanionProtocol_tick_capture_tx(CompanionProtocol* proto) {
         UsbSerialDriver_write_line(line);
         CompanionProtocol_cancel_capture_tx(proto);
         if (proto->command_handler) {
-            CommandHandler_handle_request_capture(proto->command_handler, false, 0);
+            CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_STOP, 0);
         }
         return true;
     }

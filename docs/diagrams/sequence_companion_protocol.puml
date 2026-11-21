@@ -249,7 +249,7 @@ end
 
 Web -> Proto: <b>CAPTURE</b>
 activate Proto
-Proto -> CmdH: CommandHandler_handle_request_capture(enable=true)
+Proto -> CmdH: CommandHandler_handle_request_capture_action(1)
 activate CmdH
 CmdH -> Q10: OsalQueue_push(MSG_REQUEST_CAPTURE: enable=true)
 deactivate CmdH
@@ -292,7 +292,7 @@ loop Non-Blocking Transmission across Core 1 Ticks (50 samples per line)
 end
 
 Proto --> Web: <b>CAPTURE_END count=21000</b>
-Proto -> CmdH: CommandHandler_handle_request_capture(enable=false)
+Proto -> CmdH: CommandHandler_handle_request_capture_action(0)
 activate CmdH
 CmdH -> Q10: MSG_REQUEST_CAPTURE (enable=false)
 deactivate CmdH

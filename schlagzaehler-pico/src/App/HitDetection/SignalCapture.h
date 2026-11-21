@@ -67,6 +67,7 @@ void SignalCapture_arm(
     const uint16_t thresholds[SENSOR_COUNT]
 );
 void SignalCapture_reset(SignalCapture* cap);
+bool SignalCapture_force_trigger(SignalCapture* cap);
 const uint16_t* SignalCapture_get_samples(const SignalCapture* cap);
 
 /**

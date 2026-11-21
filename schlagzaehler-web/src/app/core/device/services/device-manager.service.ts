@@ -407,6 +407,17 @@ export class DeviceManagerService implements OnDestroy {
   }
 
   /**
+   * Manually triggers raw piezo waveform capture immediately without waiting for a hit.
+   */
+  async triggerCapture(deviceId: string, target?: number | 'all'): Promise<void> {
+    if (target !== undefined) {
+      this.deviceCaptureTargets.set(deviceId, target);
+    }
+    const resolvedTarget = target ?? this.deviceCaptureTargets.get(deviceId);
+    await this.sendCommand(deviceId, CompanionCommands.captureTrigger(resolvedTarget));
+  }
+
+  /**
    * Stops/cancels raw piezo waveform capture on a device and disables auto-rearm.
    */
   async stopCapture(deviceId: string): Promise<void> {
