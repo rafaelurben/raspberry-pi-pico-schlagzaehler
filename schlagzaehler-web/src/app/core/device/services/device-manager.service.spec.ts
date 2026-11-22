@@ -262,15 +262,19 @@ describe('DeviceManagerService', () => {
     await service.resetGame(dev2!.id);
     expect(transport2.sentPayloads).toEqual(['RESET']);
 
-    await service.sendCommandToDevices([dev1!.id, dev2!.id], { type: 'CALIBRATE' });
+    await service.calibrateDevice(dev1!.id);
     expect(transport1.sentPayloads).toContain('CALIB');
+
+    await service.sendCommandToDevices([dev1!.id, dev2!.id], { type: 'CALIBRATE' });
+    expect(transport1.sentPayloads.filter((p) => p === 'CALIB')).toHaveLength(2);
     expect(transport2.sentPayloads).toContain('CALIB');
 
     const sentEvents = service.events().filter((e) => e.direction === 'sent');
-    expect(sentEvents).toHaveLength(5);
+    expect(sentEvents).toHaveLength(6);
     expect(sentEvents.map((e) => e.payload)).toContain('PARAM:40');
     expect(sentEvents.map((e) => e.payload)).toContain('MODE:RACE');
     expect(sentEvents.map((e) => e.payload)).toContain('RESET');
+    expect(sentEvents.map((e) => e.payload)).toContain('CALIB');
   });
 
   it('should remove a device completely from the list', async () => {

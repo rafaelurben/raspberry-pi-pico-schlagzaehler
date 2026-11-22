@@ -36,6 +36,14 @@ export class SettingsComponent {
     await this.deviceManager.disconnectDevice(deviceId);
   }
 
+  async onCalibrateDevice(deviceId: string): Promise<void> {
+    try {
+      await this.deviceManager.calibrateDevice(deviceId);
+    } catch {
+      // Errors are reflected in device.errorMessage and device.state.connectionState
+    }
+  }
+
   async onReconnectDevice(deviceId: string): Promise<void> {
     try {
       await this.deviceManager.reconnectDevice(deviceId);

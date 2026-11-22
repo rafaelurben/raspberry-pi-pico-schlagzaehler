@@ -18,6 +18,7 @@ export class DeviceListComponent {
   readonly reconnect = output<string>();
   readonly remove = output<string>();
   readonly rename = output<RenameDeviceEvent>();
+  readonly calibrate = output<string>();
 
   readonly editingDeviceId = signal<string | null>(null);
   readonly editingName = signal<string>('');

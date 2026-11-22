@@ -387,6 +387,13 @@ export class DeviceManagerService implements OnDestroy {
   }
 
   /**
+   * Triggers sensor baseline calibration on a device (CMD_CALIBRATE / CALIB).
+   */
+  async calibrateDevice(deviceId: string): Promise<void> {
+    await this.sendCommand(deviceId, CompanionCommands.calibrate());
+  }
+
+  /**
    * Starts the game on a device.
    */
   async startGame(deviceId: string): Promise<void> {

@@ -54,4 +54,14 @@ describe('SettingsComponent', () => {
 
     expect(passedName).toBe('Custom Pico');
   });
+
+  it('should call deviceManager.calibrateDevice when onCalibrateDevice is called', async () => {
+    let calibratedId: string | null = null;
+    deviceManager.calibrateDevice = async (id: string) => {
+      calibratedId = id;
+    };
+
+    await component.onCalibrateDevice('device-42');
+    expect(calibratedId).toBe('device-42');
+  });
 });

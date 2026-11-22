@@ -167,15 +167,28 @@
                     device.state.connectionState === 'connected' ||
                     device.state.connectionState === 'connecting'
                   ) {
-                    <button
-                      type="button"
-                      (click)="disconnect.emit(device.id)"
-                      class="rounded-lg bg-rose-600/20 px-3 py-1.5 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-600/30 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 cursor-pointer"
-                      [attr.data-testid]="'disconnect-' + device.id"
-                      [attr.aria-label]="'Disconnect ' + device.name"
-                    >
-                      Disconnect
-                    </button>
+                    <div class="inline-flex items-center gap-1.5">
+                      @if (device.state.connectionState === 'connected') {
+                        <button
+                          type="button"
+                          (click)="calibrate.emit(device.id)"
+                          class="rounded-lg bg-amber-600/20 px-2.5 py-1.5 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-600/30 hover:text-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer"
+                          [attr.data-testid]="'calibrate-' + device.id"
+                          [attr.aria-label]="'Calibrate ' + device.name"
+                        >
+                          Calibrate
+                        </button>
+                      }
+                      <button
+                        type="button"
+                        (click)="disconnect.emit(device.id)"
+                        class="rounded-lg bg-rose-600/20 px-3 py-1.5 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-600/30 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 cursor-pointer"
+                        [attr.data-testid]="'disconnect-' + device.id"
+                        [attr.aria-label]="'Disconnect ' + device.name"
+                      >
+                        Disconnect
+                      </button>
+                    </div>
                   } @else {
                     <div class="inline-flex items-center gap-1.5">
                       <button

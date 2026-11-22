@@ -13,6 +13,7 @@ import { DeviceListComponent, RenameDeviceEvent } from './device-list.component'
       (reconnect)="lastReconnectedId = $event"
       (remove)="lastRemovedId = $event"
       (rename)="lastRenamed = $event"
+      (calibrate)="lastCalibratedId = $event"
     />
   `,
 })
@@ -22,6 +23,7 @@ class TestHostComponent {
   lastReconnectedId: string | null = null;
   lastRemovedId: string | null = null;
   lastRenamed: RenameDeviceEvent | null = null;
+  lastCalibratedId: string | null = null;
 }
 
 describe('DeviceListComponent', () => {
@@ -92,6 +94,26 @@ describe('DeviceListComponent', () => {
 
     disconnectBtn.click();
     expect(host.lastDisconnectedId).toBe('device-1');
+  });
+
+  it('should emit calibrate when calibrate button is clicked on connected device', () => {
+    host.testDevices = [
+      new Device({
+        id: 'device-1',
+        name: 'Device 1',
+        state: new DeviceState({ connectionState: 'connected' }),
+        transportType: 'serial',
+      }),
+    ];
+    fixture.detectChanges();
+
+    const calibrateBtn = fixture.nativeElement.querySelector(
+      '[data-testid="calibrate-device-1"]',
+    ) as HTMLButtonElement;
+    expect(calibrateBtn).toBeTruthy();
+
+    calibrateBtn.click();
+    expect(host.lastCalibratedId).toBe('device-1');
   });
 
   it('should emit reconnect and remove when clicked on disconnected device', () => {
