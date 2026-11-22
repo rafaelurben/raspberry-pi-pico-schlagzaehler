@@ -341,7 +341,7 @@ describe('DeviceManagerService', () => {
 
     service.setAutoRearm(deviceId, true);
     await service.startCapture(deviceId);
-    expect(transport.sentPayloads).toContain('CAPTURE');
+    expect(transport.sentPayloads).toContain('CAPTURE:START');
 
     transport.eventsSubject.next({ type: 'ascii', content: 'SENSOR status=CAPTURE_ARMED' });
     expect(service.getDevice(deviceId)?.state.sensorState).toBe('CAPTURE_ARMED');
@@ -398,8 +398,8 @@ describe('DeviceManagerService', () => {
     expect(receivedPayloads).toContain('CAPTURE_END count=6');
     expect(receivedPayloads.some((p) => p.startsWith('CAPTURE_DATA'))).toBe(false);
 
-    // Auto-rearm should have sent another CAPTURE command
-    expect(transport.sentPayloads.filter((p) => p === 'CAPTURE')).toHaveLength(2);
+    // Auto-rearm should have sent another CAPTURE:START command
+    expect(transport.sentPayloads.filter((p) => p === 'CAPTURE:START')).toHaveLength(2);
 
     // Stop capture should disable auto-rearm and send CAPTURE:STOP
     await service.stopCapture(deviceId);
@@ -417,7 +417,7 @@ describe('DeviceManagerService', () => {
 
     service.setAutoRearm(deviceId, true);
     await service.startCapture(deviceId, 1);
-    expect(transport.sentPayloads).toContain('CAPTURE:1');
+    expect(transport.sentPayloads).toContain('CAPTURE:START:1');
 
     transport.eventsSubject.next({
       type: 'ascii',
@@ -436,8 +436,8 @@ describe('DeviceManagerService', () => {
       content: 'CAPTURE_END count=6',
     });
 
-    // Auto-rearm should re-issue CAPTURE:1
-    expect(transport.sentPayloads.filter((p) => p === 'CAPTURE:1')).toHaveLength(2);
+    // Auto-rearm should re-issue CAPTURE:START:1
+    expect(transport.sentPayloads.filter((p) => p === 'CAPTURE:START:1')).toHaveLength(2);
     expect(service.captures()[0].target).toBe(1);
   });
 

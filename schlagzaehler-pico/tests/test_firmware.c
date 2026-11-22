@@ -485,42 +485,20 @@ void test_companion_protocol(void) {
     CompanionProtocol_send_message(&cp, &sensor_msg);
     assert(strcmp(s_last_serial_line, "SENSOR status=ARMED") == 0);
 
-    /* Capture start/stop commands */
-    CompanionProtocol_parse_line(&cp, "CAPTURE");
+    /* Canonical capture start/stop/trigger commands */
+    CompanionProtocol_parse_line(&cp, "CAPTURE:START");
     assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
     assert(msg.type == MSG_REQUEST_CAPTURE);
     assert(msg.data.request_capture.enable == true);
+    assert(msg.data.request_capture.action == CAPTURE_ACTION_START);
     assert(msg.data.request_capture.target == 255); /* Default is ALL */
 
-    CompanionProtocol_parse_line(&cp, "CAPTURE:all");
+    CompanionProtocol_parse_line(&cp, "CAPTURE:START:1");
     assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
     assert(msg.type == MSG_REQUEST_CAPTURE);
     assert(msg.data.request_capture.enable == true);
-    assert(msg.data.request_capture.target == 255);
-
-    CompanionProtocol_parse_line(&cp, "CAPTURE:ALL");
-    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
-    assert(msg.type == MSG_REQUEST_CAPTURE);
-    assert(msg.data.request_capture.enable == true);
-    assert(msg.data.request_capture.target == 255);
-
-    CompanionProtocol_parse_line(&cp, "CAPTURE:255");
-    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
-    assert(msg.type == MSG_REQUEST_CAPTURE);
-    assert(msg.data.request_capture.enable == true);
-    assert(msg.data.request_capture.target == 255);
-
-    CompanionProtocol_parse_line(&cp, "CAPTURE:1");
-    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
-    assert(msg.type == MSG_REQUEST_CAPTURE);
-    assert(msg.data.request_capture.enable == true);
+    assert(msg.data.request_capture.action == CAPTURE_ACTION_START);
     assert(msg.data.request_capture.target == 1);
-
-    CompanionProtocol_parse_line(&cp, "CAPTURE:STOP");
-    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
-    assert(msg.type == MSG_REQUEST_CAPTURE);
-    assert(msg.data.request_capture.enable == false);
-    assert(msg.data.request_capture.action == CAPTURE_ACTION_STOP);
 
     CompanionProtocol_parse_line(&cp, "CAPTURE:TRIGGER");
     assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
@@ -535,6 +513,17 @@ void test_companion_protocol(void) {
     assert(msg.data.request_capture.enable == true);
     assert(msg.data.request_capture.action == CAPTURE_ACTION_TRIGGER);
     assert(msg.data.request_capture.target == 2);
+
+    CompanionProtocol_parse_line(&cp, "CAPTURE:STOP");
+    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
+    assert(msg.type == MSG_REQUEST_CAPTURE);
+    assert(msg.data.request_capture.enable == false);
+    assert(msg.data.request_capture.action == CAPTURE_ACTION_STOP);
+
+    CompanionProtocol_parse_line(&cp, "MODE:TIMED");
+    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
+    assert(msg.type == MSG_SET_GAME_MODE);
+    assert(msg.data.set_mode.mode == GAME_MODE_TIMED);
 
     /* Chunked capture transmission */
     uint16_t dummy_samples[120];
@@ -863,6 +852,7 @@ void test_display_presenter_capturing(void) {
 void test_ignored_sensor_calibration_and_detection(void) {
     Config cfg;
     Config_set_defaults(&cfg);
+    cfg.min_baseline_for_active_sensor = 128;
     cfg.calibration_duration_ms = 100;
     cfg.calibration_min_samples = 300; /* 100 per sensor */
     cfg.min_threshold_delta = 25;

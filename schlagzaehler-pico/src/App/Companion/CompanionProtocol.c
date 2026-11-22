@@ -88,16 +88,19 @@ void CompanionProtocol_parse_line(CompanionProtocol* proto, const char* line) {
         CommandHandler_handle_request_calibration(proto->command_handler);
     } else if (strcmp(line, "STATUS") == 0) {
         CommandHandler_handle_request_status(proto->command_handler);
-    } else if (strcmp(line, "CAPTURE") == 0 || strcmp(line, "CAPTURE:START") == 0 ||
-               strcmp(line, "CAPTURE:ALL") == 0 || strcmp(line, "CAPTURE:all") == 0 ||
-               strcmp(line, "CAPTURE:255") == 0 || strcmp(line, "CAPTURE:START:255") == 0 ||
-               strcmp(line, "CAPTURE:START:ALL") == 0 || strcmp(line, "CAPTURE:START:all") == 0) {
+    } else if (strcmp(line, "CAPTURE:START") == 0) {
         CompanionProtocol_cancel_capture_tx(proto);
         CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_START, 255);
-    } else if (strcmp(line, "CAPTURE:TRIGGER") == 0 || strcmp(line, "CAPTURE:NOW") == 0 ||
-               strcmp(line, "CAPTURE:FORCE") == 0 ||
-               strcmp(line, "CAPTURE:TRIGGER:ALL") == 0 || strcmp(line, "CAPTURE:TRIGGER:all") == 0 ||
-               strcmp(line, "CAPTURE:TRIGGER:255") == 0) {
+    } else if (strcmp(line, "CAPTURE:START:0") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
+        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_START, 0);
+    } else if (strcmp(line, "CAPTURE:START:1") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
+        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_START, 1);
+    } else if (strcmp(line, "CAPTURE:START:2") == 0) {
+        CompanionProtocol_cancel_capture_tx(proto);
+        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_START, 2);
+    } else if (strcmp(line, "CAPTURE:TRIGGER") == 0) {
         CompanionProtocol_cancel_capture_tx(proto);
         CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_TRIGGER, 255);
     } else if (strcmp(line, "CAPTURE:TRIGGER:0") == 0) {
@@ -109,25 +112,16 @@ void CompanionProtocol_parse_line(CompanionProtocol* proto, const char* line) {
     } else if (strcmp(line, "CAPTURE:TRIGGER:2") == 0) {
         CompanionProtocol_cancel_capture_tx(proto);
         CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_TRIGGER, 2);
-    } else if (strcmp(line, "CAPTURE:0") == 0 || strcmp(line, "CAPTURE:START:0") == 0) {
-        CompanionProtocol_cancel_capture_tx(proto);
-        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_START, 0);
-    } else if (strcmp(line, "CAPTURE:1") == 0 || strcmp(line, "CAPTURE:START:1") == 0) {
-        CompanionProtocol_cancel_capture_tx(proto);
-        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_START, 1);
-    } else if (strcmp(line, "CAPTURE:2") == 0 || strcmp(line, "CAPTURE:START:2") == 0) {
-        CompanionProtocol_cancel_capture_tx(proto);
-        CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_START, 2);
     } else if (strcmp(line, "CAPTURE:STOP") == 0) {
         CompanionProtocol_cancel_capture_tx(proto);
         CommandHandler_handle_request_capture_action(proto->command_handler, CAPTURE_ACTION_STOP, 0);
     } else if (strncmp(line, "MODE:", 5) == 0) {
         const char* val = line + 5;
-        if (strcmp(val, "COUNT") == 0 || strcmp(val, "0") == 0) {
+        if (strcmp(val, "COUNT") == 0) {
             CommandHandler_handle_set_mode(proto->command_handler, GAME_MODE_COUNT);
-        } else if (strcmp(val, "TIMED") == 0 || strcmp(val, "1") == 0) {
+        } else if (strcmp(val, "TIMED") == 0) {
             CommandHandler_handle_set_mode(proto->command_handler, GAME_MODE_TIMED);
-        } else if (strcmp(val, "RACE") == 0 || strcmp(val, "2") == 0) {
+        } else if (strcmp(val, "RACE") == 0) {
             CommandHandler_handle_set_mode(proto->command_handler, GAME_MODE_RACE);
         }
     } else if (strncmp(line, "PARAM:", 6) == 0) {

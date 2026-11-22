@@ -293,21 +293,13 @@ export function serializeAsciiCommand(command: UnifiedProtocolCommand): string {
       if (action === 'stop' || action === BinaryCaptureAction.STOP) {
         return 'CAPTURE:STOP';
       }
-      if (action === 'trigger' || action === BinaryCaptureAction.TRIGGER) {
-        const target = command.payload.target;
-        if (typeof target === 'number' && target >= 0 && target <= 2) {
-          return `CAPTURE:TRIGGER:${target}`;
-        }
-        return 'CAPTURE:TRIGGER';
-      }
+      const isTrigger = action === 'trigger' || action === BinaryCaptureAction.TRIGGER;
+      const prefix = isTrigger ? 'CAPTURE:TRIGGER' : 'CAPTURE:START';
       const target = command.payload.target;
-      if (target === 'all') {
-        return 'CAPTURE:all';
-      }
       if (typeof target === 'number' && target >= 0 && target <= 2) {
-        return `CAPTURE:${target}`;
+        return `${prefix}:${target}`;
       }
-      return 'CAPTURE';
+      return prefix;
     }
     case 'HANDSHAKE':
       // ASCII protocol has no handshake command

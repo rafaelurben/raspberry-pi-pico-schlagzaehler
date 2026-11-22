@@ -208,14 +208,14 @@ describe('AsciiPayloadParser', () => {
 
     it('should serialize CAPTURE commands', () => {
       expect(serializeAsciiCommand({ type: 'CAPTURE', payload: { action: 'start' } })).toBe(
-        'CAPTURE',
+        'CAPTURE:START',
       );
       expect(
         serializeAsciiCommand({ type: 'CAPTURE', payload: { action: 'start', target: 1 } }),
-      ).toBe('CAPTURE:1');
+      ).toBe('CAPTURE:START:1');
       expect(
         serializeAsciiCommand({ type: 'CAPTURE', payload: { action: 'start', target: 'all' } }),
-      ).toBe('CAPTURE:all');
+      ).toBe('CAPTURE:START');
       expect(serializeAsciiCommand({ type: 'CAPTURE', payload: { action: 'trigger' } })).toBe(
         'CAPTURE:TRIGGER',
       );

@@ -247,7 +247,7 @@ end
 
 == 6. High-Speed Raw Signal Capture & Streaming ==
 
-Web -> Proto: <b>CAPTURE</b>
+Web -> Proto: <b>CAPTURE:START</b>
 activate Proto
 Proto -> CmdH: CommandHandler_handle_request_capture_action(1)
 activate CmdH
