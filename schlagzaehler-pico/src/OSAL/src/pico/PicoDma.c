@@ -172,10 +172,6 @@ void Dma_stop_adc(void) {
     }
 }
 
-uint32_t Dma_get_transfer_count(void) {
-    return s_transfer_count;
-}
-
 uint32_t Dma_get_overrun_count(void) {
     return s_overrun_count;
 }

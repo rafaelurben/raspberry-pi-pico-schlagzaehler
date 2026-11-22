@@ -45,7 +45,7 @@ group 1. Drain Messages from Core 0 (queue_core0_to_core1)
 
         App -> CompanionProtocol : CompanionProtocol_send_message(&msg)
         activate CompanionProtocol
-        CompanionProtocol -> CompanionProtocol : Format protocol frame\n(BOOT / CALIB / SENSOR / STATE / MODE / HIT / SCORE / TIMER / END)
+        CompanionProtocol -> CompanionProtocol : Format protocol frame\n(BOOT / CALIB / SENSOR / STATE / MODE / HIT / SCORE / TIMER / RESULT)
         CompanionProtocol -> UsbSerialDriver : UsbSerialDriver_write_line(buf)
         deactivate CompanionProtocol
     end
@@ -54,11 +54,11 @@ end
 group 2. Poll Incoming Serial Commands from Companion
     App -> CompanionProtocol : CompanionProtocol_poll_input()
     activate CompanionProtocol
-    CompanionProtocol -> UsbSerialDriver : UsbSerialDriver_read_line(line_buf, sizeof(line_buf))
-    UsbSerialDriver --> CompanionProtocol : len (> 0 if full line received)
+    CompanionProtocol -> UsbSerialDriver : UsbSerialDriver_read_bytes(rx_buf, sizeof(rx_buf))
+    UsbSerialDriver --> CompanionProtocol : len (bytes read)
 
     opt Data received
-        CompanionProtocol -> CompanionProtocol : CompanionProtocol_parse_line
+        CompanionProtocol -> CompanionProtocol : Process binary frame or parse ASCII line
         opt Valid command received
             CompanionProtocol -> CommandHandler : CommandHandler_handle_*(...)
             activate CommandHandler
@@ -66,7 +66,6 @@ group 2. Poll Incoming Serial Commands from Companion
             CommandHandler -> Queue : OsalQueue_push(&queue_core1_to_core0, &cmd)
             CommandHandler --> CompanionProtocol : true / false
             deactivate CommandHandler
-            CompanionProtocol -> UsbSerialDriver : UsbSerialDriver_write_line("ACK <cmd>" / "ERR <reason>")
         end
     end
     deactivate CompanionProtocol

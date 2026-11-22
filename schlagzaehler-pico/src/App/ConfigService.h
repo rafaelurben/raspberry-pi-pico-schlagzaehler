@@ -12,10 +12,6 @@ typedef struct {
 } ConfigService;
 
 void ConfigService_init(ConfigService* service, const Config* initial_config);
-const Config* ConfigService_get(const ConfigService* service);
-
-bool ConfigService_set_mode(ConfigService* service, GameMode mode);
-bool ConfigService_set_parameter(ConfigService* service, uint32_t parameter);
 bool ConfigService_set_sensitivity(ConfigService* service, float noise_factor);
 
 #ifdef __cplusplus

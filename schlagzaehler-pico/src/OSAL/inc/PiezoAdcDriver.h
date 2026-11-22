@@ -43,11 +43,6 @@ bool PiezoAdcDriver_poll_buffer(uint16_t** out_buffer, size_t* out_count);
  */
 void PiezoAdcDriver_release_buffer(void);
 
-/**
- * @brief Get total buffer overruns / drops.
- */
-uint32_t PiezoAdcDriver_get_overrun_count(void);
-
 #ifdef __cplusplus
 }
 #endif

@@ -25,6 +25,7 @@ package "Application" as LayerApp #LightGray {
     class "App" as App
     class "ConfigService" as ConfigService
     class "HitDetector" as HitDetector
+    class "SignalCapture" as SignalCapture
     class "ButtonController" as ButtonController
     class "DisplayPresenter" as DisplayPresenter
 
@@ -49,6 +50,8 @@ package "Application" as LayerApp #LightGray {
     App *-down- DisplayPresenter
     App *-down- CompanionProtocol
     App *-down- CommandHandler
+
+    HitDetector *-down- SignalCapture
 
     ' GameController & Companion sub-components (row 3 of Applications)
     GameController *-down- GameState
@@ -219,6 +222,7 @@ App -down-> I_WatchdogService
 GameController -down-> I_Queue
 GameController -down-> I_Time
 CommandHandler -down-> I_Queue
+CommandHandler -down-> I_Time
 
 HitDetector -down-> I_Time
 
@@ -228,6 +232,7 @@ ButtonController -down-> I_Interrupt
 
 DisplayPresenter -down-> I_DisplayDriver
 CompanionProtocol -down-> I_UsbSerialDriver
+CompanionProtocol -down-> I_Time
 
 ' Internal Abstraction Layer dependencies & callbacks
 Impl_PiezoAdcDriver --> I_Dma

@@ -2,11 +2,16 @@
 
 top to bottom direction
 
-[*] --> Init
+state Boot {
+    state "Initialisierung" as BootInit
+    state "Kalibrierung" as BootCalib
 
-Init --> Calibrating
+    [*] -right-> BootInit
+    BootInit -right-> BootCalib : Hardware OK
+}
 
-Calibrating --> ModeCount
+[*] --> Boot
+Boot --> ModeCount : Kalibriert
 
 state Spiel {
     state "Spielmodus Zählen" as ModeCount {
@@ -30,7 +35,7 @@ state Spiel {
         ModeTimedActive -down-> ModeTimedResult : TIME_LIMIT
         ModeTimedResult --> ModeTimedReady : RIGHT (Restart)
 
-        ModeTimedReady --> ModeTimedReady : UP/DOWN (Zeit erhöhen/verringern)
+        ModeTimedReady --> ModeTimedReady : UP/DOWN (Zeit +/-5s)
     }
     state "Spielmodus Rennen" as ModeRace {
         state "Bereit" as ModeRaceReady
@@ -41,15 +46,26 @@ state Spiel {
 
         ModeRaceReady -right-> ModeRaceActive : HIT
         ModeRaceActive -left-> ModeRaceReady : RIGHT (Restart)
-        ModeRaceActive -down-> ModeRaceResult : HIT_LIMIT
+        ModeRaceActive -down-> ModeRaceResult : TARGET_REACHED
         ModeRaceResult --> ModeRaceReady : RIGHT (Restart)
 
-        ModeRaceReady --> ModeRaceReady : UP/DOWN (Zeit erhöhen/verringern)
+        ModeRaceReady --> ModeRaceReady : UP/DOWN (Anzahl Schläge +/-5)
     }
 
     ModeCount -[hidden]down-> ModeTimed
     ModeTimed -[hidden]down-> ModeRace
 }
+
+state "Erfassung (Capturing)" as Capturing {
+    state "Aufnahme" as CapturingRecord
+    state "Übertragung" as CapturingStream
+
+    [*] -right-> CapturingRecord
+    CapturingRecord -right-> CapturingStream : Puffer voll (21'000 Samples)
+}
+
+Spiel --> Capturing : CMD_CAPTURE / CAPTURE:START
+Capturing --> Spiel : Transfer fertig / STOP
 
 state Menu {
     state "Modus Zählen" as MenuModeCount

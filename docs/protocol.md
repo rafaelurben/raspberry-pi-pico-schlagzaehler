@@ -40,7 +40,7 @@ The Schlagzähler system employs a strictly decoupled dual-core RP2040 architect
 │  - DisplayPresenter (ST7735 128x160 SPI TFT)                           │
 └───────────────────────▲────────────────────────┬───────────────────────┘
                         │                        │
-          queue_core0_to_core1 (Cap: 16)         │ queue_core1_to_core0 (Cap: 8)
+          queue_core0_to_core1                   │ queue_core1_to_core0
           Core0ToCore1Message                    │ Core1ToCore0Message
           (State, Hits, Timer, Telemetry)        │ (Commands: Start, Mode, Calib...)
                         │                        │
@@ -226,7 +226,7 @@ packet
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `parameter` | `uint32_t` | Seconds (`5` to `300`) or target hits (`5` to `500`). |
+| `parameter` | `uint32_t` | Seconds (`5` to `10000`) or target hits (`5` to `10000`). |
 
 ---
 
@@ -243,7 +243,7 @@ packet
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `noise_factor` | `float` | Multiplier applied to baseline noise (clamped between `1.0` and `20.0`). |
+| `noise_factor` | `float` | Multiplier applied to baseline noise (clamped between `1.0` and `1000.0`). |
 
 ---
 
@@ -252,7 +252,7 @@ Arms, triggers manually, or cancels raw high-frequency piezo signal capture.
 
 ```mermaid
 ---
-title: "CMD_CAPTURE Payload (4 bytes)"
+title: "CMD_CAPTURE Payload (2 bytes)"
 ---
 packet
 0-7: "Action (u8)"
@@ -297,7 +297,7 @@ packet
 | `hardware_rev` | `uint8_t` | Hardware revision (`1`). |
 | `proto_major` | `uint8_t` | Wire protocol major version (`1`). |
 | `proto_minor` | `uint8_t` | Wire protocol minor version (`0`). |
-| `fw_major` / `minor` / `patch` | `uint8_t` | Firmware build version (e.g. `1.2.0`). |
+| `fw_major` / `minor` / `patch` | `uint8_t` | Firmware build version (e.g. `0.3.0`). |
 | `status_code` | `uint8_t` | `0` = `OK`, `1` = `ERR_VERSION_MISMATCH`, `2` = `ERR_BUSY`. |
 | `reserved` | `uint32_t` | Reserved for future capabilities (set to `0`). |
 | `client_nonce` | `uint32_t` | Echoes `client_nonce` from `CMD_HANDSHAKE`. |
@@ -310,7 +310,7 @@ Broadcast when the sensor front-end transitions states.
 
 ```mermaid
 ---
-title: "MSG_SENSOR_STATUS Payload (4 bytes)"
+title: "MSG_SENSOR_STATUS Payload (2 bytes)"
 ---
 packet
 0-7: "Sensor State (u8)"
@@ -380,7 +380,7 @@ Emitted on authoritative game state machine transitions.
 
 ```mermaid
 ---
-title: "MSG_GAME_STATE Payload (4 bytes)"
+title: "MSG_GAME_STATE Payload (2 bytes)"
 ---
 packet
 0-7: "Old State (u8)"
@@ -455,7 +455,7 @@ Emitted upon reaching a game termination condition before entering `FINISHED` st
 
 ```mermaid
 ---
-title: "MSG_GAME_FINISHED Payload (12 bytes)"
+title: "MSG_GAME_FINISHED Payload (9 bytes)"
 ---
 packet
 0-31: "Final Score (u32)"
@@ -523,7 +523,7 @@ Emitted immediately after the final `MSG_CAPTURE_DATA` chunk has been transferre
 
 ```mermaid
 ---
-title: "MSG_CAPTURE_END Payload (4 bytes)"
+title: "MSG_CAPTURE_END Payload (2 bytes)"
 ---
 packet
 0-15: "Total Streamed Samples (u16)"
@@ -605,8 +605,8 @@ Newline-delimited (`\n` or `\r\n`):
 ## 8. Inter-Core IPC Message Reference (`Messages.h`)
 
 Core 0 and Core 1 communicate exclusively via lock-safe OSAL SPSC ring buffers:
-- `queue_core0_to_core1` (Capacity: 16 entries)
-- `queue_core1_to_core0` (Capacity: 8 entries)
+- `queue_core0_to_core1`
+- `queue_core1_to_core0`
 
 ### 8.1 Core 0 $\rightarrow$ Core 1 (`Core0ToCore1Message`)
 
@@ -625,7 +625,6 @@ typedef struct {
         MsgScoreChanged         score;
         MsgTimerChanged         timer;
         MsgGameFinished         game_finished;
-        MsgConfigChanged        config;
         MsgCaptureReady         capture_ready;
         MsgError                error;
     } data;

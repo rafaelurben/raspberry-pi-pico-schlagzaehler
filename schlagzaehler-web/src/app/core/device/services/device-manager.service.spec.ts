@@ -456,8 +456,8 @@ describe('DeviceManagerService', () => {
     ackView.setUint8(1, 1); // hwRev
     ackView.setUint8(2, 1); // protoMajor
     ackView.setUint8(3, 0); // protoMinor
-    ackView.setUint8(4, 1); // fwMajor
-    ackView.setUint8(5, 2); // fwMinor
+    ackView.setUint8(4, 0); // fwMajor
+    ackView.setUint8(5, 3); // fwMinor
     ackView.setUint8(6, 0); // fwPatch
     ackView.setUint32(16, 9999, true); // uptimeMs
 
@@ -473,9 +473,9 @@ describe('DeviceManagerService', () => {
     });
 
     const updatedDev = service.getDevice(deviceId);
-    expect(updatedDev?.state.fwVersion).toBe('1.2.0');
+    expect(updatedDev?.state.fwVersion).toBe('0.3.0');
     expect(updatedDev?.state.uptimeMs).toBe(9999);
-    expect(updatedDev?.metadata?.fwVersion).toBe('1.2.0');
+    expect(updatedDev?.metadata?.fwVersion).toBe('0.3.0');
 
     // 2. MSG_SCORE
     const scorePayload = new Uint8Array(4);

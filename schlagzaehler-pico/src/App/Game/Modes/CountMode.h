@@ -14,8 +14,6 @@ typedef struct {
 
 void CountMode_init(CountMode* mode);
 void CountMode_start(CountMode* mode, uint64_t start_time_us);
-void CountMode_reset(CountMode* mode);
-bool CountMode_on_hit(CountMode* mode, uint32_t current_score);
 bool CountMode_on_tick(CountMode* mode, uint64_t now_us, uint32_t* out_elapsed_ms, uint32_t* out_remaining_ms);
 
 #ifdef __cplusplus

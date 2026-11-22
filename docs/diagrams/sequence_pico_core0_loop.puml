@@ -80,7 +80,7 @@ group 1. Process Completed ADC DMA Buffer
             App -> GameController : GameController_on_sensor_state(new_state, baseline, noise, threshold)
             activate GameController
             GameController -> Time : Time_now_us()
-            GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_SENSOR_STATE_CHANGED)
+            GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_SENSOR_STATUS_CHANGED)
             opt Transitioned from CALIBRATING to ARMED/ERROR
                 GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_CALIBRATION_RESULT)
                 GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_GAME_STATE_CHANGED)
@@ -180,7 +180,7 @@ group 5. Update GameController Timer Tick
         GameController -> Time : Time_now_us()
         GameController -> Modes : TimedMode_tick() / RaceMode_tick()
         opt Every 100ms or on game completion
-            GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_TIMER_UPDATED / MSG_GAME_FINISHED)
+            GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_TIMER_CHANGED / MSG_GAME_FINISHED)
         end
     end
     deactivate GameController

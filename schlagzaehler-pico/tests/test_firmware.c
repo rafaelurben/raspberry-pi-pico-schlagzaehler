@@ -82,11 +82,6 @@ bool OsalQueue_pop(OsalQueue* q, void* item) {
     return true;
 }
 
-size_t OsalQueue_count(const OsalQueue* q) {
-    MockQueueStorage* s = (MockQueueStorage*)q->impl;
-    return s->count;
-}
-
 /* Mock USB serial output */
 static char s_last_serial_line[256];
 static uint8_t s_last_serial_bytes[1024];
@@ -94,11 +89,6 @@ static size_t s_last_serial_bytes_len = 0;
 
 void UsbSerialDriver_write_line(const char* line) {
     strncpy(s_last_serial_line, line, sizeof(s_last_serial_line) - 1);
-    s_last_serial_line[sizeof(s_last_serial_line) - 1] = '\0';
-}
-
-void UsbSerialDriver_write_string(const char* str) {
-    strncpy(s_last_serial_line, str, sizeof(s_last_serial_line) - 1);
     s_last_serial_line[sizeof(s_last_serial_line) - 1] = '\0';
 }
 
@@ -131,10 +121,6 @@ int UsbSerialDriver_read_bytes(uint8_t* buffer, size_t max_len) {
     return (int)count;
 }
 
-int UsbSerialDriver_read_line(char* buffer, size_t max_len) {
-    (void)buffer; (void)max_len; return 0;
-}
-
 /* Mock DisplayDriver for testing */
 static char s_last_display_strings[16][64];
 static int s_display_string_count = 0;
@@ -156,16 +142,17 @@ void test_config_service(void) {
     Config_set_defaults(&cfg);
     ConfigService_init(&cs, &cfg);
 
-    const Config* c = ConfigService_get(&cs);
-    assert(c->default_mode == GAME_MODE_COUNT);
+    assert(cs.current_config.default_mode == GAME_MODE_COUNT);
 
-    ConfigService_set_mode(&cs, GAME_MODE_TIMED);
-    ConfigService_set_parameter(&cs, 45);
-    assert(ConfigService_get(&cs)->timed_duration_s == 45);
+    ConfigService_set_sensitivity(&cs, 2.5f);
+    assert(cs.current_config.noise_factor == 2.5f);
 
-    /* Test clamping */
-    ConfigService_set_parameter(&cs, 2);
-    assert(ConfigService_get(&cs)->timed_duration_s == 5);
+    /* Test clamping: min 1.0, max 1000.0 */
+    ConfigService_set_sensitivity(&cs, 0.5f);
+    assert(cs.current_config.noise_factor == 1.0f);
+
+    ConfigService_set_sensitivity(&cs, 2000.0f);
+    assert(cs.current_config.noise_factor == 1000.0f);
 
     printf("PASS: test_config_service\n");
 }
@@ -436,10 +423,8 @@ void test_companion_protocol(void) {
     CompanionProtocol_init(&cp, &ch);
 
     CompanionProtocol_parse_line(&cp, "START");
-    assert(OsalQueue_count(&q1_to_q0) == 1);
-
     Core1ToCore0Message msg;
-    OsalQueue_pop(&q1_to_q0, &msg);
+    assert(OsalQueue_pop(&q1_to_q0, &msg) == true);
     assert(msg.type == MSG_START_GAME);
 
     /* STATUS command parses and queues MSG_REQUEST_STATUS */
@@ -1101,8 +1086,8 @@ void test_binary_framing_constants_and_structs(void) {
     assert(PROTOCOL_VERSION == 1U);
     assert(PROTO_VERSION_MAJOR == 1U);
     assert(PROTO_VERSION_MINOR == 0U);
-    assert(FW_VERSION_MAJOR == 1U);
-    assert(FW_VERSION_MINOR == 2U);
+    assert(FW_VERSION_MAJOR == 0U);
+    assert(FW_VERSION_MINOR == 3U);
     assert(FW_VERSION_PATCH == 0U);
     assert(HARDWARE_GEN == 1U);
     assert(HARDWARE_REV == 1U);
@@ -1181,8 +1166,8 @@ void test_binary_handshake(void) {
     assert(ack->hardware_rev == 1);
     assert(ack->proto_major == 1);
     assert(ack->proto_minor == 0);
-    assert(ack->fw_major == 1);
-    assert(ack->fw_minor == 2);
+    assert(ack->fw_major == 0);
+    assert(ack->fw_minor == 3);
     assert(ack->fw_patch == 0);
     assert(ack->status_code == HANDSHAKE_STATUS_OK);
     assert(ack->client_nonce == 0xCAFEBABE);

@@ -82,7 +82,6 @@ void App_init_core0(App *app)
     HitDetector_init(&app->hit_detector, &app->config);
     ButtonController_init(&app->button_controller);
     GameController_init(&app->game_controller, &app->config, &app->queue_core0_to_core1);
-    CompanionProtocol_init(&app->companion_protocol, &app->command_handler);
 }
 
 void App_init_core1(App *app)

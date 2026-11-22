@@ -24,7 +24,6 @@ extern "C" {
 /* Font IDs */
 typedef enum {
     DISPLAY_FONT_DEFAULT = 1,   /* 8x8 font */
-    DISPLAY_FONT_PICO    = 2,   /* 8x12 font */
     DISPLAY_FONT_RETRO   = 5,   /* 8x16 font */
     DISPLAY_FONT_BIG     = 6    /* 16x16 font */
 } DisplayFontId;

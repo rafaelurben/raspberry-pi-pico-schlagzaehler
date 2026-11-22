@@ -183,7 +183,7 @@ static void render_ready(DisplayPresenter* presenter) {
         DisplayDriver_draw_string(DISP_X_INFO_TEXT, DISP_Y_INFO_TEXT2, "Auf/Ab: +/-5s", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
     } else if (presenter->active_mode == GAME_MODE_RACE)
     {
-        DisplayDriver_draw_string(DISP_X_INFO_TEXT, DISP_Y_INFO_TEXT2, "Auf/Ab: +/-10", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
+        DisplayDriver_draw_string(DISP_X_INFO_TEXT, DISP_Y_INFO_TEXT2, "Auf/Ab: +/-5", DISPLAY_COLOR_GRAY, DISPLAY_COLOR_BLACK, DISPLAY_FONT_DEFAULT);
     }
 }
 

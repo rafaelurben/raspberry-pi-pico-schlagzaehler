@@ -69,7 +69,7 @@ add_executable(schlagzaehler
 )
 
 pico_set_program_name(schlagzaehler "schlagzaehler")
-pico_set_program_version(schlagzaehler "0.2")
+pico_set_program_version(schlagzaehler "0.3")
 
 # Enable both UART and USB CDC stdio output
 pico_enable_stdio_uart(schlagzaehler 1)

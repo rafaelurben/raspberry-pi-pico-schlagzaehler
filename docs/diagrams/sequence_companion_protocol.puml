@@ -16,8 +16,8 @@ box "Pico W – Core 1 (Display & I/O)" #E3F2FD
 end box
 
 box "Inter-Core Queues (OSAL)" #FFF3E0
-    queue "queue_core1_to_core0\n(Capacity: 8)" as Q10
-    queue "queue_core0_to_core1\n(Capacity: 16)" as Q01
+    queue "queue_core1_to_core0" as Q10
+    queue "queue_core0_to_core1" as Q01
 end box
 
 box "Pico W – Core 0 (Game & Sensing)" #F3E5F5
@@ -28,9 +28,9 @@ end box
 
 == 1. Device Boot & Handshake ==
 
-HD -> Q01: Core0ToCore1Message\n(MSG_BOOT_STATUS: success=true, msg="OK")
-activate HD
-deactivate HD
+App0 -> Q01: Core0ToCore1Message\n(MSG_BOOT_STATUS: success=true, msg="OK")
+activate App0
+deactivate App0
 Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)
 activate Proto
 Proto --> Web: <b>BOOT success=1 msg=OK</b>
@@ -91,8 +91,9 @@ deactivate Proto
 
 note over HD, App0: Core 0 collects 10'000 ADC samples (1500 ms)\nComputes baseline, noise, and base_threshold
 
-HD -> Q01: MSG_CALIBRATION_RESULT (success=1, baseline=512, noise=14, threshold=568)
-HD -> Q01: MSG_SENSOR_STATUS_CHANGED (ARMED)
+HD -> App0: Calibration complete
+App0 -> Q01: MSG_CALIBRATION_RESULT (success=1, baseline=512, noise=14, threshold=568)
+App0 -> Q01: MSG_SENSOR_STATUS_CHANGED (ARMED)
 
 loop Drain Calibration Result & Arming
     Q01 -> Proto: OsalQueue_pop()
@@ -269,16 +270,18 @@ Proto --> Web: <b>SENSOR status=CAPTURE_ARMED</b>
 deactivate Proto
 
 note over HD: Physical hit occurs!\nPre-trigger buffer (1'000 samples) locked.\nPost-trigger buffer (20'000 samples) records for 2.0 s.
-HD -> Q01: MSG_SENSOR_STATUS_CHANGED (CAPTURING)
+HD -> App0: Capture triggered
+App0 -> Q01: MSG_SENSOR_STATUS_CHANGED (CAPTURING)
 Q01 -> Proto: OsalQueue_pop()
 activate Proto
 Proto --> Web: <b>SENSOR status=CAPTURING</b>
 deactivate Proto
 
 note over HD: Capture completes (total 21'000 samples at 10 kHz)
-HD -> Q01: MSG_CAPTURE_READY (rate=10000, pre=1000, count=21000, samples=ptr)
-activate HD
-deactivate HD
+HD -> App0: Capture complete
+App0 -> Q01: MSG_CAPTURE_READY (rate=10000, pre=1000, count=21000, samples=ptr)
+activate App0
+deactivate App0
 
 Q01 -> Proto: OsalQueue_pop()
 activate Proto

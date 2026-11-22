@@ -72,7 +72,6 @@ par Core 0 Initialization (App_init_core0)
     deactivate ButtonController
 
     App -> GameController : GameController_init(&game_controller, &config, &queue_core0_to_core1)
-    App -> CompanionProtocol : CompanionProtocol_init(&companion_protocol, &command_handler)
 
 else Core 1 Initialization (App_init_core1)
     App -> UsbSerialDriver : UsbSerialDriver_init()
@@ -108,7 +107,7 @@ App -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_BOOT_STATUS)
 App -> GameController : GameController_on_sensor_state(SENSOR_STATE_INIT, 0, 0, 100)
 activate GameController
 GameController -> Time : Time_now_us()
-GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_SENSOR_STATE_CHANGED)
+GameController -> Queue : OsalQueue_push(&queue_core0_to_core1, MSG_SENSOR_STATUS_CHANGED)
 deactivate GameController
 
 App -> PiezoAdcDriver : PiezoAdcDriver_start()

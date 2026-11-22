@@ -104,7 +104,7 @@ The RP2040's two ARM Cortex-M0+ cores have strictly separated responsibilities a
 ### Core 1: Display Rendering & USB Serial I/O (`App_run_core1`)
 
 1. **Event Dispatch**: Pops `Core0ToCore1Message` items from `queue_core0_to_core1` and passes each message to both `DisplayPresenter_handle_message()` and `CompanionProtocol_send_message()`.
-2. **Serial Command Polling**: Polls `CompanionProtocol_poll_input()` (non-blocking `UsbSerialDriver_read_line()`) and pushes parsed commands to `queue_core1_to_core0`.
+2. **Serial Command Polling**: Polls `CompanionProtocol_poll_input()` (non-blocking `UsbSerialDriver_read_bytes()` with dual-mode streaming parser) and pushes parsed commands to `queue_core1_to_core0`.
 3. **Incremental Display Rendering**: Calls `DisplayPresenter_render()`, which only redraws dirty screen regions over SPI0.
 4. **Watchdog Heartbeat**: Updates Core 1's timestamp via `WatchdogService_feed_core1()`. Hardware watchdog (`WatchdogService_tick()` on Core 0) only pets the RP2040 hardware watchdog if **both** Core 0 and Core 1 have checked in within `watchdog_timeout_ms` (5000 ms).
 
@@ -115,7 +115,7 @@ The RP2040's two ARM Cortex-M0+ cores have strictly separated responsibilities a
 ### Sensor State (`SensorState`)
 
 - `SENSOR_STATE_INIT`: Initial uncalibrated state on boot.
-- `SENSOR_STATE_CALIBRATING`: Samples baseline mean and variance across all 3 sensors over `1500 ms` (min `10000` samples per sensor), computing per-sensor `base_threshold = baseline + max(min_threshold_delta, noise_factor * noise)`. If a sensor baseline is below `config->min_baseline_for_active_sensor`, it is flagged as `ignored = true` and prevented from triggering hits or winning coincidence arbitration. Fails to `ERROR` if signal span exceeds 1500 ADC counts on any active sensor or if all three sensors are ignored.
+- `SENSOR_STATE_CALIBRATING`: Samples baseline mean and variance across all 3 sensors over `1500 ms` (min `10000` samples per sensor), computing per-sensor `base_threshold = baseline + max(min_threshold_delta, noise_factor * noise)`. If a sensor baseline is below `config->min_baseline_for_active_sensor`, it is flagged as `ignored = true` and prevented from triggering hits or winning coincidence arbitration. Fails to `ERROR` if signal span exceeds the configured maximum noise span on any active sensor or if all three sensors are ignored.
 - `SENSOR_STATE_ARMED`: Ready to detect hits exceeding per-sensor thresholds (skipping ignored sensors).
 - `SENSOR_STATE_HIT_LOCKOUT`: Triggered upon a hit; tracks peak intensity with exponential decay (`decay_factor`) per sensor during `lockout_duration_ms` to prevent double-counting ringdown oscillations. Coincidence window resolves multi-sensor vibration and picks the winning piezo by peak intensity (ignoring inactive sensors).
 - `SENSOR_STATE_CAPTURE_ARMED`: Armed via companion `CAPTURE` command (target `0`, `1`, `2`, or `all`); continuously fills a `0.1 s` pre-trigger circular buffer (`1,000` samples at `10 kHz`, 5:1 max-pooled or 15:1 max-pooled per sensor) until a sample crosses the trigger threshold.
@@ -128,15 +128,15 @@ The RP2040's two ARM Cortex-M0+ cores have strictly separated responsibilities a
 - `GAME_STATE_BOOT`: Shown during initial sensor calibration; transitions to `READY` when calibration succeeds.
 - `GAME_STATE_MENU`: Mode selection (`UP`/`DOWN` to cycle mode, `RIGHT` to confirm and enter `READY`).
 - `GAME_STATE_READY`: Pre-game screen (`LEFT` returns to `MENU`, `UP`/`DOWN` adjusts parameter in `TIMED` or `RACE` mode, `RIGHT` or companion `START` command transitions to `RUNNING`).
-- `GAME_STATE_RUNNING`: Active gameplay (`LEFT` aborts and resets to `READY`; hits increment authoritative aggregate score; timer ticks; individual winning piezo ID is not displayed on TFT).
+- `GAME_STATE_RUNNING`: Active gameplay (`RIGHT` aborts and resets to `READY`; `LEFT` returns to `MENU`; hits increment authoritative aggregate score; timer ticks; individual winning piezo ID is not displayed on TFT).
 - `GAME_STATE_FINISHED`: Game over screen (`LEFT` returns to `MENU`, `RIGHT` resets to `READY`).
 - `GAME_STATE_CAPTURING`: Dedicated screen shown while raw piezo signal capture is armed (`SENSOR_STATE_CAPTURE_ARMED`) or actively recording/streaming (`SENSOR_STATE_CAPTURING`).
 
 ### Game Modes (`GameMode`)
 
 - **`GAME_MODE_COUNT` ("Zaehlen")**: Open-ended hit counter with elapsed stopwatch.
-- **`GAME_MODE_TIMED` ("Zeit")**: Count as many hits as possible within a countdown duration (default `30 s`, adjustable in `5 s` steps between `5 s` and `300 s`). Ends with `GAME_END_TIME_LIMIT`.
-- **`GAME_MODE_RACE` ("Rennen")**: Reach a target hit count (default `50` hits, adjustable in `5`-hit steps between `5` and `500`) as fast as possible. Ends with `GAME_END_TARGET_REACHED`.
+- **`GAME_MODE_TIMED` ("Zeit")**: Count as many hits as possible within a countdown duration (default `30 s`, adjustable in `5 s` steps between `5 s` and `10000 s`). Ends with `GAME_END_TIME_LIMIT`.
+- **`GAME_MODE_RACE` ("Rennen")**: Reach a target hit count (default `50` hits, adjustable in `5`-hit steps between `5` and `10000`) as fast as possible. Ends with `GAME_END_TARGET_REACHED`.
 
 ---
 

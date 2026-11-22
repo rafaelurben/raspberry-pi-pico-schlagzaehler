@@ -316,21 +316,18 @@ void GameController_on_button(GameController* gc, const ButtonEvent* btn) {
             GameState_reset_score(&gc->state_model);
             broadcast_score_change(gc);
         } else if (btn->button == BTN_ID_UP) {
-            if (gc->state_model.active_mode == GAME_MODE_TIMED) {
+            if (gc->state_model.active_mode == GAME_MODE_TIMED || gc->state_model.active_mode == GAME_MODE_RACE) {
                 gc->state_model.parameter += 5;
-                if (gc->state_model.parameter > 300) gc->state_model.parameter = 300;
-                broadcast_mode_change(gc);
-            } else if (gc->state_model.active_mode == GAME_MODE_RACE) {
-                gc->state_model.parameter += 10;
-                if (gc->state_model.parameter > 500) gc->state_model.parameter = 500;
+                if (gc->state_model.parameter > 10000) gc->state_model.parameter = 10000;
                 broadcast_mode_change(gc);
             }
         } else if (btn->button == BTN_ID_DOWN) {
-            if (gc->state_model.active_mode == GAME_MODE_TIMED) {
-                if (gc->state_model.parameter > 5) gc->state_model.parameter -= 5;
-                broadcast_mode_change(gc);
-            } else if (gc->state_model.active_mode == GAME_MODE_RACE) {
-                if (gc->state_model.parameter > 10) gc->state_model.parameter -= 10;
+            if (gc->state_model.active_mode == GAME_MODE_TIMED || gc->state_model.active_mode == GAME_MODE_RACE) {
+                if (gc->state_model.parameter > 5) {
+                    gc->state_model.parameter -= 5;
+                } else {
+                    gc->state_model.parameter = 5;
+                }
                 broadcast_mode_change(gc);
             }
         }
@@ -415,10 +412,14 @@ void GameController_on_command(GameController* gc, const Core1ToCore0Message* cm
             GameState_reset_score(&gc->state_model);
             broadcast_mode_change(gc);
             break;
-        case MSG_SET_GAME_PARAMETER:
-            gc->state_model.parameter = cmd->data.set_parameter.parameter;
+        case MSG_SET_GAME_PARAMETER: {
+            uint32_t param = cmd->data.set_parameter.parameter;
+            if (param < 5) param = 5;
+            if (param > 10000) param = 10000;
+            gc->state_model.parameter = param;
             broadcast_mode_change(gc);
             break;
+        }
         case MSG_REQUEST_STATUS:
             broadcast_sensor_state(gc);
             broadcast_state_change(gc, gc->state_model.state, gc->state_model.state);

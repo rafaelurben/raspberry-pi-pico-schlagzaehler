@@ -46,9 +46,6 @@ extern "C" void DisplayDriver_draw_string(int16_t x, int16_t y, const char* str,
     if (!s_initialized || !str) return;
 
     switch (font_id) {
-        case DISPLAY_FONT_PICO:
-            s_tft.setFont(font_pico);
-            break;
         case DISPLAY_FONT_RETRO:
             s_tft.setFont(font_retro);
             break;

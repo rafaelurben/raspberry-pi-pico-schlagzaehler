@@ -26,7 +26,6 @@ typedef enum {
     MSG_SCORE_CHANGED,
     MSG_TIMER_CHANGED,
     MSG_GAME_FINISHED,
-    MSG_CONFIG_CHANGED,
     MSG_CAPTURE_READY,
     MSG_ERROR
 } Core0ToCore1MsgType;
@@ -84,10 +83,6 @@ typedef struct {
 } MsgGameFinished;
 
 typedef struct {
-    Config config;
-} MsgConfigChanged;
-
-typedef struct {
     uint32_t sample_rate_hz;
     uint8_t target; /* 0, 1, 2, or 255 for ALL */
     uint16_t pre_samples;
@@ -118,7 +113,6 @@ typedef struct {
         MsgScoreChanged         score;
         MsgTimerChanged         timer;
         MsgGameFinished         game_finished;
-        MsgConfigChanged        config;
         MsgCaptureReady         capture_ready;
         MsgError                error;
     } data;

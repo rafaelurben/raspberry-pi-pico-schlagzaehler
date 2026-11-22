@@ -35,11 +35,6 @@ void Dma_start_adc(void);
 void Dma_stop_adc(void);
 
 /**
- * @brief Query total DMA buffer transfer completions.
- */
-uint32_t Dma_get_transfer_count(void);
-
-/**
  * @brief Query number of detected buffer overwrite/overrun conditions.
  */
 uint32_t Dma_get_overrun_count(void);

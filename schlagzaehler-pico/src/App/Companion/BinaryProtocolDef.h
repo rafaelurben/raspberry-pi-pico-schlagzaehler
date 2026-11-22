@@ -19,8 +19,8 @@ extern "C" {
 #define PROTO_VERSION_MAJOR        1U
 #define PROTO_VERSION_MINOR        0U
 
-#define FW_VERSION_MAJOR           1U
-#define FW_VERSION_MINOR           2U
+#define FW_VERSION_MAJOR           0U
+#define FW_VERSION_MINOR           3U
 #define FW_VERSION_PATCH           0U
 
 #define HARDWARE_GEN               1U

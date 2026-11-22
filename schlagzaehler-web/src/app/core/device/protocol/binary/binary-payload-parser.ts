@@ -453,7 +453,7 @@ export function serializeBinaryCommand(command: UnifiedProtocolCommand, seq?: nu
       if (typeof target === 'number' && target >= 0 && target <= 2) {
         targetVal = target;
       }
-      const payload = new Uint8Array([actionVal, targetVal, 0, 0]);
+      const payload = new Uint8Array([actionVal, targetVal]);
       return serializeBinaryFrame(BinaryCommandType.CMD_CAPTURE, payload, 0, sequenceNumber);
     }
   }

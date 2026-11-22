@@ -147,7 +147,7 @@ export class DeviceCardComponent implements OnInit, OnDestroy {
     if (!Number.isNaN(parsed) && parsed > 0) {
       this.parameterChange.emit({
         deviceId: this.device().id,
-        parameter: Math.floor(parsed),
+        parameter: Math.max(5, Math.min(10000, Math.floor(parsed))),
       });
     }
   }

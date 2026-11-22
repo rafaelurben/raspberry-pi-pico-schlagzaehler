@@ -219,7 +219,9 @@
             <div class="flex items-center gap-1.5">
               <input
                 type="number"
-                min="1"
+                min="5"
+                max="10000"
+                step="5"
                 [id]="'param-input-' + device().id"
                 [value]="parameterValue()"
                 (change)="onParameterInput($any($event.target).value)"
