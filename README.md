@@ -6,7 +6,7 @@ Piezo-based hit detection and interactive target gaming system featuring dual-co
 
 ## 1. System Overview
 
-Schlagzähler combines physical target hardware with a real-time web dashboard. One or more battery- or USB-powered physical targets can be operated standalone (via their on-board TFT display and 4-button navigation) or connected simultaneously over USB CDC Serial to the companion web application for synchronized multiplayer matches, telemetry monitoring, and raw waveform signal analysis.
+Schlagzähler combines physical target hardware with a real-time web dashboard. One or more battery- or USB-powered physical targets (powered by a Raspberry Pi Pico W with 3 piezo sensors on a single target mount, 4 navigation buttons, and an ST7735 TFT display) can be operated standalone (via their on-board TFT display and 4-button navigation) or connected simultaneously over USB CDC Serial to the companion web application for synchronized multiplayer matches, telemetry monitoring, and raw waveform signal analysis.
 
 ### Repository Structure
 
@@ -50,18 +50,19 @@ The firmware runs a strict three-layer architecture: **Application Layer** (`src
 ### Application Services (`src/App/`)
 
 - **`HitDetector` & `SignalCapture`** (`src/App/HitDetection/`):
-  - **Hit Detection Engine**: Samples the piezo sensor at **50 kHz** via continuous ping-pong DMA buffers (256 samples per buffer). Performs dynamic statistical calibration (mean baseline and noise variance over 1.5 s / 10,000 samples). Calculates an adaptive dynamic threshold with exponential decay (`decay_factor = 0.995`) and enforces a configurable lockout dead-time (`100 ms`) to reject mechanical ringdown reverberations.
+  - **Hit Detection Engine**: Samples the piezo sensors at **150 kHz aggregate** (**3x 50 kHz** hardware round-robin) 
+    via continuous ping-pong DMA buffers (384 samples per buffer, 128 samples per sensor). Performs dynamic statistical calibration per sensor (mean baseline and noise variance over 1.5 s / 30,000 total samples, 10,000 samples per sensor). Calculates an adaptive dynamic threshold with exponential decay (`decay_factor = 0.995`) and enforces a configurable lockout dead-time (`100 ms`) to reject mechanical ringdown reverberations. Employs a 2.5 ms coincidence window and peak intensity comparison to pick the winning sensor zone for each hit, and automatically flags inactive or disconnected sensors (baseline below threshold) as ignored so the target continues operating smoothly on remaining sensors.
   - **Mechanical Vibration Suppression**: Automatically ignores piezo triggers during and immediately following button presses (`150–250 ms`) to prevent button-press vibrations from registering as hits.
-  - **Raw Waveform Capture Engine (`SignalCapture`)**: Single-shot raw signal recording tool. Uses **5:1 max-pooling** (10 kHz effective rate) to preserve high-frequency hit peaks while capturing **21,000 samples (2.1 seconds)** into a static 42 KB buffer (`0` dynamic allocations). Unrolls a 1,000-sample circular pre-trigger buffer (`0.1 s`) and records 20,000 post-trigger samples (`2.0 s`).
-  - **Sensor Lifecycle**: Authoritative state machine managing `SENSOR_STATE_INIT`, `CALIBRATING`, `ARMED`, `HIT_LOCKOUT`, `CAPTURE_ARMED`, `CAPTURING` (LED on), and `CAPTURE_TX_WAIT` (LED off).
+  - **Raw Waveform Capture Engine (`SignalCapture`)**: Single-shot raw signal recording tool supporting target-selectable capture (`0`, `1`, `2`, or interleaved `all` / 255). Uses **5:1 max-pooling** (10 kHz effective rate for single sensor) or **15:1 max-pooling** (interleaved `0,1,2,0,1,2...` for 10 kHz aggregate rate in `all` mode) to preserve high-frequency hit peaks while capturing **21,000 samples (2.1 seconds)** into a static 42 KB buffer (`0` dynamic allocations). Unrolls a circular pre-trigger buffer (1,000 samples for single sensor, 999 samples for `all` mode) and records post-trigger samples up to 21,000 total.
+  - **Sensor Lifecycle**: Authoritative state machine managing `SENSOR_STATE_INIT`, `CALIBRATING`, `ARMED`, `HIT_LOCKOUT`, `CAPTURE_ARMED`, `CAPTURING`, `CAPTURE_TX_WAIT`, and `SENSOR_STATE_ERROR`.
 - **`GameController` & `GameState`** (`src/App/Game/`):
   - Authoritative game engine for all match rules, scorekeeping, and countdown timing.
   - Manages transitions between `GAME_STATE_BOOT`, `MENU`, `READY`, `RUNNING`, `FINISHED`, and `CAPTURING`.
   - Supports three built-in game modes:
     - **`COUNT`**: Open-ended hit counter.
-    - **`TIMED`**: Countdown timer (5–600 s) counting maximum hits before expiration.
-    - **`RACE`**: Target hit race (5–1,000 hits) measuring elapsed time to reach target.
-  - Provides menu-based mode selection and parameter configuration directly from local hardware buttons.
+    - **`TIMED`**: Countdown timer (5–10,000 s in 5 s steps) counting maximum hits before expiration.
+    - **`RACE`**: Target hit race (5–10,000 hits in 5 hit steps) measuring elapsed time to reach target.
+  - Provides menu-based mode selection and parameter configuration directly from local hardware buttons (`UP`/`DOWN` navigate menus and adjust values, `LEFT` selects/starts, and `RIGHT` aborts and resets to `READY`).
 - **`ButtonController`** (`src/App/Input/`):
   - Active-low GPIO interrupt handler for 4 navigation buttons (`UP`, `DOWN`, `LEFT`, `RIGHT`).
   - ISR-safe ring buffer with 25 ms software debouncing.
@@ -71,21 +72,21 @@ The firmware runs a strict three-layer architecture: **Application Layer** (`src
   - Flicker-free rendering using dirty-region tracking (`needs_full_redraw`, `needs_score_redraw`, `needs_timer_redraw`).
   - Renders dedicated screens for boot/calibration, menu navigation, ready/running/finished game states, and specialized analysis screens (`BEREIT!`, `AUFNAHME`, `TRANSFER`).
 - **`CompanionProtocol` & `CommandHandler`** (`src/App/Companion/`):
-  - Core 1 bi-directional ASCII serial communication protocol over USB CDC.
-  - Parses incoming companion commands and routes them via non-blocking queues to Core 0.
+  - Core 1 dual-mode communication protocol over USB CDC Serial supporting high-efficiency **Framed Binary Protocol (TLV)** with 16-bit CRC and human-readable **ASCII Protocol**.
+  - Parses incoming companion commands (`START`, `RESET`, `CALIB`, `MODE`, `PARAM`, `SENS`, `CAPTURE`) and routes them via non-blocking queues to Core 0.
   - Streams telemetry events and non-blocking chunked raw waveform data (`CAPTURE_DATA`, 50 samples per line, 1 line per tick) without stalling UI rendering or tripping watchdogs.
 - **`ConfigService`** (`src/App/ConfigService.c`):
-  - Validates and clamps runtime parameters (game modes, durations, target hits, noise factors, and sensitivity).
+  - Validates and clamps runtime parameters (game modes, durations 5..10,000 s, target hits 5..10,000, noise factors / sensitivity 1.0..1,000.0).
 - **`App` Orchestrator** (`src/App/App.c`):
   - Top-level supervisor allocating static `.bss` storage and managing inter-core message dispatching and power gating (disables ADC/DMA during menus to conserve power).
 
 ### Hardware Abstraction Layer (OSAL Services, `src/OSAL/`)
 
 - **`WatchdogService`**: Cooperative dual-core hardware watchdog supervisor. Requires both Core 0 and Core 1 to check in within 5,000 ms before petting the RP2040 hardware watchdog.
-- **`PiezoAdcDriver` & `Dma`**: Configures RP2040 ADC0 (GPIO 26) with pacing timer and ping-pong DMA channels.
+- **`PiezoAdcDriver` & `Dma`**: Configures RP2040 ADC hardware round-robin across ADC0, ADC1, ADC2 (GPIO 26, 27, 28) with pacing timer and ping-pong DMA channels at 150 kHz aggregate.
 - **`GpioDriver` & `Interrupt`**: Configures button pull-ups and registers edge-fall/rise interrupt callbacks.
 - **`DisplayDriver`**: C wrapper interfacing with the vendored C++ `displaylib_16bit` library for SPI0 display communication.
-- **`UsbSerialDriver`**: Non-blocking line reading and writing over USB CDC (`stdio_usb`).
+- **`UsbSerialDriver`**: Non-blocking line and byte reading/writing over USB CDC (`stdio_usb`).
 - **`OsalQueue`**: Lock-free, non-blocking inter-core queues (`queue_core0_to_core1` and `queue_core1_to_core0`).
 - **`Board` & `Time`**: Board LED control, microsecond timestamps (`Time_now_us()`), and busy/sleep delays.
 
@@ -110,7 +111,7 @@ The Angular v22 single-page companion app provides real-time multi-target match 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                       Transport Abstraction Layer                       │
 │    DeviceTransport (Interface)  •  WebSerialTransport (Web Serial)     │
-│                   NewlineEventParser (Chunk Deframing)                  │
+│                 DualEventParser (Binary TLV & ASCII Deframing)          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -123,11 +124,11 @@ The Angular v22 single-page companion app provides real-time multi-target match 
   - Manages the auto-rearming pipeline for automated continuous hit waveform captures.
   - Isolates errors so a disconnect on one physical target does not interrupt other connected targets.
 - **`CompanionProtocol` Parser & Serializer** (`src/app/core/device/protocol/`):
-  - Bi-directional serializer and parser converting ASCII protocol lines into typed domain models.
+  - Dual-mode serializer and parser converting Framed Binary TLV packets (with CRC-16) and ASCII protocol lines into typed domain models.
   - Filters out raw high-frequency `CAPTURE_DATA` chunks from the user-facing live event log while assembling full sample buffers in the background.
-- **`WebSerialTransport` & `NewlineEventParser`** (`src/app/core/device/transport/`):
+- **`WebSerialTransport` & `DualEventParser`** (`src/app/core/device/transport/`, `src/app/core/device/protocol/parser/`):
   - Implementation of the `DeviceTransport` contract using the W3C Web Serial API (115,200 baud).
-  - Handles USB chunk fragmentation, stream assembly, and CRLF / LF line endings with fault tolerance.
+  - Handles USB chunk fragmentation, stream assembly, binary TLV frame deframing with CRC-16 validation, and CRLF / LF line endings with fault tolerance.
 - **`AudioFeedbackService`** (`src/app/core/services/`):
   - Synthesizes low-latency audio feedback (hits, countdown beeps, start buzzer, victory fanfare) using the Web Audio API without requiring external audio assets.
 
@@ -146,8 +147,8 @@ The Angular v22 single-page companion app provides real-time multi-target match 
   - **CSV Export** (`Sample,ADC_Value`) and **PNG Image Export**.
 - **Settings (`/settings`)**:
   - USB Serial port connection manager.
-  - Calibration trigger and noise factor sensitivity configuration.
-  - Live filterable event log.
+  - Sensor baseline calibration trigger (`CMD_CALIBRATE`) and noise factor sensitivity configuration.
+  - Live filterable event log and raw command terminal.
 
 ---
 
@@ -159,21 +160,19 @@ The RP2040's dual ARM Cortex-M0+ cores run strictly separated roles communicatin
 ┌──────────────────────────────────────────────┐          ┌──────────────────────────────────────────────┐
 │           Core 0 (Execution Core)            │          │             Core 1 (I/O Core)                │
 │                                              │          │                                              │
-│  - 50 kHz ADC DMA buffer processing          │          │  - ST7735 SPI0 TFT Display Rendering         │
-│  - Hit detection & dynamic thresholding      │          │  - USB CDC Serial line polling (RX)          │
+│  - 150 kHz aggregate ADC DMA buffer handling │          │  - ST7735 SPI0 TFT Display Rendering         │
+│  - Multi-sensor coincidence & winner pick    │          │  - USB CDC Serial line polling (RX)          │
 │  - SignalCapture (10 kHz max-pooling)        │          │  - USB CDC Telemetry & Capture streaming(TX) │
 │  - Authoritative GameController state machine│          │  - Core 1 watchdog heartbeat                 │
 │  - ButtonController event consumption        │          │                                              │
 │  - Core 0 watchdog check & hardware pet      │          │                                              │
 └──────────────────────┬───────────────────────┘          └──────────────────────▲───────────────────────┘
                        │                                                         │
-                       │           queue_core0_to_core1 (capacity 64)            │
+                       │                  queue_core0_to_core1                   │
                        └─────────────────────────────────────────────────────────┘
-                       ┌─────────────────────────────────────────────────────────┐
-                       │           queue_core1_to_core0 (capacity 16)            │
+                       ▲                                                         │
+                       │                  queue_core1_to_core0                   │
                        └─────────────────────────────────────────────────────────┘
-                               ▲                                                         │
-                               └─────────────────────────────────────────────────────────┘
 ```
 
 ---

@@ -6,7 +6,9 @@ Real-time multi-device Web Serial interface for Raspberry Pi Pico devices built 
 
 - **Multi-Device Concurrency**: Connects to multiple Raspberry Pi Pico devices concurrently using the W3C Web Serial API.
 - **Transport Abstraction Layer**: Generic `DeviceTransport` contract allowing future transports (e.g. Web Bluetooth, WebSocket) to be plugged in without changing the UI or application state.
-- **Robust Line Buffering**: `NewlineEventParser` handles chunk fragmentation, CRLF / LF line endings, and ignores empty lines.
+- **Dual-Mode Stream Parsing**: `DualEventParser` handles chunk fragmentation, demultiplexing high-efficiency Framed Binary TLV packets (with CRC-16 verification) and newline-delimited ASCII lines without data loss.
+- **Device Management**: Dedicated settings page for device connection, custom naming, sensor baseline calibration (`CMD_CALIBRATE`), sensitivity adjustments, and real-time live event streaming.
+- **High-DPI Waveform Analyzer**: Interactive raw piezo signal debugger with HTML5 canvas min/max bucketing, zoom presets, multi-sensor comparison, and CSV/PNG export.
 - **Fault Isolation**: Device connection drops and transport errors are isolated per-device without affecting other active streams.
 - **Modern Angular State**: Uses Angular Signals for UI and connection state management, with RxJS for asynchronous event streams.
 - **Accessible UI**: High-contrast, WCAG AA compliant dashboard built with Tailwind CSS.
