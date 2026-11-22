@@ -23,6 +23,7 @@ rectangle "Host-System" as host {
 player --> buttons : Bedienung
 player --> display : Anzeige ablesen
 player --> boeckli : Schläge mit Schlägel
+player --> companion : Score ablesen / Steuerung
 
 buttons --> pico : Eingaben
 piezo --> pico : Analoges Sensorsignal
