@@ -266,7 +266,7 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
                 uint16_t range = ch->calib_max - ch->calib_min;
 
                 ch->baseline = (uint16_t)(mean + 0.5);
-                ch->noise = (uint16_t)(noise + 0.5);
+                ch->noise = (uint16_t)(detector->config.noise_offset + noise + 0.5);
 
                 if (ch->baseline < detector->config.min_baseline_for_active_sensor) {
                     ch->ignored = true;

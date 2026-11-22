@@ -44,6 +44,7 @@ typedef struct {
     uint16_t dma_buffer_samples;
     uint32_t calibration_duration_ms;
     uint32_t calibration_min_samples;
+    float    noise_offset;           /* Offset added to noise for threshold calculation */
     float    noise_factor;           /* k in threshold = baseline + k * noise */
     uint16_t min_threshold_delta;    /* Minimum offset above baseline */
     uint32_t lockout_duration_ms;    /* Dead time after hit to prevent re-triggering */
@@ -66,11 +67,12 @@ static inline void Config_set_defaults(Config* config) {
     config->dma_buffer_samples       = 384;   /* 128 samples per sensor, divisible by 3 */
     config->calibration_duration_ms  = 1500;
     config->calibration_min_samples  = 30000; /* 10000 samples per sensor */
-    config->noise_factor             = 4.5f;
+    config->noise_offset             = 25.0f;
+    config->noise_factor             = 15.0f;
     config->min_threshold_delta      = 25;
     config->lockout_duration_ms      = 25;
     config->decay_factor             = 0.995f;
-    config->min_baseline_for_active_sensor = 128;
+    config->min_baseline_for_active_sensor = 25;
 
     config->default_mode             = GAME_MODE_COUNT;
     config->timed_duration_s         = 30;
