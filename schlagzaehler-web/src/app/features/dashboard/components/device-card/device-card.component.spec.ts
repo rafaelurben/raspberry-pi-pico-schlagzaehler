@@ -181,4 +181,35 @@ describe('DeviceCardComponent', () => {
     reconnectBtn.click();
     expect(host.lastReconnectId).toBe('device-1');
   });
+
+  it('should display Connecting status and UNKNOWN readiness and disable controls when connecting', async () => {
+    host.testDevice = new Device({
+      id: 'device-2',
+      name: 'Pico Target 2',
+      state: new DeviceState({
+        connectionState: 'connecting',
+        gameState: 'UNKNOWN',
+        sensorState: 'UNKNOWN',
+        isReady: false,
+        mode: 'COUNT',
+      }),
+      transportType: 'serial',
+    });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    expect(compiled.textContent).toContain('Connecting');
+    expect(compiled.textContent).toContain('UNKNOWN');
+    expect(compiled.textContent).not.toContain('Connected');
+
+    const modeSelect = compiled.querySelector('[data-testid="mode-select"]') as HTMLSelectElement;
+    expect(modeSelect.disabled).toBe(true);
+
+    const resetBtn = compiled.querySelector(
+      '[data-testid="reset-game-button"]',
+    ) as HTMLButtonElement;
+    expect(resetBtn.disabled).toBe(true);
+  });
 });

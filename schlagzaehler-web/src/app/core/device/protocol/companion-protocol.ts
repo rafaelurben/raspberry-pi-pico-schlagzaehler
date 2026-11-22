@@ -105,6 +105,7 @@ export function applyUnifiedMessageToDeviceState(
       const isSuccess = msg.payload.success;
       return new DeviceState({
         ...currentState,
+        connectionState: isSuccess ? 'connecting' : 'error',
         gameState: 'BOOT',
         sensorState: isSuccess ? 'INIT' : 'ERROR',
         score: 0,
@@ -241,14 +242,18 @@ export function applyUnifiedMessageToDeviceState(
 
     case 'HANDSHAKE_ACK': {
       const ack = msg.payload;
+      const isSuccess = ack.statusCode === 0;
+      const connectionState = isSuccess ? 'connected' : 'error';
       return new DeviceState({
         ...currentState,
+        connectionState,
         hardwareGen: ack.hardwareGen,
         hardwareRev: ack.hardwareRev,
         protoMajor: ack.protoMajor,
         protoMinor: ack.protoMinor,
         fwVersion: `${ack.fwMajor}.${ack.fwMinor}.${ack.fwPatch}`,
         uptimeMs: ack.uptimeMs,
+        isReady: computeIsReady(connectionState, currentState.gameState, currentState.sensorState),
       });
     }
 

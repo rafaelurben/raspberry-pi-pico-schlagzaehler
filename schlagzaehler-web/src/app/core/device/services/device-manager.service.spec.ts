@@ -54,6 +54,31 @@ class MockDeviceTransport implements DeviceTransport {
   }
 }
 
+function emitHandshakeAck(transport: MockDeviceTransport, statusCode = 0, protoMajor = 0): void {
+  const ackPayload = new Uint8Array(20);
+  const ackView = new DataView(ackPayload.buffer);
+  ackView.setUint8(0, 1); // hwGen
+  ackView.setUint8(1, 1); // hwRev
+  ackView.setUint8(2, protoMajor); // protoMajor
+  ackView.setUint8(3, 0); // protoMinor
+  ackView.setUint8(4, 0); // fwMajor
+  ackView.setUint8(5, 3); // fwMinor
+  ackView.setUint8(6, 0); // fwPatch
+  ackView.setUint8(7, statusCode); // statusCode
+  ackView.setUint32(16, 9999, true); // uptimeMs
+
+  const ackFrame: BinaryFrame = {
+    type: BinaryMessageType.MSG_HANDSHAKE_ACK,
+    flags: 0,
+    seq: 1,
+    payload: ackPayload,
+  };
+  transport.eventsSubject.next({
+    type: 'binary',
+    content: ackFrame,
+  });
+}
+
 class MockWebSerialTransportFactory {
   supported = true;
   transportsToReturn: MockDeviceTransport[] = [];
@@ -98,7 +123,7 @@ describe('DeviceManagerService', () => {
     expect(service.isSupported()).toBe(true);
   });
 
-  it('should connect a serial device and register it with state.connectionState "connected"', async () => {
+  it('should connect a serial device with state.connectionState "connecting" and UNKNOWN gameState until HANDSHAKE_ACK', async () => {
     setupService();
     const transport = new MockDeviceTransport();
     mockFactory.transportsToReturn = [transport];
@@ -107,7 +132,9 @@ describe('DeviceManagerService', () => {
 
     expect(device).toBeDefined();
     expect(device?.name).toBe('Device 1');
-    expect(device?.state.connectionState).toBe('connected');
+    expect(device?.state.connectionState).toBe('connecting');
+    expect(device?.state.gameState).toBe('UNKNOWN');
+    expect(device?.state.isReady).toBe(false);
     expect(device?.transportType).toBe('serial');
     expect(service.devices()).toHaveLength(1);
     expect(service.isConnecting()).toBe(false);
@@ -117,6 +144,30 @@ describe('DeviceManagerService', () => {
     expect(sent[0]).toBe(SYNC_BYTE_0);
     expect(sent[1]).toBe(SYNC_BYTE_1);
     expect(sent[3]).toBe(BinaryCommandType.CMD_HANDSHAKE);
+
+    // Verify commands cannot be sent while in connecting state
+    await expect(service.setGameMode(device!.id, 'TIMED')).rejects.toThrow('handshake pending');
+
+    // Acknowledge handshake
+    emitHandshakeAck(transport);
+
+    expect(service.getDevice(device!.id)?.state.connectionState).toBe('connected');
+    await service.setGameMode(device!.id, 'TIMED');
+    expect(service.getDevice(device!.id)?.state.mode).toBe('TIMED');
+  });
+
+  it('should set device connectionState to error if HANDSHAKE_ACK reports non-zero status', async () => {
+    setupService();
+    const transport = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport];
+
+    const dev = await service.connectSerialDevice('Pico Fail');
+    expect(dev?.state.connectionState).toBe('connecting');
+
+    emitHandshakeAck(transport, 1); // ERR_VERSION_MISMATCH
+    const updated = service.getDevice(dev!.id);
+    expect(updated?.state.connectionState).toBe('error');
+    expect(updated?.errorMessage).toContain('Handshake rejected: status code 1');
   });
 
   it('should allow specifying a custom device name on connect and modifying it later', async () => {
@@ -204,6 +255,10 @@ describe('DeviceManagerService', () => {
     const dev2 = await service.connectSerialDevice();
     const dev3 = await service.connectSerialDevice();
 
+    emitHandshakeAck(transport1);
+    emitHandshakeAck(transport2);
+    emitHandshakeAck(transport3);
+
     transport2.errorsSubject.next(new Error('Device 2 serial lost'));
 
     const devices = service.devices();
@@ -225,6 +280,8 @@ describe('DeviceManagerService', () => {
 
     const dev1 = await service.connectSerialDevice();
     const dev2 = await service.connectSerialDevice();
+    emitHandshakeAck(transport1);
+    emitHandshakeAck(transport2);
 
     await service.disconnectDevice(dev1!.id);
 
@@ -235,6 +292,8 @@ describe('DeviceManagerService', () => {
 
     await service.reconnectDevice(dev1!.id);
     expect(transport1.connectCalls).toBe(2);
+    expect(service.getDevice(dev1!.id)?.state.connectionState).toBe('connecting');
+    emitHandshakeAck(transport1);
     expect(service.getDevice(dev1!.id)?.state.connectionState).toBe('connected');
   });
 
@@ -246,6 +305,7 @@ describe('DeviceManagerService', () => {
     const dev = await service.connectSerialDevice('My Target');
     expect(dev?.name).toBe('My Target');
     const originalId = dev!.id;
+    emitHandshakeAck(transport1);
 
     // Simulate device disconnected (e.g. unplugged) and transport1 cannot reconnect
     await service.disconnectDevice(originalId);
@@ -265,7 +325,9 @@ describe('DeviceManagerService', () => {
     expect(reconnectedDevice).toBeDefined();
     expect(reconnectedDevice?.id).toBe(originalId);
     expect(reconnectedDevice?.name).toBe('My Target');
-    expect(reconnectedDevice?.state.connectionState).toBe('connected');
+    expect(reconnectedDevice?.state.connectionState).toBe('connecting');
+    emitHandshakeAck(transport2);
+    expect(service.getDevice(originalId)?.state.connectionState).toBe('connected');
     expect(reconnectedDevice?.metadata?.usbProductId).toBe(0x000b);
   });
 
@@ -342,6 +404,7 @@ describe('DeviceManagerService', () => {
 
     const dev = await service.connectSerialDevice('Device X');
     const devId = dev!.id;
+    emitHandshakeAck(transport1);
 
     // Manually delete active transport entry to simulate orphaned/lost transport
     (service as unknown as { activeDevices: Map<string, unknown> }).activeDevices.delete(devId);
@@ -351,6 +414,8 @@ describe('DeviceManagerService', () => {
 
     await service.reconnectDevice(devId);
     expect(transport2.connectCalls).toBe(1);
+    expect(service.getDevice(devId)?.state.connectionState).toBe('connecting');
+    emitHandshakeAck(transport2);
     expect(service.getDevice(devId)?.state.connectionState).toBe('connected');
     expect(service.getDevice(devId)?.name).toBe('Device X');
   });
@@ -363,6 +428,8 @@ describe('DeviceManagerService', () => {
 
     const dev1 = await service.connectSerialDevice();
     const dev2 = await service.connectSerialDevice();
+    emitHandshakeAck(transport1);
+    emitHandshakeAck(transport2);
 
     transport1.sentPayloads = [];
     transport2.sentPayloads = [];
@@ -459,6 +526,7 @@ describe('DeviceManagerService', () => {
 
     const dev = await service.connectSerialDevice('Pico Target');
     const deviceId = dev!.id;
+    emitHandshakeAck(transport);
 
     service.setAutoRearm(deviceId, true);
     await service.startCapture(deviceId);
@@ -535,6 +603,7 @@ describe('DeviceManagerService', () => {
 
     const dev = await service.connectSerialDevice('Pico Target');
     const deviceId = dev!.id;
+    emitHandshakeAck(transport);
 
     service.setAutoRearm(deviceId, true);
     await service.startCapture(deviceId, 1);

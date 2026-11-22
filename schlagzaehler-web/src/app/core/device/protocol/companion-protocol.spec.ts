@@ -156,4 +156,60 @@ describe('companion-protocol', () => {
     expect(ignoredResult.sensorState).toBe('ARMED');
     expect(ignoredResult.isReady).toBe(true);
   });
+
+  it('should transition connectionState on HANDSHAKE_ACK (connected on success, error on failure)', () => {
+    const connectingState = new DeviceState({
+      connectionState: 'connecting',
+      gameState: 'UNKNOWN',
+      sensorState: 'UNKNOWN',
+    });
+
+    const successAck = applyUnifiedMessageToDeviceState(connectingState, {
+      encoding: 'binary',
+      type: 'HANDSHAKE_ACK',
+      payload: {
+        hardwareGen: 1,
+        hardwareRev: 2,
+        protoMajor: 1,
+        protoMinor: 0,
+        fwMajor: 1,
+        fwMinor: 2,
+        fwPatch: 3,
+        statusCode: 0,
+        reserved: 0,
+        clientNonce: 0,
+        uptimeMs: 12345,
+      },
+      rawText: 'HANDSHAKE_ACK v1.0 fw=1.2.3 status=0 uptime=12345ms',
+    });
+
+    expect(successAck.connectionState).toBe('connected');
+    expect(successAck.hardwareGen).toBe(1);
+    expect(successAck.hardwareRev).toBe(2);
+    expect(successAck.protoMajor).toBe(1);
+    expect(successAck.fwVersion).toBe('1.2.3');
+    expect(successAck.uptimeMs).toBe(12345);
+
+    const errorAck = applyUnifiedMessageToDeviceState(connectingState, {
+      encoding: 'binary',
+      type: 'HANDSHAKE_ACK',
+      payload: {
+        hardwareGen: 1,
+        hardwareRev: 1,
+        protoMajor: 1,
+        protoMinor: 0,
+        fwMajor: 1,
+        fwMinor: 0,
+        fwPatch: 0,
+        statusCode: 1, // ERR_VERSION_MISMATCH
+        reserved: 0,
+        clientNonce: 0,
+        uptimeMs: 100,
+      },
+      rawText: 'HANDSHAKE_ACK status=1',
+    });
+
+    expect(errorAck.connectionState).toBe('error');
+    expect(errorAck.isReady).toBe(false);
+  });
 });

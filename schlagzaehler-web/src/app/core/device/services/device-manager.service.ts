@@ -225,7 +225,13 @@ export class DeviceManagerService implements OnDestroy {
           ? new Device({
               ...d,
               errorMessage: undefined,
-              state: new DeviceState({ ...d.state, connectionState: 'connecting' }),
+              state: new DeviceState({
+                ...d.state,
+                connectionState: 'connecting',
+                gameState: 'UNKNOWN',
+                sensorState: 'UNKNOWN',
+                isReady: false,
+              }),
             })
           : d,
       ),
@@ -254,7 +260,13 @@ export class DeviceManagerService implements OnDestroy {
               ? new Device({
                   ...d,
                   errorMessage: undefined,
-                  state: new DeviceState({ ...d.state, connectionState: 'connecting' }),
+                  state: new DeviceState({
+                    ...d.state,
+                    connectionState: 'connecting',
+                    gameState: 'UNKNOWN',
+                    sensorState: 'UNKNOWN',
+                    isReady: false,
+                  }),
                 })
               : d,
           ),
@@ -371,6 +383,14 @@ export class DeviceManagerService implements OnDestroy {
     }
 
     const device = this.getDevice(deviceId);
+    if (command.type !== 'HANDSHAKE' && device?.state.connectionState !== 'connected') {
+      const error = new Error(
+        `Cannot send command '${command.type}': device ${deviceId} is not connected (handshake pending).`,
+      );
+      this.handleDeviceError(deviceId, error);
+      throw error;
+    }
+
     let payloadToSend: string | Uint8Array;
     let logText: string;
 
@@ -413,6 +433,15 @@ export class DeviceManagerService implements OnDestroy {
    * Changes the active game mode on a device.
    */
   async setGameMode(deviceId: string, mode: SelectableGameMode): Promise<void> {
+    const device = this.getDevice(deviceId);
+    if (!device || device.state.connectionState !== 'connected') {
+      const error = new Error(
+        `Cannot change game mode: device ${deviceId} is not connected (handshake pending).`,
+      );
+      this.handleDeviceError(deviceId, error);
+      throw error;
+    }
+
     this.devices.update((devices) =>
       devices.map((d) => {
         if (d.id !== deviceId) {
@@ -452,6 +481,15 @@ export class DeviceManagerService implements OnDestroy {
    * Sets the game mode parameter (duration seconds for TIMED, target hits for RACE) on a device.
    */
   async setGameParameter(deviceId: string, parameter: number): Promise<void> {
+    const device = this.getDevice(deviceId);
+    if (!device || device.state.connectionState !== 'connected') {
+      const error = new Error(
+        `Cannot set game parameter: device ${deviceId} is not connected (handshake pending).`,
+      );
+      this.handleDeviceError(deviceId, error);
+      throw error;
+    }
+
     const sanitized = Math.max(1, Math.floor(parameter));
     this.devices.update((devices) =>
       devices.map((d) => {
@@ -585,8 +623,6 @@ export class DeviceManagerService implements OnDestroy {
   }
 
   private updateDeviceConnectionState(deviceId: string, connectionState: ConnectionState): void {
-    const prevConnectionState = this.getDevice(deviceId)?.state.connectionState;
-
     if (connectionState !== 'connected') {
       this.inProgressCaptures.delete(deviceId);
       this.setDeviceCaptureProgress(deviceId, null);
@@ -597,27 +633,22 @@ export class DeviceManagerService implements OnDestroy {
         if (d.id !== deviceId) {
           return d;
         }
-        const isConnected = connectionState === 'connected';
-        const isReady =
-          isConnected &&
-          d.state.sensorState !== 'ERROR' &&
-          (d.state.gameState === 'READY' ||
-            d.state.gameState === 'RUNNING' ||
-            d.state.sensorState === 'ARMED');
+        // When transport connects, the device connection state remains 'connecting' until HANDSHAKE_ACK
+        const effectiveConnectionState: ConnectionState =
+          connectionState === 'connected' ? 'connecting' : connectionState;
         return new Device({
           ...d,
-          errorMessage: isConnected ? undefined : d.errorMessage,
           state: new DeviceState({
             ...d.state,
-            connectionState,
-            isReady,
-            lastTimerUpdatedAt: isConnected ? d.state.lastTimerUpdatedAt : null,
+            connectionState: effectiveConnectionState,
+            isReady: false,
+            lastTimerUpdatedAt: null,
           }),
         });
       }),
     );
 
-    if (connectionState === 'connected' && prevConnectionState !== 'connected') {
+    if (connectionState === 'connected') {
       // Negotiate binary mode via CMD_HANDSHAKE with TLV_MODE = 1
       void this.sendCommand(deviceId, CompanionCommands.handshake({ tlvMode: true })).catch((e) =>
         console.error(`Failed to send handshake to device ${deviceId}:`, e),
@@ -688,6 +719,12 @@ export class DeviceManagerService implements OnDestroy {
           return d;
         }
         const updatedState = applyUnifiedMessageToDeviceState(d.state, msg, now);
+        const updatedErrorMessage =
+          msg.type === 'HANDSHAKE_ACK'
+            ? msg.payload.statusCode !== 0
+              ? `Handshake rejected: status code ${msg.payload.statusCode}`
+              : undefined
+            : d.errorMessage;
         const updatedMetadata =
           msg.type === 'HANDSHAKE_ACK'
             ? {
@@ -702,6 +739,7 @@ export class DeviceManagerService implements OnDestroy {
             : d.metadata;
         return new Device({
           ...d,
+          errorMessage: updatedErrorMessage,
           state: updatedState,
           metadata: updatedMetadata,
         });

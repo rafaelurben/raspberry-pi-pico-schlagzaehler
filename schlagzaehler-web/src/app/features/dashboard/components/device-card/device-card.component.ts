@@ -100,8 +100,11 @@ export class DeviceCardComponent implements OnInit, OnDestroy {
 
   readonly readinessLabel = computed<string>(() => {
     const state = this.device().state;
-    if (state.connectionState !== 'connected') {
+    if (state.connectionState === 'disconnected') {
       return 'Offline';
+    }
+    if (state.connectionState === 'error') {
+      return 'Error';
     }
     if (state.sensorState === 'CALIBRATING') {
       return 'Calibrating';
@@ -112,7 +115,7 @@ export class DeviceCardComponent implements OnInit, OnDestroy {
     if (state.gameState !== 'UNKNOWN') {
       return state.gameState;
     }
-    return state.isReady ? 'READY' : 'Connected';
+    return 'UNKNOWN';
   });
 
   ngOnInit(): void {
