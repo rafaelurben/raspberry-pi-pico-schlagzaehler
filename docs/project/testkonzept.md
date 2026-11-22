@@ -121,8 +121,10 @@ Kapitel 6):
 
 - **`TC-FA-STANDALONE`**: Deckt alle 14 funktionalen Anforderungen des autarken Betriebs ohne Host ab (`FA-H01`,
   `FA-H02`, `FA-S01` bis `FA-S12`).
-- **`TC-FA-HOST`**: Deckt alle 8 funktionalen Anforderungen des Host- und Companion-Betriebs ab (`FA-K01` bis `FA-K03`,
-  `FA-C01` bis `FA-C05`).
+- **`TC-FA-HOST-1`**: Deckt die 6 funktionalen Anforderungen der Host-Kommunikation, bidirektionalen Steuerung und
+  Telemetrie im Einzelgerätebetrieb ab (`FA-K01` bis `FA-K03`, `FA-C01` bis `FA-C03`).
+- **`TC-FA-HOST-2`**: Deckt die Anforderungen an die Resilienz bei Verbindungsunterbruch und Wiederverbindung ab
+  (`FA-C04`, `FA-C05` sowie `FA-K03`).
 - **`TC-NFA-REC`**: Deckt alle 4 Anforderungen an Sensor-Erkennungsraten, Dynamik und Störfestigkeit ab (`NFA-S01` bis
   `NFA-S04`).
 - **`TC-NFA-LAT`**: Deckt beide Latenzanforderungen von Display und Companion ab (`NFA-S05`, `NFA-C01`).
@@ -149,8 +151,8 @@ Kapitel 6):
 | **FA-K01**      | Bidirektionale Kommunikation mit Computer.                     | Pico sendet Telemetrie an Host; Host sendet Befehle (`START`, `RESET`, `MODE:...`, `PARAM:...`), die der Pico ausführt.                          |
 | **FA-K02**      | Ereignisbasierte Zustandsübertragung an Computer.              | Bei Zustandsänderung, Hit, Score- oder Timer-Tick wird sofort ein entsprechendes Event über USB gesendet.                                        |
 | **FA-K03**      | Kommunikation via USB.                                         | Kommunikation erfolgt stabil über USB CDC Serial mit 115200 Baud, 8N1.                                                                           |
-| **FA-C01**      | Im Companion können mehrere Schlagzähler verbunden werden.     | 2 Picos werden über Web Serial angeschlossen; beide erscheinen als unabhängige Geräte im Dashboard.                                              |
-| **FA-C02**      | Zustand aller verbundenen Schlagzähler im Companion sichtbar.  | Dashboard zeigt für jeden Pico synchron Modus, Zustand (`READY`/`RUNNING`), Live-Score und interpolierten Timer.                                 |
+| **FA-C01**      | Im Companion können mehrere Schlagzähler verbunden werden.     | Mehrere Geräte (z. B. 1 Pico und 1 virtueller/simulierter Port oder 2 serielle Ports) werden im Dashboard als unabhängige Geräte geführt. |
+| **FA-C02**      | Zustand aller verbundenen Schlagzähler im Companion sichtbar.  | Dashboard zeigt synchron Modus, Zustand (`READY`/`RUNNING`), Live-Score und interpolierten Timer für verbundene Geräte.                          |
 | **FA-C03**      | Über Companion kann Spielmodus gewechselt werden.              | Klick auf Modus-Buttons (`COUNT`, `TIMED`, `RACE`) im Web sendet `MODE:...`; Pico quittiert und wechselt den Modus.                              |
 | **FA-C04**      | Companion erkennt Unterbruch und zeigt dies an.                | Nach Trennen des USB-Kabels schaltet der Gerätestatus auf `disconnected` / `error`; Warnhinweis in UI sichtbar.                                  |
 | **FA-C05**      | Unterbruch zum Companion beendet lokales Spiel nicht.          | USB-Verbindung während laufendem Spiel trennen ohne die Stromzufuhr zu unterbrechen (externes USB-Hub); Spiel auf Pico läuft unverändert weiter. |
@@ -219,46 +221,81 @@ Kapitel 6):
 - **Akzeptanzkriterium**: Sämtliche Teilprüfungen werden ohne Neustart, Hänger oder Fehlzählung rein über die lokalen
   Bedienelemente und das Display erfolgreich absolviert.
 
-### 6.2 Testfall `TC-FA-HOST`: Verbundener Betrieb mit Companion Web App & Multi-Device
+### 6.2 Testfall-Gruppe `TC-FA-HOST`: Verbundener Betrieb mit Companion Web App
 
-- **Abgedeckte Anforderungen**: `FA-K01`, `FA-K02`, `FA-K03`, `FA-C01`, `FA-C02`, `FA-C03`, `FA-C04`, `FA-C05`
-- **Ziel**: Vollständiger Nachweis der seriellen USB-Kommunikation, des Multi-Device-Betriebs im Web-Dashboard, der
-  Fernsteuerung und der Resilienz bei Verbindungsunterbruch.
+Die Host- und Companion-Prüfung ist in zwei Unter-Testfälle aufgeteilt, welche separat und mit jeweils nur einem einzigen Pico vollständig durchgeführt werden können:
+- **6.2.1 `TC-FA-HOST-1`**: Einzelgerät-Betrieb: Bidirektionale Steuerung, Moduswechsel & Telemetrie
+- **6.2.2 `TC-FA-HOST-2`**: Resilienz bei Verbindungsunterbruch & Wiederverbindung
+
+#### 6.2.1 Testfall `TC-FA-HOST-1`: Einzelgerät-Betrieb: Bidirektionale Steuerung, Moduswechsel & Telemetrie
+
+- **Abgedeckte Anforderungen**: `FA-K01`, `FA-K02`, `FA-K03`, `FA-C01`, `FA-C02`, `FA-C03`
+- **Ziel**: Vollständiger Nachweis der seriellen USB-Kommunikation, des Handshakes, der bidirektionalen Fernsteuerung
+  in beiden Richtungen (Web → Pico und Pico → Web) sowie der ereignisbasierten Telemetrie im Spielbetrieb mit einem
+  einzelnen Pico.
 - **Voraussetzung**:
-    - Laptop mit Google Chrome und geöffnetem Companion
-    - Erster Schlagzähler (Pico 1) direkt via USB mit dem Laptop verbunden
-    - Zweiter Schlagzähler (Pico 2) via extern mit Strom versorgtem USB-Hub am Laptop angeschlossen.
+    - Laptop mit Google Chrome und geöffnetem Companion.
+    - Ein Schlagzähler (1 Pico), montiert am Böckli und via USB mit dem Laptop verbunden.
+    - *(Hinweis zu `FA-C01`)*: Für den Nachweis der Multi-Device-Fähigkeit mit nur einem physischen Pico kann auf dem Host
+      zusätzlich ein virtueller serieller Port (z. B. Pseudo-Terminal / Loopback) freigegeben werden; die
+      Multi-Device-Isolation ist zudem isoliert in Teststufe 1 (`DeviceManagerService`) automatisiert verifiziert.
 - **Durchführung**:
-    1. **Multi-Device USB-Verbindung (`FA-K03`, `FA-C01`)**:
-        - Im Browser über den Serial-Dialog nacheinander die Ports beider Picos freigebe.
-        - Verifizieren, dass beide Geräte gleichzeitig im Web-Dashboard als unabhängige Karten mit Status `connected`
-          erscheinen.
-    2. **Bidirektionale Fernsteuerung & Synchronisation (`FA-K01`, `FA-K02`, `FA-C02`, `FA-C03`)**:
-        - Dashboard zeigt für beide Geräte synchron Modus, Zustand (`READY`), Score und Timer an.
-        - Im Dashboard für Pico 1 den Modus `TIMED` wählen und das Zeitlimit auf 15 Sekunden setzen (`MODE:TIMED`,
-          `PARAM:15`).
-        - Display von Pico 1 synchronisiert sich unverzüglich und zeigt `TIMED` sowie 15s an.
-        - Über die Buttons von Pico 2 den Spielmodus auf `RACE` ändern und das Ziel auf 10 Schläge erhöhen.
-        - Im Dashboard wird bei Pico 2 der Modus `RACE` und die 10s angezeigt.
-        - Mit Schlag auf Pico 2 das Spiel starten.
-        - Im Dashboard zählt der Timer synchron mit dem Display aufwärts.
-    3. **Ereignisbasierte Telemetrie im Spielbetrieb (`FA-K01`, `FA-K02`, `FA-C02`)**:
-        - Spiel auf Pico 1 per Schlag starten: Web empfängt sofort `STATE:RUNNING`.
-        - 10 Schläge spielen: Jeder Schlag wird ereignisbasiert übertragen und im Web-Dashboard
-          ohne spürbare Verzögerung visualisiert.
-        - Nach Ablauf von 15s meldet Pico 1 `STATE:FINISHED` und `RESULT`; das finale Ergebnis wird im Dashboard
-          synchron dargestellt.
-    4. **Resilienz gegen Verbindungsunterbruch (`FA-C04`, `FA-C05`)**:
-        - Neues Spiel im Modus `TIMED` (30s) auf Pico 1 starten (`RUNNING`).
-        - Nach 10 Sekunden das Daten-USB-Kabel zwischen Laptop und Pico 1 abziehen (Spannungsversorgung bleibt via
-          externem Hub bestehen).
-        - Web Companion: Das Dashboard erkennt den Verbindungsabriss sofort und schaltet den Status von Pico 1 auf
-          getrennt/Fehler um.
-        - Pico 1: Das laufende Spiel wird auf dem RP2040 ohne Unterbrechung autonom weitergeführt. Score zählt weiter,
-          Countdown läuft auf 0 ab, Display schaltet sauber in `FINISHED`.
-        - USB-Kabel wieder einstecken und im Browser neu verbinden: Status synchronisiert sich wieder stabil.
-        - Pico 2 wurde durch das Trennen von Pico 1 nicht beeinflusst und der Timer läuft immer noch weiter.
-- **Akzeptanzkriterium**: Sämtliche 8 Host- und Kommunikationsanforderungen werden fehlerfrei erfüllt.
+    1. **USB-Verbindung & Handshake (`FA-K03`, `FA-C02`, optional `FA-C01`)**:
+        - Im Browser über den Serial-Dialog den Port des Pico freigeben.
+        - Verifizieren, dass das Gerät im Web-Dashboard als aktive Karte mit Status `connected` erscheint und der
+          automatische Handshake erfolgreich durchgeführt wird.
+        - *(Optional für `FA-C01`)*: Falls ein zweiter serieller Port (z. B. virtuell) geöffnet wird, diesen ebenfalls
+          hinzufügen und prüfen, dass beide Geräte als separate Karten parallel im Dashboard angezeigt werden.
+    2. **Fernsteuerung Host → Pico (`FA-K01`, `FA-C03`)**:
+        - Im Dashboard den Modus `TIMED` wählen und das Zeitlimit auf 15 Sekunden setzen (`MODE:TIMED`, `PARAM:15`).
+        - ST7735-Display auf dem Pico prüfen: Das Display synchronisiert sich unverzüglich und zeigt `TIMED` sowie 15s an.
+    3. **Synchronisation Pico → Host (`FA-K01`, `FA-K02`, `FA-C02`)**:
+        - Über die physischen Tasten am Pico (`LEFT`, `UP`/`DOWN`, `RIGHT`) in den Spielmodus `RACE` wechseln und das
+          Schlagziel auf 20 Schläge einstellen.
+        - Web-Dashboard prüfen: Das Dashboard übernimmt unverzüglich und synchron den Modus `RACE` sowie das Ziel von
+          20 Schlägen.
+    4. **Ereignisbasierte Telemetrie im Spielbetrieb (`FA-K01`, `FA-K02`, `FA-C02`)**:
+        - Spiel durch den ersten Schlag auf das Böckli (oder Klick auf «Start» im Web) starten: Der Status wechselt
+          sofort auf `RUNNING`, der Timer zählt synchron auf Display und im Web vorwärts.
+        - 10 Schläge spielen: Jeder Schlag wird ereignisbasiert via USB übertragen und im Web-Dashboard ohne spürbare
+          Verzögerung visualisiert (Score zählt synchron hoch).
+        - Kontinuierlich weiterschlagen, bis 20 Schläge erreicht sind: Bei Erreichen meldet der Pico `STATE:FINISHED`
+          und `RESULT`; das finale Ergebnis wird im Dashboard synchron dargestellt.
+- **Akzeptanzkriterium**: Alle Steuer- und Telemetriebefehle in beide Richtungen werden ohne Verzögerung oder
+  Datenverlust synchronisiert.
+
+#### 6.2.2 Testfall `TC-FA-HOST-2`: Resilienz bei Verbindungsunterbruch & Wiederverbindung
+
+- **Abgedeckte Anforderungen**: `FA-K03`, `FA-C04`, `FA-C05`
+- **Ziel**: Nachweis, dass ein plötzlicher Abriss der USB-Datenkommunikation vom Companion erkannt wird, das laufende
+  Spiel auf dem RP2040 autonom und ungestört weiterläuft und nach Wiederanstecken des Kabels eine saubere
+  Wiederverbindung möglich ist.
+- **Voraussetzung**:
+    - Laptop mit Google Chrome und geöffnetem Companion.
+    - Ein Schlagzähler (1 Pico), montiert am Böckli.
+    - Anschluss über einen extern mit Strom versorgten USB-Hub (oder Y-Datenkabel / Powerbank), sodass das Abziehen des
+      USB-Datenkabels am Laptop nicht die 5V-Spannungsversorgung des Pico unterbricht.
+- **Durchführung**:
+    1. **Verbindung herstellen & Spiel starten (`FA-K03`, `FA-C02`)**:
+        - Pico mit dem Laptop verbinden und im Companion freigeben (Status `connected`).
+        - Neues Spiel im Modus `TIMED` (30s) starten (`RUNNING`).
+        - Einige Schläge ausführen und prüfen, dass Score und Timer im Dashboard synchron mitlaufen.
+    2. **Verbindungsunterbruch während laufendem Spiel (`FA-C04`, `FA-C05`)**:
+        - Nach ca. 10 Sekunden das USB-Datenkabel zwischen Laptop und Hub/Pico abziehen (5V-Stromversorgung bleibt
+          bestehen).
+        - **Web Companion (`FA-C04`)**: Das Dashboard erkennt den Verbindungsabriss sofort und schaltet den Status des
+          Geräts auf getrennt/Fehler um (`disconnected` bzw. `error`); ein Warnhinweis wird angezeigt.
+        - **Pico (`FA-C05`)**: Das laufende Spiel wird auf dem RP2040 ohne Hänger, Reset oder Unterbrechung autonom
+          weitergeführt. Score zählt bei Schlägen weiter, Countdown läuft auf 0 ab, Display schaltet sauber in
+          `FINISHED`.
+    3. **Wiederverbindung / Reconnect (`FA-K03`)**:
+        - USB-Datenkabel wieder am Laptop einstecken.
+        - Im Browser über den Serial-Dialog bzw. «Reconnect» die Verbindung wiederherstellen.
+        - Der Gerätestatus springt wieder auf `connected`, das aktuelle Ergebnis bzw. der Status `FINISHED` wird synchron
+          im Dashboard angezeigt.
+- **Akzeptanzkriterium**: Der Verbindungsabbruch führt zu keinerlei Beeinträchtigung des laufenden Spiels auf dem Pico
+  (`FA-C05`), der Companion meldet den Verbindungsverlust unverzüglich (`FA-C04`) und die Verbindung kann nach dem
+  Wiederanstecken stabil reaktiviert werden (`FA-K03`).
 
 ### 6.3 Testfall `TC-NFA-REC`: Sensor-Erkennungsraten, Dynamik & Störfestigkeit
 
@@ -354,5 +391,5 @@ Kapitel 6):
 
 Das System gilt als erfolgreich qualifiziert, wenn:
 
-1. Alle 5 Testfälle erfolgreich durchgeführt werden.
+1. Alle Testfälle erfolgreich durchgeführt werden.
 2. Keine offenen Blocker- oder Critical-Bugs mehr existieren.
