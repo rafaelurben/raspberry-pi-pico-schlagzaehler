@@ -292,7 +292,7 @@ export class DeviceManagerService implements OnDestroy {
 
     try {
       await entry.transport.send(payloadToSend);
-      this.appendEvent(deviceId, logText, 'sent');
+      this.appendEvent(deviceId, logText, 'sent', undefined, 'COMMAND');
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       this.handleDeviceError(deviceId, error);
@@ -613,7 +613,7 @@ export class DeviceManagerService implements OnDestroy {
     );
 
     // 4. Record sanitized / formatted message in event log
-    this.appendEvent(deviceId, msg.rawText, 'received', now);
+    this.appendEvent(deviceId, msg.rawText, 'received', now, msg.type);
 
     // 5. Respond to BOOT message with Handshake command to establish/negotiate protocol
     if (msg.type === 'BOOT') {
@@ -678,7 +678,7 @@ export class DeviceManagerService implements OnDestroy {
         receivedCount: 0,
       });
       this.setDeviceCaptureProgress(deviceId, 0);
-      this.appendEvent(deviceId, rawPayload, 'received', now);
+      this.appendEvent(deviceId, rawPayload, 'received', now, msg.type);
       return;
     }
 
@@ -715,7 +715,7 @@ export class DeviceManagerService implements OnDestroy {
       const active = this.inProgressCaptures.get(deviceId);
       this.inProgressCaptures.delete(deviceId);
       this.setDeviceCaptureProgress(deviceId, null);
-      this.appendEvent(deviceId, rawPayload, 'received', now);
+      this.appendEvent(deviceId, rawPayload, 'received', now, msg.type);
 
       if (active) {
         let peak = 0;
@@ -771,6 +771,7 @@ export class DeviceManagerService implements OnDestroy {
     payload: string,
     direction: EventDirection,
     now: number = Date.now(),
+    type?: string,
   ): void {
     const event: DeviceEvent = {
       id: this.generateId(),
@@ -778,6 +779,7 @@ export class DeviceManagerService implements OnDestroy {
       timestamp: new Date(now),
       payload,
       direction,
+      ...(type !== undefined ? { type } : {}),
     };
 
     // Prepend new event (reverse chronological order) and cap at maximum retained events

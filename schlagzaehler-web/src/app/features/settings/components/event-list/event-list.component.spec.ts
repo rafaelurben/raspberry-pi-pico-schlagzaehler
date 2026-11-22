@@ -11,6 +11,7 @@ import { EventListComponent, SendRawCommandEvent } from './event-list.component'
     <app-event-list
       [events]="testEvents"
       [devices]="testDevices"
+      [(hideTimerEvents)]="hideTimer"
       (clear)="clearCalled = true"
       (sendRaw)="lastSentRaw = $event"
     />
@@ -19,6 +20,7 @@ import { EventListComponent, SendRawCommandEvent } from './event-list.component'
 class TestHostComponent {
   testEvents: DeviceEvent[] = [];
   testDevices: Device[] = [];
+  hideTimer = false;
   clearCalled = false;
   lastSentRaw: SendRawCommandEvent | null = null;
 }
@@ -256,5 +258,269 @@ describe('EventListComponent', () => {
 
     clearBtn.click();
     expect(host.clearCalled).toBe(true);
+  });
+
+  it('should display TIMER events by default when hideTimerEvents is false', () => {
+    host.testDevices = [
+      new Device({
+        id: 'dev-1',
+        name: 'Pico One',
+        state: new DeviceState({ connectionState: 'connected' }),
+        transportType: 'serial',
+      }),
+    ];
+    host.testEvents = [
+      {
+        id: 'evt-1',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'TIMER elapsed=1000 remaining=29000',
+      },
+      {
+        id: 'evt-2',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'HIT id=1 target=0 peak=2150 intensity=300',
+      },
+    ];
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('TIMER elapsed=1000 remaining=29000');
+    expect(compiled.textContent).toContain('HIT id=1 target=0 peak=2150 intensity=300');
+
+    const checkbox = fixture.nativeElement.querySelector(
+      '[data-testid="hide-timer-checkbox"]',
+    ) as HTMLInputElement;
+    expect(checkbox).toBeTruthy();
+    expect(checkbox.checked).toBe(false);
+  });
+
+  it('should hide TIMER events when hideTimerEvents filter is toggled via checkbox', () => {
+    host.testDevices = [
+      new Device({
+        id: 'dev-1',
+        name: 'Pico One',
+        state: new DeviceState({ connectionState: 'connected' }),
+        transportType: 'serial',
+      }),
+    ];
+    host.testEvents = [
+      {
+        id: 'evt-1',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'TIMER elapsed=1000 remaining=29000',
+      },
+      {
+        id: 'evt-2',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'HIT id=1 target=0 peak=2150 intensity=300',
+      },
+      {
+        id: 'evt-3',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'MODE active=TIMED param=30',
+      },
+    ];
+    fixture.detectChanges();
+
+    const checkbox = fixture.nativeElement.querySelector(
+      '[data-testid="hide-timer-checkbox"]',
+    ) as HTMLInputElement;
+
+    // Toggle hide TIMER filter ON
+    checkbox.click();
+    fixture.detectChanges();
+
+    expect(host.hideTimer).toBe(true);
+    expect(fixture.nativeElement.textContent).not.toContain('TIMER elapsed=1000 remaining=29000');
+    // Non-TIMER events remain visible (including MODE active=TIMED)
+    expect(fixture.nativeElement.textContent).toContain(
+      'HIT id=1 target=0 peak=2150 intensity=300',
+    );
+    expect(fixture.nativeElement.textContent).toContain('MODE active=TIMED param=30');
+
+    // Toggle hide TIMER filter OFF
+    checkbox.click();
+    fixture.detectChanges();
+
+    expect(host.hideTimer).toBe(false);
+    expect(fixture.nativeElement.textContent).toContain('TIMER elapsed=1000 remaining=29000');
+    expect(fixture.nativeElement.textContent).toContain(
+      'HIT id=1 target=0 peak=2150 intensity=300',
+    );
+  });
+
+  it('should combine device filtering and hideTimerEvents filter', () => {
+    host.testDevices = [
+      new Device({
+        id: 'dev-1',
+        name: 'Pico One',
+        state: new DeviceState({ connectionState: 'connected' }),
+        transportType: 'serial',
+      }),
+      new Device({
+        id: 'dev-2',
+        name: 'Pico Two',
+        state: new DeviceState({ connectionState: 'connected' }),
+        transportType: 'serial',
+      }),
+    ];
+    host.testEvents = [
+      {
+        id: 'evt-1',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'TIMER elapsed=2000 remaining=28000',
+      },
+      {
+        id: 'evt-2',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'HIT id=1 target=0 peak=1900 intensity=200',
+      },
+      {
+        id: 'evt-3',
+        deviceId: 'dev-2',
+        timestamp: new Date(),
+        payload: 'SCORE value=10',
+      },
+      {
+        id: 'evt-4',
+        deviceId: 'dev-2',
+        timestamp: new Date(),
+        payload: 'TIMER elapsed=3000 remaining=27000',
+      },
+    ];
+    fixture.detectChanges();
+
+    // Filter by Pico One only
+    const filterOneBtn = fixture.nativeElement.querySelector(
+      '[data-testid="filter-device-dev-1"]',
+    ) as HTMLButtonElement;
+    filterOneBtn.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('TIMER elapsed=2000 remaining=28000');
+    expect(fixture.nativeElement.textContent).toContain(
+      'HIT id=1 target=0 peak=1900 intensity=200',
+    );
+    expect(fixture.nativeElement.textContent).not.toContain('SCORE value=10');
+    expect(fixture.nativeElement.textContent).not.toContain('TIMER elapsed=3000 remaining=27000');
+
+    // Also enable hide TIMER events
+    const checkbox = fixture.nativeElement.querySelector(
+      '[data-testid="hide-timer-checkbox"]',
+    ) as HTMLInputElement;
+    checkbox.click();
+    fixture.detectChanges();
+
+    // Only non-TIMER events for Pico One should be visible
+    expect(fixture.nativeElement.textContent).not.toContain('TIMER elapsed=2000 remaining=28000');
+    expect(fixture.nativeElement.textContent).toContain(
+      'HIT id=1 target=0 peak=1900 intensity=200',
+    );
+    expect(fixture.nativeElement.textContent).not.toContain('SCORE value=10');
+    expect(fixture.nativeElement.textContent).not.toContain('TIMER elapsed=3000 remaining=27000');
+  });
+
+  it('should show empty state if all received events are TIMER events and hideTimerEvents is active', () => {
+    host.testEvents = [
+      {
+        id: 'evt-1',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'TIMER elapsed=100 remaining=900',
+      },
+      {
+        id: 'evt-2',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'TIMER elapsed=200 remaining=800',
+      },
+    ];
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('No events received');
+
+    const checkbox = fixture.nativeElement.querySelector(
+      '[data-testid="hide-timer-checkbox"]',
+    ) as HTMLInputElement;
+    checkbox.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('No events received');
+  });
+
+  it('should correctly identify TIMER events using isTimerEvent', () => {
+    const eventListComponent = fixture.debugElement.children[0]
+      .componentInstance as EventListComponent;
+
+    expect(
+      eventListComponent.isTimerEvent({
+        id: '1',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'TIMER elapsed=5000 remaining=25000',
+      }),
+    ).toBe(true);
+
+    expect(
+      eventListComponent.isTimerEvent({
+        id: '2',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'timer elapsed=5000',
+      }),
+    ).toBe(true);
+
+    expect(
+      eventListComponent.isTimerEvent({
+        id: '3',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'TIMER',
+      }),
+    ).toBe(true);
+
+    expect(
+      eventListComponent.isTimerEvent({
+        id: '4',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        type: 'TIMER',
+        payload: 'anything',
+      }),
+    ).toBe(true);
+
+    expect(
+      eventListComponent.isTimerEvent({
+        id: '5',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'MODE active=TIMED param=30',
+      }),
+    ).toBe(false);
+
+    expect(
+      eventListComponent.isTimerEvent({
+        id: '6',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'HIT id=1 target=0',
+      }),
+    ).toBe(false);
+
+    expect(
+      eventListComponent.isTimerEvent({
+        id: '7',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'SCORE value=100',
+      }),
+    ).toBe(false);
   });
 });

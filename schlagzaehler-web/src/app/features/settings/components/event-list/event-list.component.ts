@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, computed, input, output, signal } from '@angular/core';
+import { Component, computed, input, model, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DeviceEvent } from '../../../../core/device/models/device-event.model';
 import { Device } from '../../../../core/device/models/device.model';
@@ -19,6 +19,11 @@ export class EventListComponent {
   readonly devices = input.required<readonly Device[]>();
   readonly clear = output<void>();
   readonly sendRaw = output<SendRawCommandEvent>();
+
+  /**
+   * Whether to hide TIMER events from the live event stream.
+   */
+  readonly hideTimerEvents = model<boolean>(true);
 
   /**
    * Selected device IDs for filtering live events.
@@ -42,11 +47,15 @@ export class EventListComponent {
 
   readonly filteredEvents = computed(() => {
     const filterIds = this.selectedFilterDeviceIds();
+    const hideTimer = this.hideTimerEvents();
     const allEvents = this.events();
-    if (filterIds.size === 0) {
-      return allEvents;
-    }
-    return allEvents.filter((evt) => filterIds.has(evt.deviceId));
+
+    return allEvents.filter((evt) => {
+      if (filterIds.size > 0 && !filterIds.has(evt.deviceId)) {
+        return false;
+      }
+      return !(hideTimer && this.isTimerEvent(evt));
+    });
   });
 
   readonly deviceNameMap = computed(() => {
@@ -56,6 +65,17 @@ export class EventListComponent {
     }
     return map;
   });
+
+  /**
+   * Determines whether a given DeviceEvent is a TIMER event.
+   */
+  isTimerEvent(event: DeviceEvent): boolean {
+    if (event.type === 'TIMER') {
+      return true;
+    }
+    const payload = (event.payload ?? '').trim();
+    return /^TIMER(\s|$)/i.test(payload);
+  }
 
   resolveDeviceName(deviceId: string): string {
     return this.deviceNameMap().get(deviceId) ?? deviceId;

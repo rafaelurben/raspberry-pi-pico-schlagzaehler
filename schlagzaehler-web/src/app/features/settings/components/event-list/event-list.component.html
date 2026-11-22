@@ -86,47 +86,67 @@
     </div>
   </div>
 
-  <!-- Filter by Device(s) -->
-  @if (devices().length > 0) {
-    <div
-      class="mb-4 flex flex-wrap items-center gap-1.5"
-      role="group"
-      aria-label="Filter events by device"
-    >
-      <span class="mr-1 text-xs font-medium text-slate-400">Filter:</span>
-      <button
-        type="button"
-        (click)="clearFilter()"
-        aria-label="Show events from all devices"
-        data-testid="filter-all-devices"
-        class="rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer"
-        [class]="
-          selectedFilterDeviceIds().size === 0
-            ? 'bg-indigo-600 text-white'
-            : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
-        "
+  <!-- Filters Section -->
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    @if (devices().length > 0) {
+      <div
+        class="flex flex-wrap items-center gap-1.5"
+        role="group"
+        aria-label="Filter events by device"
       >
-        All
-      </button>
-      @for (device of devices(); track device.id) {
+        <span class="mr-1 text-xs font-medium text-slate-400">Filter:</span>
         <button
           type="button"
-          (click)="toggleFilterDevice(device.id)"
-          [attr.data-testid]="'filter-device-' + device.id"
-          [attr.aria-label]="'Filter by ' + device.name"
-          [attr.aria-pressed]="isFilterSelected(device.id)"
+          (click)="clearFilter()"
+          aria-label="Show events from all devices"
+          data-testid="filter-all-devices"
           class="rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer"
           [class]="
-            isFilterSelected(device.id)
+            selectedFilterDeviceIds().size === 0
               ? 'bg-indigo-600 text-white'
               : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
           "
         >
-          {{ device.name }}
+          All
         </button>
-      }
+        @for (device of devices(); track device.id) {
+          <button
+            type="button"
+            (click)="toggleFilterDevice(device.id)"
+            [attr.data-testid]="'filter-device-' + device.id"
+            [attr.aria-label]="'Filter by ' + device.name"
+            [attr.aria-pressed]="isFilterSelected(device.id)"
+            class="rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer"
+            [class]="
+              isFilterSelected(device.id)
+                ? 'bg-indigo-600 text-white'
+                : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+            "
+          >
+            {{ device.name }}
+          </button>
+        }
+      </div>
+    }
+
+    <!-- Hide TIMER Events Filter -->
+    <div class="flex items-center">
+      <label
+        data-testid="filter-hide-timer"
+        class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700/80 bg-slate-900/60 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:border-slate-600 hover:text-white select-none"
+      >
+        <input
+          type="checkbox"
+          [ngModel]="hideTimerEvents()"
+          (ngModelChange)="hideTimerEvents.set($event)"
+          data-testid="hide-timer-checkbox"
+          aria-label="Hide TIMER events"
+          class="h-3.5 w-3.5 rounded border-slate-600 bg-slate-800 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+        />
+        <span>Hide TIMER events</span>
+      </label>
     </div>
-  }
+  </div>
 
   @if (filteredEvents().length === 0) {
     <div

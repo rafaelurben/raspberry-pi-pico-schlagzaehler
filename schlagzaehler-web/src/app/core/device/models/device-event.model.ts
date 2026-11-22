@@ -6,4 +6,5 @@ export interface DeviceEvent {
   readonly timestamp: Date;
   readonly payload: string;
   readonly direction?: EventDirection;
+  readonly type?: string;
 }
