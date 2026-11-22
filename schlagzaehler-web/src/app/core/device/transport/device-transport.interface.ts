@@ -17,7 +17,7 @@ export type TransportEvent = AsciiTransportEvent | BinaryTransportEvent;
 
 /**
  * Generic transport abstraction representing a single physical or virtual device connection.
- * Designed to support Web Serial (both framed binary TLV and fallback ASCII),
+ * Designed to support Web Serial (both binary mode and fallback ASCII),
  * and extensible to future transports like Web Bluetooth or WebSocket.
  */
 export interface DeviceTransport {

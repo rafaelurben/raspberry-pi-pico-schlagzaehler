@@ -11,7 +11,7 @@ import {
   BinaryMessageType,
   CALIB_FLAG_IGNORED,
   CALIB_FLAG_REPEATED,
-  HANDSHAKE_FLAG_TLV_MODE,
+  HANDSHAKE_FLAG_BINARY_MODE,
   PROTOCOL_VERSION,
 } from './binary-protocol.types';
 import {
@@ -375,8 +375,8 @@ export function serializeBinaryCommand(command: UnifiedProtocolCommand, seq?: nu
       const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
       const major = command.payload?.clientProtoMajor ?? PROTOCOL_VERSION;
       const minor = command.payload?.clientProtoMinor ?? 0;
-      const tlv = command.payload?.tlvMode ?? true;
-      const flags = tlv ? HANDSHAKE_FLAG_TLV_MODE : 0;
+      const binaryMode = command.payload?.binaryMode ?? true;
+      const flags = binaryMode ? HANDSHAKE_FLAG_BINARY_MODE : 0;
       const nonce = command.payload?.clientNonce ?? generateRandomNonce();
       view.setUint8(0, major);
       view.setUint8(1, minor);

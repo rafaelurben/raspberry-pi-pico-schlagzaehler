@@ -72,7 +72,7 @@ The firmware runs a strict three-layer architecture: **Application Layer** (`src
   - Flicker-free rendering using dirty-region tracking (`needs_full_redraw`, `needs_score_redraw`, `needs_timer_redraw`).
   - Renders dedicated screens for boot/calibration, menu navigation, ready/running/finished game states, and specialized analysis screens (`BEREIT!`, `AUFNAHME`, `TRANSFER`).
 - **`CompanionProtocol` & `CommandHandler`** (`src/App/Companion/`):
-  - Core 1 dual-mode communication protocol over USB CDC Serial supporting high-efficiency **Framed Binary Protocol (TLV)** with 16-bit CRC and human-readable **ASCII Protocol**.
+  - Core 1 dual-mode communication protocol over USB CDC Serial supporting high-efficiency **Framed Binary Protocol** (binary mode) with 16-bit CRC and human-readable **ASCII Protocol**.
   - Parses incoming companion commands (`START`, `RESET`, `CALIB`, `MODE`, `PARAM`, `SENS`, `CAPTURE`) and routes them via non-blocking queues to Core 0.
   - Streams telemetry events and non-blocking chunked raw waveform data (`CAPTURE_DATA`, 50 samples per line, 1 line per tick) without stalling UI rendering or tripping watchdogs.
 - **`ConfigService`** (`src/App/ConfigService.c`):
@@ -110,8 +110,8 @@ The Angular v22 single-page companion app provides real-time multi-target match 
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                       Transport Abstraction Layer                       │
-│    DeviceTransport (Interface)  •  WebSerialTransport (Web Serial)     │
-│                 DualEventParser (Binary TLV & ASCII Deframing)          │
+│    DeviceTransport (Interface)  •  WebSerialTransport (Web Serial)      │
+│                 DualEventParser (Binary & ASCII Deframing)              │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -124,11 +124,11 @@ The Angular v22 single-page companion app provides real-time multi-target match 
   - Manages the auto-rearming pipeline for automated continuous hit waveform captures.
   - Isolates errors so a disconnect on one physical target does not interrupt other connected targets.
 - **`CompanionProtocol` Parser & Serializer** (`src/app/core/device/protocol/`):
-  - Dual-mode serializer and parser converting Framed Binary TLV packets (with CRC-16) and ASCII protocol lines into typed domain models.
+  - Dual-mode serializer and parser converting binary mode packets (with CRC-16) and ASCII protocol lines into typed domain models.
   - Filters out raw high-frequency `CAPTURE_DATA` chunks from the user-facing live event log while assembling full sample buffers in the background.
 - **`WebSerialTransport` & `DualEventParser`** (`src/app/core/device/transport/`, `src/app/core/device/protocol/parser/`):
   - Implementation of the `DeviceTransport` contract using the W3C Web Serial API (115,200 baud).
-  - Handles USB chunk fragmentation, stream assembly, binary TLV frame deframing with CRC-16 validation, and CRLF / LF line endings with fault tolerance.
+  - Handles USB chunk fragmentation, stream assembly, binary frame deframing with CRC-16 validation, and CRLF / LF line endings with fault tolerance.
 - **`AudioFeedbackService`** (`src/app/core/services/`):
   - Synthesizes low-latency audio feedback (hits, countdown beeps, start buzzer, victory fanfare) using the Web Audio API without requiring external audio assets.
 
@@ -180,7 +180,7 @@ The RP2040's dual ARM Cortex-M0+ cores run strictly separated roles communicatin
 ## 5. System Integration (Companion Protocol)
 
 Communication between the Raspberry Pi Pico W firmware and companion software runs over USB CDC Serial (`115200` baud) using a dual-mode protocol:
-- **Framed Binary Protocol (TLV)**: High-efficiency packet-based communication with 16-bit CRC, supporting fast raw ADC waveform streaming, structured telemetry, and runtime capability negotiation.
+- **Framed Binary Protocol (Binary Mode)**: High-efficiency packet-based communication with 16-bit CRC, supporting fast raw ADC waveform streaming, structured telemetry, and runtime capability negotiation.
 - **ASCII Protocol**: Human-readable, line-delimited format maintained side-by-side for serial terminals (`minicom`, Arduino Serial Monitor) and simple scripting.
 
 For the complete protocol specification, packet diagrams, session handshake lifecycle, and payload definitions, see:

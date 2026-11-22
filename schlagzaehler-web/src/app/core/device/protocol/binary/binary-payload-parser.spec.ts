@@ -16,7 +16,7 @@ import {
   BinarySensorState,
   CALIB_FLAG_IGNORED,
   CALIB_FLAG_REPEATED,
-  HANDSHAKE_FLAG_TLV_MODE,
+  HANDSHAKE_FLAG_BINARY_MODE,
   PROTOCOL_VERSION,
   SYNC_BYTE_0,
   SYNC_BYTE_1,
@@ -377,7 +377,7 @@ describe('BinaryPayloadParser', () => {
             clientNonce: 0xaabbccdd,
             clientProtoMajor: 1,
             clientProtoMinor: 0,
-            tlvMode: true,
+            binaryMode: true,
           },
         },
         7,
@@ -393,7 +393,7 @@ describe('BinaryPayloadParser', () => {
       const view = new DataView(packet.buffer, packet.byteOffset + 8, 8);
       expect(view.getUint8(0)).toBe(1); // major
       expect(view.getUint8(1)).toBe(0); // minor
-      expect(view.getUint16(2, true)).toBe(HANDSHAKE_FLAG_TLV_MODE);
+      expect(view.getUint16(2, true)).toBe(HANDSHAKE_FLAG_BINARY_MODE);
       expect(view.getUint32(4, true)).toBe(0xaabbccdd);
     });
 

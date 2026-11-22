@@ -162,7 +162,7 @@ export interface HandshakeCommandPayload {
   readonly clientNonce?: number;
   readonly clientProtoMajor?: number;
   readonly clientProtoMinor?: number;
-  readonly tlvMode?: boolean;
+  readonly binaryMode?: boolean;
 }
 
 export interface SetModeCommandPayload {

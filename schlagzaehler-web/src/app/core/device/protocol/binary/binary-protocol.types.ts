@@ -47,7 +47,7 @@ export enum BinaryMessageType {
 }
 
 // Handshake Command Flags
-export const HANDSHAKE_FLAG_TLV_MODE = 0x0001;
+export const HANDSHAKE_FLAG_BINARY_MODE = 0x0001;
 
 // Calibration Result Flags
 export const CALIB_FLAG_IGNORED = 0x01;

@@ -27,7 +27,7 @@ Transport Abstraction (DeviceTransport Interface)
 Web Serial Transport (WebSerialTransport & WebSerialTransportFactory)
     │
     ▼
-Dual-Mode Event Parser (DualEventParser: Binary TLV frames & ASCII lines)
+Dual-Mode Event Parser (DualEventParser: Binary frames & ASCII lines)
     │
     ▼
 Browser Web Serial API (navigator.serial, SerialPort, ReadableStreamDefaultReader on Uint8Array)
@@ -45,8 +45,8 @@ Browser Web Serial API (navigator.serial, SerialPort, ReadableStreamDefaultReade
   - `piezo-capture.model.ts`: `PiezoCaptureResult` and `CaptureProtocolMessage` types representing 2.1s raw ADC piezo waveform captures (`10 kHz`, `1,000` pre-trigger + `20,000` post-trigger samples).
 - **`src/app/core/device/protocol/`**:
   - `companion-protocol.ts`: Unified protocol implementation with `CompanionCommands` (`START`, `RESET`, `CALIB`, `STATUS`, `CAPTURE`, `CAPTURE:STOP`, `MODE:...`, `PARAM:...`, `SENS:...`), `parseCompanionMessage()`, and `parseCaptureMessage()`.
-  - `binary/`: Framed binary TLV protocol encoding, decoding, CRC16 verification, and packet structures.
-  - `parser/dual-event-parser.ts`: `DualEventParser` parses incoming raw `Uint8Array` stream chunks across arbitrary read boundaries, demultiplexing binary TLV frames and newline-delimited ASCII lines.
+  - `binary/`: Framed binary protocol encoding, decoding, CRC16 verification, and packet structures.
+  - `parser/dual-event-parser.ts`: `DualEventParser` parses incoming raw `Uint8Array` stream chunks across arbitrary read boundaries, demultiplexing binary frames and newline-delimited ASCII lines.
 - **`src/app/core/device/transport/`**:
   - `device-transport.interface.ts`: Generic `DeviceTransport` contract (`state$`, `events$`, `errors$`, `getMetadata()`, `connect()`, `disconnect()`, `send()`). UI and Device Manager never depend directly on Web Serial types.
   - `web-serial-transport.ts`: Native `SerialPort` integration using `ReadableStreamDefaultReader<Uint8Array>` and `DualEventParser` for reading, and `WritableStreamDefaultWriter<Uint8Array>` for sending.

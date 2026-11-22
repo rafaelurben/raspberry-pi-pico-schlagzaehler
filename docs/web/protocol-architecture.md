@@ -1,6 +1,6 @@
 # Web Companion Protocol Architecture
 
-This document describes the 3-tier architecture used in `schlagzaehler-web` to receive, decode, and process both binary TLV frames and fallback ASCII lines from the Schlagzähler firmware.
+This document describes the 3-tier architecture used in `schlagzaehler-web` to receive, decode, and process both binary mode frames and fallback ASCII lines from the Schlagzähler firmware.
 
 ---
 

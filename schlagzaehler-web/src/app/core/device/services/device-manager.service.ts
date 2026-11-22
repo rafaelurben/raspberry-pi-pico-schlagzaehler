@@ -649,9 +649,9 @@ export class DeviceManagerService implements OnDestroy {
     );
 
     if (connectionState === 'connected') {
-      // Negotiate binary mode via CMD_HANDSHAKE with TLV_MODE = 1
-      void this.sendCommand(deviceId, CompanionCommands.handshake({ tlvMode: true })).catch((e) =>
-        console.error(`Failed to send handshake to device ${deviceId}:`, e),
+      // Negotiate binary mode via CMD_HANDSHAKE with BINARY_MODE = 1
+      void this.sendCommand(deviceId, CompanionCommands.handshake({ binaryMode: true })).catch(
+        (e) => console.error(`Failed to send handshake to device ${deviceId}:`, e),
       );
     }
   }
@@ -751,8 +751,8 @@ export class DeviceManagerService implements OnDestroy {
 
     // 5. Respond to BOOT message with Handshake command to establish/negotiate protocol
     if (msg.type === 'BOOT') {
-      void this.sendCommand(deviceId, CompanionCommands.handshake({ tlvMode: true })).catch((e) =>
-        console.error(`Failed to send handshake after BOOT to device ${deviceId}:`, e),
+      void this.sendCommand(deviceId, CompanionCommands.handshake({ binaryMode: true })).catch(
+        (e) => console.error(`Failed to send handshake after BOOT to device ${deviceId}:`, e),
       );
     }
   }

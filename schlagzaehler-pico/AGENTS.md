@@ -143,7 +143,7 @@ The RP2040's two ARM Cortex-M0+ cores have strictly separated responsibilities a
 ## 5. USB CDC Companion Protocol
 
 The Pico firmware communicates with `schlagzaehler-web` and serial terminals over USB CDC Serial (`115200` baud) using a dual-mode architecture:
-- **Framed Binary Protocol (TLV)**: Packet-based with 16-bit CRC for high-speed raw ADC capture streaming and low-overhead telemetry.
+- **Framed Binary Protocol (Binary Mode)**: Packet-based with 16-bit CRC for high-speed raw ADC capture streaming and low-overhead telemetry.
 - **ASCII Protocol**: Kept side-by-side for CLI terminal debugging (`minicom`, screen, Arduino Serial Monitor).
 
 For the authoritative specification of wire framing, binary packet diagrams, command/telemetry payloads, session handshakes, and inter-core IPC messages, consult the Interface Control Document:

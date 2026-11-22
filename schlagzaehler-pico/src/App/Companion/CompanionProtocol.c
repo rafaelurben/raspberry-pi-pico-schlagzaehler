@@ -146,7 +146,7 @@ void CompanionProtocol_parse_binary_frame(CompanionProtocol* proto, const Binary
                 const CmdHandshakePayload* hs = (const CmdHandshakePayload*)payload;
                 CompanionProtocol_cancel_capture_tx(proto);
                 proto->active_client_nonce = hs->client_nonce;
-                if (hs->flags & HANDSHAKE_FLAG_TLV_MODE) {
+                if (hs->flags & HANDSHAKE_FLAG_BINARY_MODE) {
                     proto->tx_encoding = PROTOCOL_ENCODING_BINARY;
                 } else {
                     proto->tx_encoding = PROTOCOL_ENCODING_ASCII;

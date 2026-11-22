@@ -1130,11 +1130,11 @@ void test_binary_handshake(void) {
 
     assert(cp.tx_encoding == PROTOCOL_ENCODING_ASCII);
 
-    /* 1. Send valid CMD_HANDSHAKE with TLV_MODE set */
+    /* 1. Send valid CMD_HANDSHAKE with BINARY_MODE set */
     CmdHandshakePayload hs = {
         .client_proto_major = 1,
         .client_proto_minor = 0,
-        .flags = HANDSHAKE_FLAG_TLV_MODE,
+        .flags = HANDSHAKE_FLAG_BINARY_MODE,
         .client_nonce = 0xCAFEBABE
     };
     uint8_t frame[64];
@@ -1181,7 +1181,7 @@ void test_binary_handshake(void) {
     CmdHandshakePayload hs_bad = {
         .client_proto_major = 2,
         .client_proto_minor = 0,
-        .flags = HANDSHAKE_FLAG_TLV_MODE,
+        .flags = HANDSHAKE_FLAG_BINARY_MODE,
         .client_nonce = 0x11223344
     };
     frame_len = build_binary_frame(frame, CMD_HANDSHAKE, 0, &hs_bad, sizeof(hs_bad), 2);

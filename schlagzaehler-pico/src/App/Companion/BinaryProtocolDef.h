@@ -33,7 +33,7 @@ extern "C" {
 #define BINARY_FLAG_IS_ERROR       (1U << 0)
 
 /* Handshake flags (CMD_HANDSHAKE payload) */
-#define HANDSHAKE_FLAG_TLV_MODE    (1U << 0)
+#define HANDSHAKE_FLAG_BINARY_MODE (1U << 0)
 
 /* Calibration result flags (MSG_CALIBRATION_RESULT payload) */
 #define CALIBRATION_FLAG_IGNORED   (1U << 0)
@@ -130,7 +130,7 @@ typedef struct __attribute__((packed)) {
 typedef struct __attribute__((packed)) {
     uint8_t  client_proto_major;
     uint8_t  client_proto_minor;
-    uint16_t flags;         /* Bit 0: TLV_MODE */
+    uint16_t flags;         /* Bit 0: BINARY_MODE */
     uint32_t client_nonce;
 } CmdHandshakePayload;
 

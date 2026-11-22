@@ -45,9 +45,9 @@ describe('companion-protocol', () => {
       type: 'CAPTURE',
       payload: { action: 'stop' },
     });
-    expect(CompanionCommands.handshake({ tlvMode: true })).toEqual({
+    expect(CompanionCommands.handshake({ binaryMode: true })).toEqual({
       type: 'HANDSHAKE',
-      payload: { tlvMode: true },
+      payload: { binaryMode: true },
     });
   });
 

@@ -23,7 +23,7 @@ Schlagzähler is a piezo-based hit detection and interactive game system. One or
 
 ## 2. System Integration (Companion Protocol)
 
-The Pico firmware and the companion application communicate over USB CDC Serial (`115200` baud) using a dual-mode protocol (Framed Binary TLV with side-by-side ASCII support).
+The Pico firmware and the companion application communicate over USB CDC Serial (`115200` baud) using a dual-mode protocol (binary mode with side-by-side ASCII support).
 
 The hardware device on Core 0 is always the authoritative source of truth for sensor calibration, hit detection, game state transitions, scores, and timers.
 
