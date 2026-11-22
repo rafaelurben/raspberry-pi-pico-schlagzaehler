@@ -238,6 +238,123 @@ describe('DeviceManagerService', () => {
     expect(service.getDevice(dev1!.id)?.state.connectionState).toBe('connected');
   });
 
+  it('should prompt user with port picker if reconnection fails and associate new port with existing device', async () => {
+    setupService();
+    const transport1 = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport1];
+
+    const dev = await service.connectSerialDevice('My Target');
+    expect(dev?.name).toBe('My Target');
+    const originalId = dev!.id;
+
+    // Simulate device disconnected (e.g. unplugged) and transport1 cannot reconnect
+    await service.disconnectDevice(originalId);
+    transport1.shouldFailConnect = true;
+
+    const transport2 = new MockDeviceTransport({ usbVendorId: 0x2e8a, usbProductId: 0x000b });
+    mockFactory.transportsToReturn = [transport2];
+
+    await service.reconnectDevice(originalId);
+
+    // transport1 was attempted and failed
+    expect(transport1.connectCalls).toBe(2);
+    // transport2 was created from port picker and connected
+    expect(transport2.connectCalls).toBe(1);
+
+    const reconnectedDevice = service.getDevice(originalId);
+    expect(reconnectedDevice).toBeDefined();
+    expect(reconnectedDevice?.id).toBe(originalId);
+    expect(reconnectedDevice?.name).toBe('My Target');
+    expect(reconnectedDevice?.state.connectionState).toBe('connected');
+    expect(reconnectedDevice?.metadata?.usbProductId).toBe(0x000b);
+  });
+
+  it('should gracefully handle user cancelling port picker when reconnection fails', async () => {
+    setupService();
+    const transport1 = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport1];
+
+    const dev = await service.connectSerialDevice();
+    const devId = dev!.id;
+
+    await service.disconnectDevice(devId);
+    transport1.shouldFailConnect = true;
+
+    // Simulate user cancelling port picker
+    mockFactory.requestPortError = new DOMException('User cancelled', 'NotFoundError');
+
+    await expect(service.reconnectDevice(devId)).resolves.toBeUndefined();
+
+    const device = service.getDevice(devId);
+    expect(device?.state.connectionState).toBe('disconnected');
+    expect(device?.errorMessage).toBeUndefined();
+  });
+
+  it('should fail reconnection if Web Serial is not supported when direct reconnect fails', async () => {
+    const unsupportedFactory = new MockWebSerialTransportFactory();
+    unsupportedFactory.supported = false;
+    setupService(unsupportedFactory);
+
+    const transport1 = new MockDeviceTransport();
+    const dev = await service.attachDevice(transport1);
+    const devId = dev.id;
+
+    await service.disconnectDevice(devId);
+    transport1.shouldFailConnect = true;
+
+    await expect(service.reconnectDevice(devId)).rejects.toThrow(
+      'The Web Serial API is not supported in this browser.',
+    );
+    expect(service.getDevice(devId)?.state.connectionState).toBe('error');
+  });
+
+  it('should set error state if new transport fails to connect after port selection', async () => {
+    setupService();
+    const transport1 = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport1];
+
+    const dev = await service.connectSerialDevice();
+    const devId = dev!.id;
+
+    await service.disconnectDevice(devId);
+    transport1.shouldFailConnect = true;
+
+    const transport2 = new MockDeviceTransport();
+    transport2.shouldFailConnect = true;
+    mockFactory.transportsToReturn = [transport2];
+
+    await expect(service.reconnectDevice(devId)).rejects.toThrow('Failed to open port');
+    expect(service.getDevice(devId)?.state.connectionState).toBe('error');
+    expect(service.getDevice(devId)?.errorMessage).toBe('Failed to open port');
+  });
+
+  it('should throw error when reconnecting a non-existent device ID', async () => {
+    setupService();
+    await expect(service.reconnectDevice('unknown-id')).rejects.toThrow(
+      'Device unknown-id is not found.',
+    );
+  });
+
+  it('should show port picker directly if device has no active transport entry', async () => {
+    setupService();
+    const transport1 = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport1];
+
+    const dev = await service.connectSerialDevice('Device X');
+    const devId = dev!.id;
+
+    // Manually delete active transport entry to simulate orphaned/lost transport
+    (service as unknown as { activeDevices: Map<string, unknown> }).activeDevices.delete(devId);
+
+    const transport2 = new MockDeviceTransport();
+    mockFactory.transportsToReturn = [transport2];
+
+    await service.reconnectDevice(devId);
+    expect(transport2.connectCalls).toBe(1);
+    expect(service.getDevice(devId)?.state.connectionState).toBe('connected');
+    expect(service.getDevice(devId)?.name).toBe('Device X');
+  });
+
   it('should send commands to one or multiple devices and log sent events', async () => {
     setupService();
     const transport1 = new MockDeviceTransport();
