@@ -3,8 +3,7 @@
 #include "pico/time.h"
 #include <stdlib.h>
 
-bool OsalQueue_init(OsalQueue* q, void* buffer, size_t item_size, size_t capacity) {
-    (void)buffer;
+bool OsalQueue_init(OsalQueue* q, size_t item_size, size_t capacity) {
     if (!q || item_size == 0 || capacity == 0) return false;
     queue_t* pq = (queue_t*)malloc(sizeof(queue_t));
     if (!pq) return false;

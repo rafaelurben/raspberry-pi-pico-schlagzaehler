@@ -49,8 +49,7 @@ typedef struct {
     size_t item_size;
 } MockQueueStorage;
 
-bool OsalQueue_init(OsalQueue* q, void* buffer, size_t item_size, size_t capacity) {
-    (void)buffer;
+bool OsalQueue_init(OsalQueue* q, size_t item_size, size_t capacity) {
     MockQueueStorage* s = (MockQueueStorage*)calloc(1, sizeof(MockQueueStorage));
     s->item_size = item_size;
     s->capacity = (capacity > 64) ? 64 : capacity;
@@ -259,7 +258,7 @@ void test_game_controller_and_modes(void) {
     Config_set_defaults(&cfg);
 
     OsalQueue q0_to_q1;
-    OsalQueue_init(&q0_to_q1, NULL, sizeof(Core0ToCore1Message), 64);
+    OsalQueue_init(&q0_to_q1, sizeof(Core0ToCore1Message), 64);
 
     GameController gc;
     GameController_init(&gc, &cfg, &q0_to_q1);
@@ -414,7 +413,7 @@ void test_game_controller_and_modes(void) {
 
 void test_companion_protocol(void) {
     OsalQueue q1_to_q0;
-    OsalQueue_init(&q1_to_q0, NULL, sizeof(Core1ToCore0Message), 16);
+    OsalQueue_init(&q1_to_q0, sizeof(Core1ToCore0Message), 16);
 
     CommandHandler ch;
     CommandHandler_init(&ch, &q1_to_q0);
@@ -895,7 +894,7 @@ void test_ignored_sensor_calibration_and_detection(void) {
     /* Test companion protocol CALIB message output formatting with ignored */
     CompanionProtocol cp;
     OsalQueue q_dummy;
-    OsalQueue_init(&q_dummy, NULL, sizeof(Core1ToCore0Message), 16);
+    OsalQueue_init(&q_dummy, sizeof(Core1ToCore0Message), 16);
     CommandHandler ch_dummy;
     CommandHandler_init(&ch_dummy, &q_dummy);
     CompanionProtocol_init(&cp, &ch_dummy);
@@ -977,8 +976,7 @@ void test_all_sensors_ignored_transitions_to_error(void) {
 
     /* Test integration with GameController: state stays in BOOT and calibration results are marked failed */
     OsalQueue q0_to_1;
-    MockQueueStorage q0_storage;
-    OsalQueue_init(&q0_to_1, &q0_storage, sizeof(Core0ToCore1Message), 16);
+    OsalQueue_init(&q0_to_1, sizeof(Core0ToCore1Message), 16);
     GameController gc;
     GameController_init(&gc, &cfg, &q0_to_1);
     assert(GameController_get_state(&gc)->state == GAME_STATE_BOOT);
@@ -1122,7 +1120,7 @@ void test_binary_framing_constants_and_structs(void) {
 
 void test_binary_handshake(void) {
     OsalQueue q_to_core0;
-    OsalQueue_init(&q_to_core0, NULL, sizeof(Core1ToCore0Message), 16);
+    OsalQueue_init(&q_to_core0, sizeof(Core1ToCore0Message), 16);
     CommandHandler ch;
     CommandHandler_init(&ch, &q_to_core0);
     CompanionProtocol cp;
@@ -1199,7 +1197,7 @@ void test_binary_handshake(void) {
 
 void test_binary_commands(void) {
     OsalQueue q_to_core0;
-    OsalQueue_init(&q_to_core0, NULL, sizeof(Core1ToCore0Message), 16);
+    OsalQueue_init(&q_to_core0, sizeof(Core1ToCore0Message), 16);
     CommandHandler ch;
     CommandHandler_init(&ch, &q_to_core0);
     CompanionProtocol cp;
@@ -1407,7 +1405,7 @@ void test_binary_telemetry_emission(void) {
 
 void test_binary_capture_chunked_streaming(void) {
     OsalQueue q_to_core0;
-    OsalQueue_init(&q_to_core0, NULL, sizeof(Core1ToCore0Message), 16);
+    OsalQueue_init(&q_to_core0, sizeof(Core1ToCore0Message), 16);
     CommandHandler ch;
     CommandHandler_init(&ch, &q_to_core0);
     CompanionProtocol cp;
@@ -1494,7 +1492,7 @@ void test_binary_capture_chunked_streaming(void) {
 
 void test_dual_mode_streaming_parser(void) {
     OsalQueue q_to_core0;
-    OsalQueue_init(&q_to_core0, NULL, sizeof(Core1ToCore0Message), 16);
+    OsalQueue_init(&q_to_core0, sizeof(Core1ToCore0Message), 16);
     CommandHandler ch;
     CommandHandler_init(&ch, &q_to_core0);
     CompanionProtocol cp;
@@ -1565,7 +1563,7 @@ void test_pre_capture_repeated_calibration(void) {
     Config cfg;
     Config_set_defaults(&cfg);
     OsalQueue q0_to_q1;
-    OsalQueue_init(&q0_to_q1, NULL, sizeof(Core0ToCore1Message), 16);
+    OsalQueue_init(&q0_to_q1, sizeof(Core0ToCore1Message), 16);
     GameController gc;
     GameController_init(&gc, &cfg, &q0_to_q1);
 

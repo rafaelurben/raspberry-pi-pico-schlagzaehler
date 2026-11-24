@@ -36,8 +36,8 @@ void App_init(App* app, const Config* config) {
     ConfigService_init(&app->config_service, &app->config);
 
     /* Initialize inter-core typed queues */
-    OsalQueue_init(&app->queue_core0_to_core1, NULL, sizeof(Core0ToCore1Message), QUEUE_CORE0_TO_CORE1_CAPACITY);
-    OsalQueue_init(&app->queue_core1_to_core0, NULL, sizeof(Core1ToCore0Message), QUEUE_CORE1_TO_CORE0_CAPACITY);
+    OsalQueue_init(&app->queue_core0_to_core1, sizeof(Core0ToCore1Message), QUEUE_CORE0_TO_CORE1_CAPACITY);
+    OsalQueue_init(&app->queue_core1_to_core0, sizeof(Core1ToCore0Message), QUEUE_CORE1_TO_CORE0_CAPACITY);
 
     /* Launch Core 1 only after all queues and shared resources are initialized */
     CoreStartup_launch_core1(core1_entry);

@@ -19,9 +19,9 @@ struct OsalQueue {
 };
 
 /**
- * @brief Initialize a queue with storage buffer, item size, and capacity.
+ * @brief Initialize a queue with item size and capacity.
  */
-bool OsalQueue_init(OsalQueue* q, void* buffer, size_t item_size, size_t capacity);
+bool OsalQueue_init(OsalQueue* q, size_t item_size, size_t capacity);
 
 /**
  * @brief Non-blocking push. Returns false and increments overflow_count if full.
