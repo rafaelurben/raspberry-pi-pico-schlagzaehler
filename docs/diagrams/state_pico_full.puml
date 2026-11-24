@@ -2,31 +2,31 @@
 
 top to bottom direction
 
-state Boot {
-    state "Initialisierung" as BootInit
-    state "Kalibrierung" as BootCalib
+state "Boot (GAME_STATE_BOOT)" as Boot {
+    state "Initialisierung\n(SENSOR_STATE_INIT)" as BootInit
+    state "Kalibrierung\n(SENSOR_STATE_CALIBRATING)" as BootCalib
 
     [*] -right-> BootInit
     BootInit -right-> BootCalib : Hardware OK
 }
 
 [*] --> Boot
-Boot --> ModeCount : Kalibriert
+Boot --> ModeCount : Kalibriert (ARMED)
 
-state Spiel {
-    state "Spielmodus Zählen" as ModeCount {
-        state "Bereit" as ModeCountReady
-        state "Aktiv" as ModeCountActive
+state "Spiel" as Spiel {
+    state "Modus Zählen (GAME_MODE_COUNT)" as ModeCount {
+        state "Bereit (GAME_STATE_READY)" as ModeCountReady
+        state "Aktiv (GAME_STATE_RUNNING)" as ModeCountActive
 
         [*] -right-> ModeCountReady
 
         ModeCountReady -right-> ModeCountActive : HIT
         ModeCountActive -left-> ModeCountReady : RIGHT (Reset Counter)
     }
-    state "Spielmodus Zeit" as ModeTimed {
-        state "Bereit" as ModeTimedReady
-        state "Aktiv" as ModeTimedActive
-        state "Resultat" as ModeTimedResult
+    state "Modus Zeit (GAME_MODE_TIMED)" as ModeTimed {
+        state "Bereit (GAME_STATE_READY)" as ModeTimedReady
+        state "Aktiv (GAME_STATE_RUNNING)" as ModeTimedActive
+        state "Resultat (GAME_STATE_FINISHED)" as ModeTimedResult
 
         [*] -right-> ModeTimedReady
 
@@ -37,10 +37,10 @@ state Spiel {
 
         ModeTimedReady --> ModeTimedReady : UP/DOWN (Zeit +/-5s)
     }
-    state "Spielmodus Rennen" as ModeRace {
-        state "Bereit" as ModeRaceReady
-        state "Aktiv" as ModeRaceActive
-        state "Resultat" as ModeRaceResult
+    state "Modus Rennen (GAME_MODE_RACE)" as ModeRace {
+        state "Bereit (GAME_STATE_READY)" as ModeRaceReady
+        state "Aktiv (GAME_STATE_RUNNING)" as ModeRaceActive
+        state "Resultat (GAME_STATE_FINISHED)" as ModeRaceResult
 
         [*] -right-> ModeRaceReady
 
@@ -56,21 +56,21 @@ state Spiel {
     ModeTimed -[hidden]down-> ModeRace
 }
 
-state "Erfassung (Capturing)" as Capturing {
-    state "Aufnahme" as CapturingRecord
-    state "Übertragung" as CapturingStream
+state "Analyse-Aufnahme (GAME_STATE_CAPTURING)" as Capturing {
+    state "Scharf\n(SENSOR_STATE_CAPTURE_ARMED)" as CapturingArmed
+    state "Aufnahme\n(SENSOR_STATE_CAPTURING)" as CapturingRecord
+    state "Übertragung\n(SENSOR_STATE_CAPTURE_TX_WAIT)" as CapturingStream
 
-    [*] -right-> CapturingRecord
-    CapturingRecord -right-> CapturingStream : Puffer voll (21'000 Samples)
+    [*] --> CapturingArmed
+    CapturingArmed -> CapturingRecord : Schlag/Trigger
+    CapturingRecord --> CapturingStream : Puffer voll (21'000 Samples)
 }
+note bottom of Capturing: Hinweis: Erfassung (GAME_STATE_CAPTURING) wird extern via\nCompanion (CMD_CAPTURE) gesteuert (Übergänge hier nicht dargestellt).
 
-Spiel --> Capturing : CMD_CAPTURE / CAPTURE:START
-Capturing --> Spiel : Transfer fertig / STOP
-
-state Menu {
-    state "Modus Zählen" as MenuModeCount
-    state "Modus Zeit" as MenuModeTimed
-    state "Modus Rennen" as MenuModeRace
+state "Menü (GAME_STATE_MENU)" as Menu {
+    state "Modus Zählen\n(GAME_MODE_COUNT)" as MenuModeCount
+    state "Modus Zeit\n(GAME_MODE_TIMED)" as MenuModeTimed
+    state "Modus Rennen\n(GAME_MODE_RACE)" as MenuModeRace
 
     MenuModeCount -down-> MenuModeTimed : DOWN
     MenuModeTimed -down-> MenuModeRace : DOWN

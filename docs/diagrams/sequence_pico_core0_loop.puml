@@ -139,6 +139,7 @@ group 2. Process Interrupt-Queued Button Events
 end
 
 group 3. Process Commands from Core 1
+    note over App, Queue #FFFDE7: Queue pop is asynchronous: drains commands queued by Core 1 during this Core 0 loop tick
     loop while OsalQueue_pop(&queue_core1_to_core0, &cmd) == true
         App -> Queue : OsalQueue_pop(&queue_core1_to_core0, &cmd)
         alt cmd.type == MSG_REQUEST_CALIBRATION

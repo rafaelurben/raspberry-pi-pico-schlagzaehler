@@ -119,6 +119,8 @@ deactivate App
 
 == Enter Main Execution Loops ==
 
+note over Queue, App #FFFDE7: Note: Queued messages (MSG_BOOT_STATUS, etc.) are popped asynchronously\nonce each core enters its respective main loop.
+
 par Core 0 Loop
     loop forever
         Main -> App : App_run_core0(&app)

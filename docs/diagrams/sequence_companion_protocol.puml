@@ -26,25 +26,33 @@ box "Pico W – Core 0 (Game & Sensing)" #F3E5F5
     participant "HitDetector\n(Core 0)" as HD
 end box
 
+note over Q10, Q01 #FFFDE7
+    <b>Inter-Core Queue Note:</b>
+    Core 0 and Core 1 run independent execution loops.
+    Queue pops are decoupled and execute asynchronously during each core's polling tick.
+end note
+
 == 1. Device Boot & Handshake ==
 
 App0 -> Q01: Core0ToCore1Message\n(MSG_BOOT_STATUS: success=true, msg="OK")
 activate App0
 deactivate App0
-Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)
+Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
 activate Proto
 Proto --> Web: <b>BOOT success=1 msg=OK</b>
 deactivate Proto
 
-Web -> Proto: <b>STATUS</b>
+Web -> Proto: <b>CMD_HANDSHAKE</b>\n(proto_ver=1.0, flags=BINARY_MODE, nonce=0x42)
 activate Proto
+note over Proto: Sets BINARY TX encoding\nAborts any active capture transfer
+Proto --> Web: <b>MSG_HANDSHAKE_ACK</b>\n(status=OK, proto=1.0, fw=0.3.0, nonce=0x42, uptime)
 Proto -> CmdH: CommandHandler_handle_request_status()
 activate CmdH
 CmdH -> Q10: OsalQueue_push(MSG_REQUEST_STATUS)
 deactivate CmdH
 deactivate Proto
 
-Q10 -> App0: OsalQueue_pop(&queue_core1_to_core0)
+Q10 -> App0: OsalQueue_pop(&queue_core1_to_core0)\n<size:10><color:#666666>(asynchronous Core 0 loop tick)</color></size>
 activate App0
 App0 -> GC: GameController_on_command(MSG_REQUEST_STATUS)
 deactivate App0
@@ -57,18 +65,18 @@ deactivate GC
 deactivate App0
 
 loop Drain Core 0 Status Updates
-    Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)
+    Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
     activate Proto
-    Proto --> Web: <b>SENSOR status=ARMED</b>
-    Proto --> Web: <b>STATE old=READY new=READY</b>
-    Proto --> Web: <b>MODE active=COUNT param=0</b>
-    Proto --> Web: <b>SCORE value=0</b>
+    Proto --> Web: <b>MSG_SENSOR_STATUS</b>\n(status=ARMED)
+    Proto --> Web: <b>MSG_GAME_STATE</b>\n(old=READY, new=READY)
+    Proto --> Web: <b>MSG_GAME_MODE</b>\n(active=COUNT, param=0)
+    Proto --> Web: <b>MSG_SCORE</b>\n(value=0)
     deactivate Proto
 end
 
 == 2. Sensor Calibration Workflow ==
 
-Web -> Proto: <b>CALIB</b>
+Web -> Proto: <b>CMD_CALIBRATE</b>
 activate Proto
 Proto -> CmdH: CommandHandler_handle_request_calibration()
 activate CmdH
@@ -76,7 +84,7 @@ CmdH -> Q10: OsalQueue_push(MSG_REQUEST_CALIBRATION)
 deactivate CmdH
 deactivate Proto
 
-Q10 -> App0: OsalQueue_pop(&queue_core1_to_core0)
+Q10 -> App0: OsalQueue_pop(&queue_core1_to_core0)\n<size:10><color:#666666>(asynchronous Core 0 loop tick)</color></size>
 activate App0
 App0 -> HD: HitDetector_start_calibration()
 activate HD
@@ -84,9 +92,9 @@ App0 -> Q01: MSG_SENSOR_STATUS_CHANGED (CALIBRATING)
 deactivate App0
 deactivate HD
 
-Q01 -> Proto: OsalQueue_pop()
+Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
 activate Proto
-Proto --> Web: <b>SENSOR status=CALIBRATING</b>
+Proto --> Web: <b>MSG_SENSOR_STATUS</b>\n(status=CALIBRATING)
 deactivate Proto
 
 note over HD, App0: Core 0 collects 10'000 ADC samples (1500 ms)\nComputes baseline, noise, and base_threshold
@@ -96,16 +104,16 @@ App0 -> Q01: MSG_CALIBRATION_RESULT (success=1, baseline=512, noise=14, threshol
 App0 -> Q01: MSG_SENSOR_STATUS_CHANGED (ARMED)
 
 loop Drain Calibration Result & Arming
-    Q01 -> Proto: OsalQueue_pop()
+    Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
     activate Proto
-    Proto --> Web: <b>CALIB success=1 baseline=512 noise=14 threshold=568</b>
-    Proto --> Web: <b>SENSOR status=ARMED</b>
+    Proto --> Web: <b>MSG_CALIBRATION_RESULT</b>\n(success=1, baseline=512, noise=14, threshold=568)
+    Proto --> Web: <b>MSG_SENSOR_STATUS</b>\n(status=ARMED)
     deactivate Proto
 end
 
 == 3. Game Configuration Workflow ==
 
-Web -> Proto: <b>MODE:TIMED</b>
+Web -> Proto: <b>CMD_SET_MODE</b>\n(mode=TIMED)
 activate Proto
 Proto -> CmdH: CommandHandler_handle_set_mode(GAME_MODE_TIMED)
 activate CmdH
@@ -113,7 +121,7 @@ CmdH -> Q10: OsalQueue_push(MSG_SET_GAME_MODE: mode=TIMED)
 deactivate CmdH
 deactivate Proto
 
-Q10 -> App0: OsalQueue_pop()
+Q10 -> App0: OsalQueue_pop(&queue_core1_to_core0)\n<size:10><color:#666666>(asynchronous Core 0 loop tick)</color></size>
 activate App0
 App0 -> GC: GameController_on_command(MSG_SET_GAME_MODE)
 deactivate App0
@@ -123,12 +131,12 @@ GC -> Q01: MSG_GAME_MODE_CHANGED (active=TIMED, param=30)
 deactivate GC
 deactivate App0
 
-Q01 -> Proto: OsalQueue_pop()
+Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
 activate Proto
-Proto --> Web: <b>MODE active=TIMED param=30</b>
+Proto --> Web: <b>MSG_GAME_MODE</b>\n(active=TIMED, param=30)
 deactivate Proto
 
-Web -> Proto: <b>PARAM:45</b>
+Web -> Proto: <b>CMD_SET_PARAMETER</b>\n(param=45)
 activate Proto
 Proto -> CmdH: CommandHandler_handle_set_parameter(45)
 activate CmdH
@@ -136,7 +144,7 @@ CmdH -> Q10: OsalQueue_push(MSG_SET_GAME_PARAMETER: param=45)
 deactivate CmdH
 deactivate Proto
 
-Q10 -> App0: OsalQueue_pop()
+Q10 -> App0: OsalQueue_pop(&queue_core1_to_core0)\n<size:10><color:#666666>(asynchronous Core 0 loop tick)</color></size>
 activate App0
 App0 -> GC: GameController_on_command(MSG_SET_GAME_PARAMETER)
 activate GC
@@ -145,14 +153,14 @@ GC -> Q01: MSG_GAME_MODE_CHANGED (active=TIMED, param=45)
 deactivate GC
 deactivate App0
 
-Q01 -> Proto: OsalQueue_pop()
+Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
 activate Proto
-Proto --> Web: <b>MODE active=TIMED param=45</b>
+Proto --> Web: <b>MSG_GAME_MODE</b>\n(active=TIMED, param=45)
 deactivate Proto
 
 == 4. Game Execution & Real-Time Hit Telemetry ==
 
-Web -> Proto: <b>START</b>
+Web -> Proto: <b>CMD_START</b>
 activate Proto
 Proto -> CmdH: CommandHandler_handle_start()
 activate CmdH
@@ -160,7 +168,7 @@ CmdH -> Q10: OsalQueue_push(MSG_START_GAME)
 deactivate CmdH
 deactivate Proto
 
-Q10 -> App0: OsalQueue_pop()
+Q10 -> App0: OsalQueue_pop(&queue_core1_to_core0)\n<size:10><color:#666666>(asynchronous Core 0 loop tick)</color></size>
 activate App0
 App0 -> GC: GameController_on_command(MSG_START_GAME)
 activate GC
@@ -172,11 +180,11 @@ deactivate GC
 deactivate App0
 
 loop Drain Start Notifications
-    Q01 -> Proto: OsalQueue_pop()
+    Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
     activate Proto
-    Proto --> Web: <b>STATE old=READY new=RUNNING</b>
-    Proto --> Web: <b>SCORE value=0</b>
-    Proto --> Web: <b>TIMER elapsed=0 remaining=45000</b>
+    Proto --> Web: <b>MSG_GAME_STATE</b>\n(old=READY, new=RUNNING)
+    Proto --> Web: <b>MSG_SCORE</b>\n(value=0)
+    Proto --> Web: <b>MSG_TIMER</b>\n(elapsed=0, remaining=45000)
     deactivate Proto
 end
 
@@ -189,18 +197,18 @@ GC -> Q01: MSG_SCORE_CHANGED (score=1)
 deactivate GC
 
 loop Drain Hit & Score Update
-    Q01 -> Proto: OsalQueue_pop()
+    Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
     activate Proto
-    Proto --> Web: <b>HIT id=1 peak=1840 intensity=1272</b>
-    Proto --> Web: <b>SCORE value=1</b>
+    Proto --> Web: <b>MSG_HIT_DETECTED</b>\n(id=1, peak=1840, intensity=1272)
+    Proto --> Web: <b>MSG_SCORE</b>\n(value=1)
     deactivate Proto
 end
 
 note over GC: Periodic 100 ms Tick (GameController_tick)
 GC -> Q01: MSG_TIMER_CHANGED (elapsed=1000, remaining=44000)
-Q01 -> Proto: OsalQueue_pop()
+Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
 activate Proto
-Proto --> Web: <b>TIMER elapsed=1000 remaining=44000</b>
+Proto --> Web: <b>MSG_TIMER</b>\n(elapsed=1000, remaining=44000)
 deactivate Proto
 
 == 5. Game Finish Condition & Reset ==
@@ -213,14 +221,14 @@ GC -> Q01: MSG_GAME_STATE_CHANGED (old=RUNNING, new=FINISHED)
 deactivate GC
 
 loop Drain Finish Notifications
-    Q01 -> Proto: OsalQueue_pop()
+    Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
     activate Proto
-    Proto --> Web: <b>RESULT score=24 time_ms=45000 reason=TIME_LIMIT</b>
-    Proto --> Web: <b>STATE old=RUNNING new=FINISHED</b>
+    Proto --> Web: <b>MSG_GAME_FINISHED</b>\n(score=24, time_ms=45000, reason=TIME_LIMIT)
+    Proto --> Web: <b>MSG_GAME_STATE</b>\n(old=RUNNING, new=FINISHED)
     deactivate Proto
 end
 
-Web -> Proto: <b>RESET</b>
+Web -> Proto: <b>CMD_RESET</b>
 activate Proto
 Proto -> CmdH: CommandHandler_handle_reset()
 activate CmdH
@@ -228,7 +236,7 @@ CmdH -> Q10: OsalQueue_push(MSG_RESET_GAME)
 deactivate CmdH
 deactivate Proto
 
-Q10 -> App0: OsalQueue_pop()
+Q10 -> App0: OsalQueue_pop(&queue_core1_to_core0)\n<size:10><color:#666666>(asynchronous Core 0 loop tick)</color></size>
 activate App0
 App0 -> GC: GameController_on_command(MSG_RESET_GAME)
 activate GC
@@ -239,16 +247,16 @@ deactivate GC
 deactivate App0
 
 loop Drain Reset Notifications
-    Q01 -> Proto: OsalQueue_pop()
+    Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
     activate Proto
-    Proto --> Web: <b>STATE old=FINISHED new=READY</b>
-    Proto --> Web: <b>SCORE value=0</b>
+    Proto --> Web: <b>MSG_GAME_STATE</b>\n(old=FINISHED, new=READY)
+    Proto --> Web: <b>MSG_SCORE</b>\n(value=0)
     deactivate Proto
 end
 
 == 6. High-Speed Raw Signal Capture & Streaming ==
 
-Web -> Proto: <b>CAPTURE:START</b>
+Web -> Proto: <b>CMD_CAPTURE</b>\n(action=START, target=ALL)
 activate Proto
 Proto -> CmdH: CommandHandler_handle_request_capture_action(1)
 activate CmdH
@@ -256,7 +264,7 @@ CmdH -> Q10: OsalQueue_push(MSG_REQUEST_CAPTURE: enable=true)
 deactivate CmdH
 deactivate Proto
 
-Q10 -> App0: OsalQueue_pop()
+Q10 -> App0: OsalQueue_pop(&queue_core1_to_core0)\n<size:10><color:#666666>(asynchronous Core 0 loop tick)</color></size>
 activate App0
 App0 -> HD: HitDetector_start_capture()
 activate HD
@@ -264,17 +272,17 @@ App0 -> Q01: MSG_SENSOR_STATUS_CHANGED (CAPTURE_ARMED)
 deactivate HD
 deactivate App0
 
-Q01 -> Proto: OsalQueue_pop()
+Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
 activate Proto
-Proto --> Web: <b>SENSOR status=CAPTURE_ARMED</b>
+Proto --> Web: <b>MSG_SENSOR_STATUS</b>\n(status=CAPTURE_ARMED)
 deactivate Proto
 
 note over HD: Physical hit occurs!\nPre-trigger buffer (1'000 samples) locked.\nPost-trigger buffer (20'000 samples) records for 2.0 s.
 HD -> App0: Capture triggered
 App0 -> Q01: MSG_SENSOR_STATUS_CHANGED (CAPTURING)
-Q01 -> Proto: OsalQueue_pop()
+Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
 activate Proto
-Proto --> Web: <b>SENSOR status=CAPTURING</b>
+Proto --> Web: <b>MSG_SENSOR_STATUS</b>\n(status=CAPTURING)
 deactivate Proto
 
 note over HD: Capture completes (total 21'000 samples at 10 kHz)
@@ -283,18 +291,18 @@ App0 -> Q01: MSG_CAPTURE_READY (rate=10000, pre=1000, count=21000, samples=ptr)
 activate App0
 deactivate App0
 
-Q01 -> Proto: OsalQueue_pop()
+Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
 activate Proto
 Proto -> Proto: Set capture_tx_active = true, offset = 0
-Proto --> Web: <b>CAPTURE_START rate=10000 pre=1000 count=21000 ...</b>
+Proto --> Web: <b>MSG_CAPTURE_START</b>\n(rate=10000, pre=1000, count=21000, target=ALL)
 
-loop Non-Blocking Transmission across Core 1 Ticks (50 samples per line)
+loop Non-Blocking Transmission across Core 1 Ticks (chunked)
     Proto -> Proto: CompanionProtocol_tick_capture_tx()
-    Proto --> Web: <b>CAPTURE_DATA offset=0 values=512,514,...</b>
-    Proto --> Web: <b>CAPTURE_DATA offset=... values=...</b>
+    Proto --> Web: <b>MSG_CAPTURE_DATA</b>\n(offset=0, count=128, samples=...)
+    Proto --> Web: <b>MSG_CAPTURE_DATA</b>\n(offset=..., count=128, samples=...)
 end
 
-Proto --> Web: <b>CAPTURE_END count=21000</b>
+Proto --> Web: <b>MSG_CAPTURE_END</b>\n(count=21000)
 Proto -> CmdH: CommandHandler_handle_request_capture_action(0)
 activate CmdH
 CmdH -> Q10: MSG_REQUEST_CAPTURE (enable=false)

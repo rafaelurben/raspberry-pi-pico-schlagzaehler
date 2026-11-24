@@ -34,6 +34,7 @@ deactivate App
 activate App
 
 group 1. Drain Messages from Core 0 (queue_core0_to_core1)
+    note over App, Queue #FFFDE7: Queue pop is asynchronous: drains messages queued by Core 0 during this Core 1 loop tick
     loop while OsalQueue_pop(&queue_core0_to_core1, &msg) == true
         App -> Queue : OsalQueue_pop(&queue_core0_to_core1, &msg)
         Queue --> App : msg (Core0ToCore1Message)
@@ -72,31 +73,24 @@ group 2. Poll Incoming Serial Commands from Companion
 end
 
 group 3. Render Dirty UI Components on ST7735 Display
-    App -> DisplayPresenter : DisplayPresenter_render()
+    App -> DisplayPresenter : DisplayPresenter_render(&display_presenter)
     activate DisplayPresenter
-    opt presenter->dirty == true
-        opt presenter->full_redraw == true
-            DisplayPresenter -> DisplayDriver : DisplayDriver_clear(COLOR_BLACK)
-            DisplayPresenter -> DisplayDriver : DisplayDriver_fill_rect(header)
-            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_line(separator)
+    opt needs_full_redraw || needs_score_redraw || needs_timer_redraw
+        alt state == GAME_STATE_BOOT
+            DisplayPresenter -> DisplayPresenter : render_boot(presenter)
+        else state == GAME_STATE_MENU
+            DisplayPresenter -> DisplayPresenter : render_menu(presenter)
+        else state == GAME_STATE_READY
+            DisplayPresenter -> DisplayPresenter : render_ready(presenter)
+        else state == GAME_STATE_RUNNING
+            DisplayPresenter -> DisplayPresenter : render_running(presenter)
+        else state == GAME_STATE_FINISHED
+            DisplayPresenter -> DisplayPresenter : render_finished(presenter)
+        else state == GAME_STATE_CAPTURING
+            DisplayPresenter -> DisplayPresenter : render_capturing(presenter)
         end
 
-        alt cache.game_state == GAME_STATE_BOOT
-            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string("CALIBRATING...")
-            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_rect(progress_bar_outline)
-            DisplayPresenter -> DisplayDriver : DisplayDriver_fill_rect(progress_bar_fill)
-        else cache.game_state == GAME_STATE_MENU
-            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string("SELECT MODE")
-            DisplayPresenter -> DisplayDriver : DisplayDriver_fill_rect(selected_item_highlight)
-            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string("COUNT / TIMED / RACE")
-        else cache.game_state == GAME_STATE_READY || RUNNING || FINISHED
-            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string(header_mode_and_state)
-            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string(big_score_counter)
-            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string(timer_or_target_info)
-            DisplayPresenter -> DisplayDriver : DisplayDriver_draw_string(footer_controls)
-        end
-
-        DisplayPresenter -> DisplayPresenter : dirty = false\nfull_redraw = false
+        DisplayPresenter -> DisplayPresenter : needs_full_redraw = false\nneeds_score_redraw = false\nneeds_timer_redraw = false
     end
     deactivate DisplayPresenter
 end

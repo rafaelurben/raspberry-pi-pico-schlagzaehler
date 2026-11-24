@@ -43,8 +43,8 @@ package "Abstraction Layer (OSAL: PicoDma & PicoPiezoAdcDriver)" as AbsLayer #Cy
 ' 3. APPLICATION LAYER (CORE 0 & CORE 1)
 ' ============================================================================
 package "Application Layer (Core 0 & Core 1)" as AppLayer #LightGray {
-    component "HitDetector_process_buffer()\n1. De-interleave samples by sensor (i % 3)\n2. CALIBRATING: per-sensor baseline & noise\n3. ARMED: per-sensor dynamic threshold decay\n4. Coincidence Window\n5. Winner Disambiguation: max peak intensity\n6. Lockout" as HitDetector #White
-    component "SignalCapture_process_samples()\nTarget-Selected Waveform Capture:\n• Target 0/1/2: 5:1 max-pool (10 kHz)\n• Target ALL: 15:1 max-pool interleaved (10 kHz)\n21,000 samples" as SignalCapture #White
+    component "HitDetector_process_buffer()\n1. CAPTURING: Feed SignalCapture (conditional)\n2. CALIBRATING: per-sensor baseline & noise\n3. ARMED: dynamic threshold decay & trigger\n4. Coincidence Window (2.5 ms / 125 samples)\n5. Winner Disambiguation (relative peak score)\n6. HIT_LOCKOUT: dead time & threshold decay" as HitDetector #White
+    component "SignalCapture_process_buffer()\nTarget-Selected Waveform Capture:\n• Target 0/1/2: 5:1 max-pool (10 kHz)\n• Target ALL: 15:1 max-pool interleaved (10 kHz)\n21,000 samples" as SignalCapture #White
     component "App (Core 0)\nRoutes sensing and calibration\nevents to inter-core queue" as AppCore0 #White
     component "GameController_on_hit()\nAuthoritative aggregate game scoring\n(CountMode / TimedMode / RaceMode)" as GameController #White
     queue "OsalQueue\nqueue_core0_to_core1\n(Core0ToCore1Message)" as InterCoreQueue #White
@@ -84,7 +84,7 @@ Buf0 -down-> PollBuffer : Zero-copy pointer\n(when index == 0)
 Buf1 -down-> PollBuffer : Zero-copy pointer\n(when index == 1)
 
 PollBuffer -down-> HitDetector : uint16_t* interleaved_samples\nsample_count = 384
-HitDetector -right-> SignalCapture : Feed raw samples\nfor selected target(s)
+HitDetector -right-> SignalCapture : [if state == CAPTURE_ARMED\nor CAPTURING]\nFeed raw buffer to\nSignalCapture_process_buffer()
 HitDetector -down-> AppCore0 : Calibration complete /\nCapture ready
 HitDetector -down-> GameController : HitEvent\n(hit_id, winning sensor_id, peak, intensity)
 AppCore0 -down-> InterCoreQueue : MSG_CALIBRATION_RESULT (x3)\nMSG_CAPTURE_READY
