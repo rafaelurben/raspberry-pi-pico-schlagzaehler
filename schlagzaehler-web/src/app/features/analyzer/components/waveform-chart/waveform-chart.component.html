@@ -33,11 +33,11 @@
         </span>
         <span class="inline-flex items-center gap-1.5 text-slate-300">
           <span class="h-0.5 w-3.5 bg-amber-400"></span>
-          <span>Threshold ({{ capture().threshold }})</span>
+          <span>Threshold ({{ sensorCalibrations()[0]?.threshold }})</span>
         </span>
         <span class="inline-flex items-center gap-1.5 text-slate-300">
           <span class="h-0.5 w-3.5 bg-emerald-400"></span>
-          <span>Baseline ({{ capture().baseline }})</span>
+          <span>Baseline ({{ sensorCalibrations()[0]?.baseline }})</span>
         </span>
       }
       <span class="inline-flex items-center gap-1.5 text-slate-300">

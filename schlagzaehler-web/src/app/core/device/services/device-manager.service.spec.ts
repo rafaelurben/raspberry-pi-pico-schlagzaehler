@@ -572,9 +572,10 @@ describe('DeviceManagerService', () => {
     expect(captures[0].sampleRateHz).toBe(10000);
     expect(captures[0].preSamples).toBe(2);
     expect(captures[0].totalSamples).toBe(6);
-    expect(captures[0].baseline).toBe(1980);
-    expect(captures[0].noise).toBe(3);
-    expect(captures[0].threshold).toBe(2010);
+    expect(captures[0].sensors).toHaveLength(1);
+    expect(captures[0].sensors[0].baseline).toBe(1980);
+    expect(captures[0].sensors[0].noise).toBe(3);
+    expect(captures[0].sensors[0].threshold).toBe(2010);
     expect(captures[0].peak).toBe(2450);
     expect(captures[0].samples).toEqual([1979, 1981, 2450, 2200, 2050, 1982]);
 
@@ -788,9 +789,10 @@ describe('DeviceManagerService', () => {
     const captures = service.captures();
     expect(captures).toHaveLength(1);
     const cap = captures[0];
-    expect(cap.baseline).toBe(1850); // Resolved from cached calibration!
-    expect(cap.noise).toBe(12);
-    expect(cap.threshold).toBe(1910);
+    expect(cap.sensors).toHaveLength(1);
+    expect(cap.sensors[0].baseline).toBe(1850); // Resolved from cached calibration!
+    expect(cap.sensors[0].noise).toBe(12);
+    expect(cap.sensors[0].threshold).toBe(1910);
     expect(cap.peak).toBe(2200);
     expect(cap.samples).toEqual([1850, 1852, 2200, 1860]);
   });

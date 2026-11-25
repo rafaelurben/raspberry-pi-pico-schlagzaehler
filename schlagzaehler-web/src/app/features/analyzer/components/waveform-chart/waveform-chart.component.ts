@@ -9,10 +9,9 @@ import {
   viewChild,
 } from '@angular/core';
 import {
+  isAllSensorsTarget,
   PiezoCaptureResult,
   SensorCalibrationData,
-  getCaptureSensorCalibrations,
-  isAllSensorsTarget,
 } from '../../../../core/device/models/piezo-capture.model';
 
 export type ZoomPreset = 'full' | 'ringdown' | 'impact';
@@ -34,8 +33,8 @@ export class WaveformChartComponent implements AfterViewInit {
   readonly zoom = input<ZoomPreset>('full');
   readonly yScale = input<YAxisScale>('auto');
 
-  readonly sensorCalibrations = computed<readonly SensorCalibrationData[]>(() =>
-    getCaptureSensorCalibrations(this.capture()),
+  readonly sensorCalibrations = computed<readonly SensorCalibrationData[]>(
+    () => this.capture().sensors,
   );
   readonly isAllSensors = computed(() => isAllSensorsTarget(this.capture().target));
 
@@ -170,8 +169,8 @@ export class WaveformChartComponent implements AfterViewInit {
     let yMax = 4095;
 
     if (this.yScale() === 'auto' && samples.length > 0) {
-      let minVal = cap.baseline;
-      let maxVal = Math.max(cap.threshold, cap.peak);
+      let minVal = this.sensorCalibrations()[0]?.baseline ?? 0;
+      let maxVal = Math.max(this.sensorCalibrations()[0]?.threshold ?? 0, cap.peak);
       for (const c of this.sensorCalibrations()) {
         if (c.baseline < minVal) minVal = c.baseline;
         if (c.threshold > maxVal) maxVal = c.threshold;
@@ -265,8 +264,12 @@ export class WaveformChartComponent implements AfterViewInit {
         ctx.stroke();
       }
     } else {
+      const calib = this.sensorCalibrations()[0];
+      const baseVal = calib?.baseline ?? 0;
+      const threshVal = calib?.threshold ?? 0;
+
       // Baseline reference line
-      const yBase = yToPx(cap.baseline);
+      const yBase = yToPx(baseVal);
       ctx.strokeStyle = '#34d399';
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
@@ -276,7 +279,7 @@ export class WaveformChartComponent implements AfterViewInit {
       ctx.stroke();
 
       // Threshold reference line
-      const yThresh = yToPx(cap.threshold);
+      const yThresh = yToPx(threshVal);
       ctx.strokeStyle = '#fbbf24';
       ctx.lineWidth = 1.25;
       ctx.setLineDash([6, 4]);

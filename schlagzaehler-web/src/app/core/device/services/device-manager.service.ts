@@ -32,11 +32,8 @@ interface InProgressCapture {
   readonly sampleRateHz: number;
   readonly preSamples: number;
   readonly totalSamples: number;
-  readonly baseline: number;
-  readonly noise: number;
-  readonly threshold: number;
   readonly target?: number;
-  readonly sensors?: readonly SensorCalibrationData[];
+  readonly sensors: readonly SensorCalibrationData[];
   readonly samples: Uint16Array;
   receivedCount: number;
 }
@@ -792,20 +789,15 @@ export class DeviceManagerService implements OnDestroy {
         ];
       }
 
-      const baseline = sensors[0]?.baseline ?? 0;
-      const noise = sensors[0]?.noise ?? 0;
-      const threshold = sensors[0]?.threshold ?? 0;
+      const defaultBaseline = sensors[0]?.baseline ?? 0;
 
       const samples = new Uint16Array(msg.totalSamples);
-      samples.fill(baseline);
+      samples.fill(defaultBaseline);
 
       this.inProgressCaptures.set(deviceId, {
         sampleRateHz: msg.sampleRateHz,
         preSamples: msg.preSamples,
         totalSamples: msg.totalSamples,
-        baseline,
-        noise,
-        threshold,
         target: msg.target,
         sensors,
         samples,
@@ -867,9 +859,6 @@ export class DeviceManagerService implements OnDestroy {
           sampleRateHz: active.sampleRateHz,
           preSamples: active.preSamples,
           totalSamples: active.totalSamples,
-          baseline: active.baseline,
-          noise: active.noise,
-          threshold: active.threshold,
           target: active.target,
           sensors: active.sensors,
           peak,

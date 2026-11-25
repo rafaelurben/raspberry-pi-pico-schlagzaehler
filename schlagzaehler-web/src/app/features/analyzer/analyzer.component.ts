@@ -3,10 +3,8 @@ import { Component, computed, inject, linkedSignal, signal, viewChild } from '@a
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
-  PiezoCaptureResult,
-  SensorCalibrationData,
-  getCaptureSensorCalibrations,
   isAllSensorsTarget,
+  PiezoCaptureResult,
 } from '../../core/device/models/piezo-capture.model';
 import { DeviceManagerService } from '../../core/device/services/device-manager.service';
 import {
@@ -153,10 +151,6 @@ export class AnalyzerComponent {
 
   isAllTarget(target: unknown): boolean {
     return isAllSensorsTarget(target);
-  }
-
-  getSensorCalibrations(cap: PiezoCaptureResult): readonly SensorCalibrationData[] {
-    return getCaptureSensorCalibrations(cap);
   }
 
   async onArmCapture(): Promise<void> {
