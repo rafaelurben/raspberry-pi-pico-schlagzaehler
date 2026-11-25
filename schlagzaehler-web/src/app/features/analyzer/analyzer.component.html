@@ -19,7 +19,7 @@
             [ngModel]="dev.id"
             (ngModelChange)="onSelectDevice($event)"
             aria-label="Select target device"
-            class="cursor-pointer rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+            class="sz-select"
           >
             @for (d of connectedDevices(); track d.id) {
               <option [value]="d.id">{{ d.name }}</option>
@@ -33,7 +33,7 @@
           (ngModelChange)="onSelectTarget($event)"
           [disabled]="isDeviceCapturingOrArmed()"
           aria-label="Select sensor to capture"
-          class="cursor-pointer rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+          class="sz-select"
         >
           @for (opt of sensorTargetOptions; track opt.value) {
             <option [value]="opt.value">{{ opt.label }}</option>
@@ -47,7 +47,7 @@
             type="checkbox"
             [ngModel]="isAutoRearmEnabled()"
             (ngModelChange)="onToggleAutoRearm($event)"
-            class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-indigo-600 focus:ring-indigo-500"
+            class="sz-checkbox"
           />
           <span>Auto-Rearm</span>
         </label>
@@ -57,7 +57,7 @@
             <button
               type="button"
               (click)="onTriggerCapture()"
-              class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+              class="sz-btn sz-btn-success sz-btn-md px-4"
             >
               <span>Trigger Now</span>
             </button>
@@ -65,7 +65,7 @@
           <button
             type="button"
             (click)="onStopCapture()"
-            class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-rose-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+            class="sz-btn sz-btn-danger sz-btn-md px-4"
           >
             <span>Cancel Capture</span>
           </button>
@@ -76,7 +76,7 @@
             [disabled]="
               dev.state.sensorState === 'CALIBRATING' || dev.state.sensorState === 'ERROR'
             "
-            class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
+            class="sz-btn sz-btn-primary sz-btn-md"
           >
             <span>Arm Capture</span>
           </button>
@@ -87,19 +87,14 @@
 
   @if (!activeDevice()) {
     <!-- No Connected Device Empty State -->
-    <div
-      class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-10 text-center shadow-lg"
-    >
+    <div class="sz-card mb-6 p-10 text-center">
       <h2 class="text-lg font-semibold text-white">No connected Pico device</h2>
       <p class="mx-auto mt-2 max-w-md text-xs text-slate-400 sm:text-sm">
         Connect a Schlagzähler Raspberry Pi Pico over USB Serial first to arm raw piezo signal
         captures.
       </p>
       <div class="mt-6">
-        <a
-          routerLink="/settings"
-          class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-indigo-500"
-        >
+        <a routerLink="/settings" class="sz-btn sz-btn-primary sz-btn-md">
           Go to Settings to Connect
         </a>
       </div>
@@ -178,7 +173,7 @@
   <div class="grid grid-cols-1 gap-6 lg:grid-cols-4">
     <!-- Chart Panel (3 cols) -->
     <section class="lg:col-span-3" aria-labelledby="waveform-heading">
-      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-lg">
+      <div class="sz-card p-5">
         @if (activeCapture(); as cap) {
           <!-- Toolbar -->
           <div
@@ -285,7 +280,7 @@
               <button
                 type="button"
                 (click)="yAxisScale.set(yAxisScale() === 'auto' ? 'full12bit' : 'auto')"
-                class="cursor-pointer rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700"
+                class="sz-btn sz-btn-secondary sz-btn-sm"
               >
                 Y: {{ yAxisScale() === 'auto' ? 'Auto-Scale' : '0 - 4095' }}
               </button>
@@ -294,15 +289,11 @@
               <button
                 type="button"
                 (click)="onExportCsv()"
-                class="cursor-pointer rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+                class="sz-btn sz-btn-secondary sz-btn-sm"
               >
                 Export CSV
               </button>
-              <button
-                type="button"
-                (click)="onExportPng()"
-                class="cursor-pointer rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
-              >
+              <button type="button" (click)="onExportPng()" class="sz-btn sz-btn-primary sz-btn-sm">
                 Export PNG
               </button>
             </div>
@@ -325,7 +316,7 @@
 
     <!-- Session Capture History (1 col) -->
     <section aria-labelledby="history-heading">
-      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-lg">
+      <div class="sz-card p-5">
         <div class="mb-4 flex items-center justify-between">
           <h2 id="history-heading" class="text-sm font-semibold text-white">
             Captured Runs ({{ deviceManager.captures().length }})

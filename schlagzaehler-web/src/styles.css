@@ -1,3 +1,150 @@
 /* You can add global styles to this file, and also import other style files */
 
 @import 'tailwindcss';
+
+@layer components {
+  /* ==========================================================================
+     Buttons (.sz-btn)
+     ========================================================================== */
+  .sz-btn {
+    @apply inline-flex items-center justify-center font-semibold transition-all focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer select-none;
+  }
+
+  /* Button sizes */
+  .sz-btn-md {
+    @apply gap-2 rounded-xl px-5 py-2.5 text-sm;
+  }
+
+  .sz-btn-sm {
+    @apply gap-1.5 rounded-lg px-3.5 py-1.5 text-xs;
+  }
+
+  .sz-btn-xs {
+    @apply gap-1 rounded-md px-2.5 py-1 text-xs font-medium;
+  }
+
+  /* Button variants */
+  .sz-btn-primary {
+    @apply bg-indigo-600 text-white shadow-md hover:bg-indigo-500 hover:shadow-indigo-600/20 focus-visible:ring-2 focus-visible:ring-indigo-400;
+  }
+
+  .sz-btn-secondary {
+    @apply border border-slate-700 bg-slate-800/80 text-slate-200 hover:bg-slate-700 hover:text-white focus-visible:ring-2 focus-visible:ring-slate-500;
+  }
+
+  .sz-btn-subtle {
+    @apply bg-slate-700/60 text-slate-300 hover:bg-slate-700 hover:text-white focus-visible:ring-2 focus-visible:ring-slate-500;
+  }
+
+  .sz-btn-success {
+    @apply bg-emerald-600 text-white shadow-md hover:bg-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-400;
+  }
+
+  .sz-btn-danger {
+    @apply bg-rose-600 text-white shadow-md hover:bg-rose-500 focus-visible:ring-2 focus-visible:ring-rose-400;
+  }
+
+  .sz-btn-danger-subtle {
+    @apply bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 hover:text-rose-200 focus-visible:ring-2 focus-visible:ring-rose-500;
+  }
+
+  .sz-btn-warning-subtle {
+    @apply bg-amber-600/20 text-amber-300 hover:bg-amber-600/30 hover:text-amber-200 focus-visible:ring-2 focus-visible:ring-amber-500;
+  }
+
+  /* ==========================================================================
+     Form Controls (.sz-input, .sz-select, .sz-checkbox)
+     ========================================================================== */
+  .sz-input {
+    @apply rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-sm text-white placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .sz-input-sm {
+    @apply rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .sz-select {
+    @apply cursor-pointer rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .sz-select-sm {
+    @apply cursor-pointer rounded-lg border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .sz-checkbox {
+    @apply h-4 w-4 rounded border-slate-600 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer;
+  }
+
+  /* ==========================================================================
+     Cards & Containers (.sz-card)
+     ========================================================================== */
+  .sz-card {
+    @apply rounded-2xl border border-slate-700/80 bg-slate-800/60 p-6 shadow-md backdrop-blur-xs;
+  }
+
+  .sz-card-compact {
+    @apply rounded-xl border border-slate-700/80 bg-slate-800/60 p-5 shadow-sm backdrop-blur-xs;
+  }
+
+  .sz-card-inner {
+    @apply rounded-xl border border-slate-700/70 bg-slate-900/70 p-4;
+  }
+
+  .sz-card-empty {
+    @apply flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-800/30 p-12 text-center text-slate-400;
+  }
+
+  /* ==========================================================================
+     Badges & Status Pills (.sz-badge)
+     ========================================================================== */
+  .sz-badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border;
+  }
+
+  .sz-badge-dot {
+    @apply h-1.5 w-1.5 rounded-full;
+  }
+
+  .sz-badge-success {
+    @apply border-emerald-800/60 bg-emerald-950/70 text-emerald-300;
+  }
+
+  .sz-badge-info {
+    @apply border-sky-800/60 bg-sky-950/70 text-sky-300;
+  }
+
+  .sz-badge-warning {
+    @apply border-amber-700/60 bg-amber-950/80 text-amber-300;
+  }
+
+  .sz-badge-danger {
+    @apply border-rose-800/60 bg-rose-950/70 text-rose-300;
+  }
+
+  .sz-badge-neutral {
+    @apply border-slate-700 bg-slate-800 text-slate-400;
+  }
+
+  /* ==========================================================================
+     Banners / Alerts (.sz-banner)
+     ========================================================================== */
+  .sz-banner {
+    @apply mb-6 rounded-xl border p-4;
+  }
+
+  .sz-banner-warning {
+    @apply border-amber-800/80 bg-amber-950/40 text-amber-200;
+  }
+
+  .sz-banner-danger {
+    @apply border-rose-800/80 bg-rose-950/40 text-rose-200;
+  }
+
+  .sz-banner-info {
+    @apply border-sky-800/80 bg-sky-950/40 text-sky-200;
+  }
+
+  .sz-banner-success {
+    @apply border-emerald-800/80 bg-emerald-950/40 text-emerald-200;
+  }
+}

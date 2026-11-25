@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DeviceManagerService } from '../../core/device/services/device-manager.service';
+import { BannerComponent } from '../../shared/components/banner/banner.component';
 import {
   DeviceListComponent,
   RenameDeviceEvent,
@@ -12,7 +13,7 @@ import {
 
 @Component({
   selector: 'app-settings',
-  imports: [FormsModule, DeviceListComponent, EventListComponent],
+  imports: [FormsModule, BannerComponent, DeviceListComponent, EventListComponent],
   templateUrl: './settings.component.html',
 })
 export class SettingsComponent {

@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DeviceManagerService } from '../../core/device/services/device-manager.service';
+import { BannerComponent } from '../../shared/components/banner/banner.component';
 import {
   ChangeModeEvent,
   ChangeParameterEvent,
@@ -10,7 +11,7 @@ import { RenameDeviceEvent } from '../settings/components/device-list/device-lis
 
 @Component({
   selector: 'app-dashboard',
-  imports: [DeviceCardComponent, RouterLink],
+  imports: [BannerComponent, DeviceCardComponent, RouterLink],
   templateUrl: './dashboard.component.html',
 })
 export class DashboardComponent {

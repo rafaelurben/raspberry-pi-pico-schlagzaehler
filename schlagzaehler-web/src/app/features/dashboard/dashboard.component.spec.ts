@@ -48,7 +48,7 @@ describe('DashboardComponent', () => {
   it('should render header and connect device button', () => {
     setupComponent();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Schlagzähler');
+    expect(compiled.querySelector('h1')?.textContent).toContain('Home');
 
     const connectBtn = compiled.querySelector(
       '[data-testid="connect-device-button"]',

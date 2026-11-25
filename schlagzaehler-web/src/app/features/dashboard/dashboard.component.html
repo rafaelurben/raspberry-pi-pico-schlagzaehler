@@ -2,40 +2,15 @@
   <!-- Header -->
   <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
     <div>
-      <div class="flex items-center gap-3">
-        <div
-          class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600/30 text-indigo-400 ring-1 ring-indigo-500/30"
-        >
-          <svg
-            class="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M13 10V3L4 14h7v7l9-11h-7z"
-            />
-          </svg>
-        </div>
-        <div>
-          <h1 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">Schlagzähler</h1>
-          <p class="text-xs text-slate-400 sm:text-sm">
-            Live device overview, scores, timers, and game mode controls
-          </p>
-        </div>
-      </div>
+      <h1 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">Home</h1>
+      <p class="text-xs text-slate-400 sm:text-sm">
+        Live device overview, scores, timers, and game mode controls
+      </p>
     </div>
 
     <!-- Actions -->
     <div class="flex items-center gap-3">
-      <a
-        routerLink="/settings"
-        class="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 px-4 py-2.5 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700 hover:text-white"
-      >
+      <a routerLink="/settings" class="sz-btn sz-btn-secondary sz-btn-md px-4">
         <span>Settings &amp; Events</span>
       </a>
       <button
@@ -43,7 +18,7 @@
         (click)="onConnectDevice()"
         [disabled]="deviceManager.isConnecting() || !deviceManager.isSupported()"
         data-testid="connect-device-button"
-        class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-indigo-500 hover:shadow-indigo-600/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        class="sz-btn sz-btn-primary sz-btn-md"
       >
         @if (deviceManager.isConnecting()) {
           <svg
@@ -90,53 +65,18 @@
 
   <!-- Unsupported Browser Warning -->
   @if (!deviceManager.isSupported()) {
-    <div class="mb-6 rounded-xl border border-amber-800/80 bg-amber-950/40 p-4 text-amber-200">
-      <div class="flex items-start gap-3">
-        <svg
-          class="h-5 w-5 shrink-0 text-amber-400"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          aria-hidden="true"
-        >
-          <path
-            fill-rule="evenodd"
-            d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
-            clip-rule="evenodd"
-          />
-        </svg>
-        <div>
-          <h3 class="text-sm font-semibold text-amber-300">Web Serial not supported</h3>
-          <p class="mt-1 text-xs text-amber-200/90 leading-relaxed">
-            This browser does not support the Web Serial API. To connect Raspberry Pi Pico devices,
-            please use Google Chrome, Microsoft Edge, Opera, or another Chromium-based browser with
-            Web Serial enabled.
-          </p>
-        </div>
-      </div>
-    </div>
+    <app-banner variant="warning" title="Web Serial not supported">
+      This browser does not support the Web Serial API. To connect Raspberry Pi Pico devices, please
+      use Google Chrome, Microsoft Edge, Opera, or another Chromium-based browser with Web Serial
+      enabled.
+    </app-banner>
   }
 
   <!-- Error Banner -->
   @if (deviceManager.lastError(); as error) {
-    <div class="mb-6 rounded-xl border border-rose-800/80 bg-rose-950/40 p-4 text-rose-200">
-      <div class="flex items-start gap-3">
-        <svg
-          class="h-5 w-5 shrink-0 text-rose-400"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          aria-hidden="true"
-        >
-          <path
-            fill-rule="evenodd"
-            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
-            clip-rule="evenodd"
-          />
-        </svg>
-        <div class="text-xs text-rose-200 leading-relaxed">
-          <span class="font-semibold text-rose-300">Connection error:</span> {{ error }}
-        </div>
-      </div>
-    </div>
+    <app-banner variant="error" title="Connection error">
+      {{ error }}
+    </app-banner>
   }
 
   <!-- Device Blocks Grid -->
@@ -144,9 +84,7 @@
     <h2 id="devices-overview-heading" class="sr-only">Devices Overview</h2>
 
     @if (deviceManager.devices().length === 0) {
-      <div
-        class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-800/30 p-12 text-center text-slate-400"
-      >
+      <div class="sz-card-empty">
         <svg
           class="mb-4 h-12 w-12 text-slate-500"
           fill="none"

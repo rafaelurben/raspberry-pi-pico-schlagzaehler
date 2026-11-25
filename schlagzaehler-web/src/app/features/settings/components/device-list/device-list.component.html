@@ -1,4 +1,4 @@
-<div class="rounded-xl border border-slate-700/80 bg-slate-800/60 p-5 shadow-sm backdrop-blur-xs">
+<div class="sz-card-compact">
   <div class="mb-4 flex items-center justify-between">
     <div class="flex items-center gap-2">
       <h2 class="text-lg font-semibold text-white">Connected Devices</h2>
@@ -9,9 +9,7 @@
   </div>
 
   @if (devices().length === 0) {
-    <div
-      class="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-700 p-8 text-center text-slate-400"
-    >
+    <div class="sz-card-empty p-8">
       <svg
         class="mb-3 h-10 w-10 text-slate-500"
         fill="none"
@@ -58,12 +56,12 @@
                       (keydown.escape)="cancelEditing()"
                       [attr.data-testid]="'device-name-input-' + device.id"
                       [attr.aria-label]="'Device name for ' + device.id"
-                      class="w-40 rounded-lg border border-indigo-500/60 bg-slate-900 px-2.5 py-1 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      class="sz-input-sm w-40"
                     />
                     <button
                       type="button"
                       (click)="saveEditing(device.id)"
-                      class="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 cursor-pointer"
+                      class="sz-btn sz-btn-primary sz-btn-xs"
                       [attr.data-testid]="'save-name-' + device.id"
                       [attr.aria-label]="'Save name for ' + device.id"
                     >
@@ -72,7 +70,7 @@
                     <button
                       type="button"
                       (click)="cancelEditing()"
-                      class="rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-600 cursor-pointer"
+                      class="sz-btn sz-btn-subtle sz-btn-xs"
                       [attr.data-testid]="'cancel-name-' + device.id"
                       [attr.aria-label]="'Cancel editing ' + device.id"
                     >
@@ -130,34 +128,26 @@
                 <div class="flex flex-col items-end justify-end gap-2">
                   @switch (device.state.connectionState) {
                     @case ('connected') {
-                      <span
-                        class="inline-flex items-center gap-1.5 rounded-full bg-emerald-950/70 px-2.5 py-1 text-xs font-medium text-emerald-300 border border-emerald-800/60"
-                      >
-                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                      <span class="sz-badge sz-badge-success">
+                        <span class="sz-badge-dot bg-emerald-400"></span>
                         Connected
                       </span>
                     }
                     @case ('connecting') {
-                      <span
-                        class="inline-flex items-center gap-1.5 rounded-full bg-sky-950/70 px-2.5 py-1 text-xs font-medium text-sky-300 border border-sky-800/60"
-                      >
-                        <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-400"></span>
+                      <span class="sz-badge sz-badge-info">
+                        <span class="sz-badge-dot animate-pulse bg-sky-400"></span>
                         Connecting
                       </span>
                     }
                     @case ('error') {
-                      <span
-                        class="inline-flex items-center gap-1.5 rounded-full bg-rose-950/70 px-2.5 py-1 text-xs font-medium text-rose-300 border border-rose-800/60"
-                      >
-                        <span class="h-1.5 w-1.5 rounded-full bg-rose-400"></span>
+                      <span class="sz-badge sz-badge-danger">
+                        <span class="sz-badge-dot bg-rose-400"></span>
                         Error
                       </span>
                     }
                     @case ('disconnected') {
-                      <span
-                        class="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-400 border border-slate-700"
-                      >
-                        <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
+                      <span class="sz-badge sz-badge-neutral">
+                        <span class="sz-badge-dot bg-slate-500"></span>
                         Disconnected
                       </span>
                     }
@@ -172,7 +162,7 @@
                         <button
                           type="button"
                           (click)="calibrate.emit(device.id)"
-                          class="rounded-lg bg-amber-600/20 px-2.5 py-1.5 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-600/30 hover:text-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 cursor-pointer"
+                          class="sz-btn sz-btn-warning-subtle sz-btn-xs"
                           [attr.data-testid]="'calibrate-' + device.id"
                           [attr.aria-label]="'Calibrate ' + device.name"
                         >
@@ -182,7 +172,7 @@
                       <button
                         type="button"
                         (click)="disconnect.emit(device.id)"
-                        class="rounded-lg bg-rose-600/20 px-3 py-1.5 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-600/30 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 cursor-pointer"
+                        class="sz-btn sz-btn-danger-subtle sz-btn-xs px-3"
                         [attr.data-testid]="'disconnect-' + device.id"
                         [attr.aria-label]="'Disconnect ' + device.name"
                       >
@@ -194,7 +184,7 @@
                       <button
                         type="button"
                         (click)="reconnect.emit(device.id)"
-                        class="rounded-lg bg-indigo-600/25 px-2.5 py-1.5 text-xs font-medium text-indigo-300 transition-colors hover:bg-indigo-600/40 hover:text-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer"
+                        class="sz-btn sz-btn-primary sz-btn-xs bg-indigo-600/25 text-indigo-300 hover:bg-indigo-600/40 hover:text-indigo-100"
                         [attr.data-testid]="'reconnect-' + device.id"
                         [attr.aria-label]="'Reconnect ' + device.name"
                       >
@@ -203,7 +193,7 @@
                       <button
                         type="button"
                         (click)="remove.emit(device.id)"
-                        class="rounded-lg bg-slate-700/60 px-2.5 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 cursor-pointer"
+                        class="sz-btn sz-btn-subtle sz-btn-xs"
                         [attr.data-testid]="'remove-' + device.id"
                         [attr.aria-label]="'Remove ' + device.name"
                       >
