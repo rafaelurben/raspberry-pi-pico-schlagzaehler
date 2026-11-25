@@ -14,17 +14,11 @@ static void* s_callback_context = NULL;
 
 static volatile uint32_t s_transfer_count = 0;
 static volatile uint32_t s_overrun_count = 0;
-static volatile bool s_buf0_pending = false;
-static volatile bool s_buf1_pending = false;
 
 static void dma_irq_handler(void) {
     if (s_chan0 >= 0 && dma_channel_get_irq0_status(s_chan0)) {
         dma_channel_acknowledge_irq0(s_chan0);
 
-        if (s_buf0_pending) {
-            s_overrun_count++;
-        }
-        s_buf0_pending = true;
         s_transfer_count++;
 
         /* Re-arm channel 0 for next ping-pong cycle */
@@ -39,10 +33,6 @@ static void dma_irq_handler(void) {
     if (s_chan1 >= 0 && dma_channel_get_irq0_status(s_chan1)) {
         dma_channel_acknowledge_irq0(s_chan1);
 
-        if (s_buf1_pending) {
-            s_overrun_count++;
-        }
-        s_buf1_pending = true;
         s_transfer_count++;
 
         /* Re-arm channel 1 for next ping-pong cycle */
@@ -104,8 +94,6 @@ bool Dma_init_adc_double_buffer(const DmaAdcConfig* config) {
 
     s_transfer_count = 0;
     s_overrun_count = 0;
-    s_buf0_pending = false;
-    s_buf1_pending = false;
 
     if (s_chan0 < 0) {
         s_chan0 = dma_claim_unused_channel(false);
@@ -134,8 +122,6 @@ bool Dma_init_adc_double_buffer(const DmaAdcConfig* config) {
 
 void Dma_start_adc(void) {
     if (s_chan0 >= 0 && s_chan1 >= 0) {
-        s_buf0_pending = false;
-        s_buf1_pending = false;
         configure_dma_channels();
         dma_channel_acknowledge_irq0(s_chan0);
         dma_channel_acknowledge_irq0(s_chan1);
@@ -167,11 +153,10 @@ void Dma_stop_adc(void) {
 
         dma_channel_acknowledge_irq0(s_chan0);
         dma_channel_acknowledge_irq0(s_chan1);
-        s_buf0_pending = false;
-        s_buf1_pending = false;
     }
 }
 
 uint32_t Dma_get_overrun_count(void) {
     return s_overrun_count;
 }
+

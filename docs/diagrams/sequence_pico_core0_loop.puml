@@ -106,8 +106,6 @@ group 1. Process Completed ADC DMA Buffer
         else new_sensor_state == SENSOR_STATE_ARMED
             App -> Board : Board_set_led(false)
         end
-
-        App -> PiezoAdcDriver : PiezoAdcDriver_release_buffer()
     end
 end
 

@@ -208,8 +208,6 @@ void App_run_core0(App* app) {
                    new_sensor_state == SENSOR_STATE_CAPTURE_TX_WAIT) {
             Board_set_led(false);
         }
-
-        PiezoAdcDriver_release_buffer();
     }
 
     /* 2. Process interrupt-queued local button events */

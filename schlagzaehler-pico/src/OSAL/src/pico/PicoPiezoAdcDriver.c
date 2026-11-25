@@ -126,6 +126,3 @@ bool PiezoAdcDriver_poll_buffer(uint16_t** out_buffer, size_t* out_count) {
     return true;
 }
 
-void PiezoAdcDriver_release_buffer(void) {
-    /* Ready for next buffer */
-}

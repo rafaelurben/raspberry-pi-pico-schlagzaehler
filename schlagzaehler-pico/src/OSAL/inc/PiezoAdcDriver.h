@@ -38,11 +38,6 @@ bool PiezoAdcDriver_is_running(void);
  */
 bool PiezoAdcDriver_poll_buffer(uint16_t** out_buffer, size_t* out_count);
 
-/**
- * @brief Release currently processed buffer, making it available again.
- */
-void PiezoAdcDriver_release_buffer(void);
-
 #ifdef __cplusplus
 }
 #endif
