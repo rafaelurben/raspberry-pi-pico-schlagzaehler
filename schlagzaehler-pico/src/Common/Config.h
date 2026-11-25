@@ -60,6 +60,10 @@ typedef struct {
     uint32_t watchdog_timeout_ms;
 } Config;
 
+/**
+ * @brief Populate a configuration structure with system default values.
+ * @param config Pointer to Config structure to initialize.
+ */
 static inline void Config_set_defaults(Config* config) {
     if (!config) return;
     /* 3 sensors sampled round-robin at 50 kHz each = 150 kHz aggregate */

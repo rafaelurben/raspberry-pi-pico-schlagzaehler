@@ -33,6 +33,10 @@ typedef struct {
     GameState last_rendered_state;
 } DisplayPresenter;
 
+/**
+ * @brief Initialize the display presenter and UI state tracking.
+ * @param presenter Pointer to DisplayPresenter instance.
+ */
 void DisplayPresenter_init(DisplayPresenter* presenter);
 
 /**

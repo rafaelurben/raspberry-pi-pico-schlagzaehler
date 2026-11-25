@@ -58,7 +58,21 @@ typedef struct {
     uint16_t sensor_thresholds[SENSOR_COUNT];
 } SignalCapture;
 
+/**
+ * @brief Initialize the signal capture sub-component.
+ * @param cap Pointer to SignalCapture instance.
+ * @param config Pointer to system configuration.
+ */
 void SignalCapture_init(SignalCapture* cap, const Config* config);
+
+/**
+ * @brief Arm the signal capture buffer for a given target sensor or all sensors.
+ * @param cap Pointer to SignalCapture instance.
+ * @param target Capture sensor target (0, 1, 2, or 255 for ALL).
+ * @param baselines Array of calibrated sensor baselines.
+ * @param noises Array of calibrated sensor noises.
+ * @param thresholds Array of sensor trigger thresholds.
+ */
 void SignalCapture_arm(
     SignalCapture* cap,
     CaptureTarget target,
@@ -66,8 +80,25 @@ void SignalCapture_arm(
     const uint16_t noises[SENSOR_COUNT],
     const uint16_t thresholds[SENSOR_COUNT]
 );
+
+/**
+ * @brief Reset the capture buffer, ring buffers, and internal state.
+ * @param cap Pointer to SignalCapture instance.
+ */
 void SignalCapture_reset(SignalCapture* cap);
+
+/**
+ * @brief Manually force-trigger post-trigger sample collection without waiting for threshold crossing.
+ * @param cap Pointer to SignalCapture instance.
+ * @return true if successfully triggered, false if already collecting or completed.
+ */
 bool SignalCapture_force_trigger(SignalCapture* cap);
+
+/**
+ * @brief Get a pointer to the captured sample buffer.
+ * @param cap Pointer to SignalCapture instance.
+ * @return Pointer to internal sample buffer array, or NULL if invalid.
+ */
 const uint16_t* SignalCapture_get_samples(const SignalCapture* cap);
 
 /**

@@ -48,6 +48,11 @@ typedef enum {
     CAPTURE_ACTION_TRIGGER = 2
 } CaptureAction;
 
+/**
+ * @brief Convert a CaptureAction enum value to its string representation.
+ * @param action Capture action enum value.
+ * @return String literal representation ("STOP", "START", "TRIGGER", or "UNKNOWN").
+ */
 static inline const char* CaptureAction_to_string(CaptureAction action) {
     switch (action) {
         case CAPTURE_ACTION_STOP:    return "STOP";
@@ -57,6 +62,11 @@ static inline const char* CaptureAction_to_string(CaptureAction action) {
     }
 }
 
+/**
+ * @brief Convert a GameMode enum value to its protocol string representation.
+ * @param mode Game mode enum value.
+ * @return String literal identifier ("COUNT", "TIMED", "RACE", or "UNKNOWN").
+ */
 static inline const char* GameMode_to_string(GameMode mode) {
     switch (mode) {
         case GAME_MODE_COUNT: return "COUNT";
@@ -66,6 +76,11 @@ static inline const char* GameMode_to_string(GameMode mode) {
     }
 }
 
+/**
+ * @brief Convert a GameMode enum value to its user-facing UI display label.
+ * @param mode Game mode enum value.
+ * @return Localized string label for the display ("Zaehlen", "Zeit", "Rennen", or "???").
+ */
 static inline const char* GameMode_to_UI_string(GameMode mode) {
     switch (mode) {
         case GAME_MODE_COUNT: return "Zaehlen";
@@ -75,6 +90,11 @@ static inline const char* GameMode_to_UI_string(GameMode mode) {
     }
 }
 
+/**
+ * @brief Convert a GameState enum value to its string representation.
+ * @param state Game state enum value.
+ * @return String literal representation ("BOOT", "MENU", "READY", etc.).
+ */
 static inline const char* GameState_to_string(GameState state) {
     switch (state) {
         case GAME_STATE_BOOT:      return "BOOT";
@@ -87,6 +107,11 @@ static inline const char* GameState_to_string(GameState state) {
     }
 }
 
+/**
+ * @brief Convert a SensorState enum value to its string representation.
+ * @param state Sensor state enum value.
+ * @return String literal representation ("INIT", "CALIBRATING", "ARMED", etc.).
+ */
 static inline const char* SensorState_to_string(SensorState state) {
     switch (state) {
         case SENSOR_STATE_INIT:            return "INIT";
@@ -101,6 +126,11 @@ static inline const char* SensorState_to_string(SensorState state) {
     }
 }
 
+/**
+ * @brief Convert a GameEndReason enum value to its string representation.
+ * @param reason Reason enum value explaining why the game concluded.
+ * @return String literal representation ("TIME_LIMIT", "TARGET_REACHED", "ABORTED", or "NONE").
+ */
 static inline const char* GameEndReason_to_string(GameEndReason reason) {
     switch (reason) {
         case GAME_END_TIME_LIMIT:     return "TIME_LIMIT";

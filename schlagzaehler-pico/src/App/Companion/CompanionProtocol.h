@@ -56,6 +56,11 @@ typedef struct {
     size_t rx_crc_pos;
 } CompanionProtocol;
 
+/**
+ * @brief Initialize the companion protocol parser, serializer, and state machines.
+ * @param proto Pointer to CompanionProtocol instance.
+ * @param handler Pointer to CommandHandler instance for dispatching parsed commands.
+ */
 void CompanionProtocol_init(CompanionProtocol* proto, CommandHandler* handler);
 
 /**

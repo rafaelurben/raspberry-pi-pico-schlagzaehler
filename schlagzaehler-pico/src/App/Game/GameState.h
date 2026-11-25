@@ -22,9 +22,32 @@ typedef struct {
     uint32_t remaining_ms;
 } GameStateModel;
 
+/**
+ * @brief Initialize the game state model with default values and starting mode.
+ * @param model Pointer to GameStateModel instance.
+ * @param default_mode Initial game mode to set.
+ */
 void GameState_init(GameStateModel* model, GameMode default_mode);
+
+/**
+ * @brief Transition the game state machine to a new state.
+ * @param model Pointer to GameStateModel instance.
+ * @param new_state Destination GameState to apply.
+ */
 void GameState_set_state(GameStateModel* model, GameState new_state);
+
+/**
+ * @brief Update the active game mode and its associated parameter.
+ * @param model Pointer to GameStateModel instance.
+ * @param mode Game mode to set.
+ * @param param Mode parameter (e.g. duration in seconds or target hit count).
+ */
 void GameState_set_mode(GameStateModel* model, GameMode mode, uint32_t param);
+
+/**
+ * @brief Reset the current game score and timers.
+ * @param model Pointer to GameStateModel instance.
+ */
 void GameState_reset_score(GameStateModel* model);
 
 #ifdef __cplusplus

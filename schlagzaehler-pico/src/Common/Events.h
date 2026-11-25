@@ -32,6 +32,11 @@ typedef struct {
     uint16_t intensity;
 } HitEvent;
 
+/**
+ * @brief Convert a ButtonId enum value to its uppercase string name.
+ * @param btn Button identifier enum value.
+ * @return String literal representation ("UP", "DOWN", "LEFT", "RIGHT", or "UNKNOWN").
+ */
 static inline const char* ButtonId_to_string(ButtonId btn) {
     switch (btn) {
         case BTN_ID_UP:    return "UP";
