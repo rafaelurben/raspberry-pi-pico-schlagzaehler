@@ -11,7 +11,6 @@ import { EventListComponent, SendRawCommandEvent } from './event-list.component'
     <app-event-list
       [events]="testEvents"
       [devices]="testDevices"
-      [(hideTimerEvents)]="hideTimer"
       (clear)="clearCalled = true"
       (sendRaw)="lastSentRaw = $event"
     />
@@ -20,7 +19,6 @@ import { EventListComponent, SendRawCommandEvent } from './event-list.component'
 class TestHostComponent {
   testEvents: DeviceEvent[] = [];
   testDevices: Device[] = [];
-  hideTimer = false;
   clearCalled = false;
   lastSentRaw: SendRawCommandEvent | null = null;
 }
@@ -67,12 +65,14 @@ describe('EventListComponent', () => {
         deviceId: 'dev-1',
         timestamp: new Date('2026-10-05T12:00:00.000Z'),
         payload: 'Hit detected! Value: 450',
+        type: 'HIT_DETECTED',
       },
       {
         id: 'evt-2',
         deviceId: 'dev-2',
         timestamp: new Date('2026-10-05T12:00:01.000Z'),
         payload: 'Hit detected! Value: 620',
+        type: 'HIT_DETECTED',
       },
     ];
     fixture.detectChanges();
@@ -107,9 +107,15 @@ describe('EventListComponent', () => {
       }),
     ];
     host.testEvents = [
-      { id: '1', deviceId: 'dev-1', timestamp: new Date(), payload: 'EVT_FROM_ONE' },
-      { id: '2', deviceId: 'dev-2', timestamp: new Date(), payload: 'EVT_FROM_TWO' },
-      { id: '3', deviceId: 'dev-3', timestamp: new Date(), payload: 'EVT_FROM_THREE' },
+      { id: '1', deviceId: 'dev-1', timestamp: new Date(), payload: 'EVT_FROM_ONE', type: 'TEST' },
+      { id: '2', deviceId: 'dev-2', timestamp: new Date(), payload: 'EVT_FROM_TWO', type: 'TEST' },
+      {
+        id: '3',
+        deviceId: 'dev-3',
+        timestamp: new Date(),
+        payload: 'EVT_FROM_THREE',
+        type: 'TEST',
+      },
     ];
     fixture.detectChanges();
 
@@ -201,6 +207,7 @@ describe('EventListComponent', () => {
         timestamp: new Date(),
         payload: 'MODE:TIMED',
         direction: 'sent',
+        type: 'COMMAND',
       },
       {
         id: 'evt-recv-1',
@@ -208,6 +215,7 @@ describe('EventListComponent', () => {
         timestamp: new Date(),
         payload: 'MODE active=TIMED param=30',
         direction: 'received',
+        type: 'GAME_MODE',
       },
       {
         id: 'evt-sent-2',
@@ -215,6 +223,7 @@ describe('EventListComponent', () => {
         timestamp: new Date(),
         payload: 'RESET',
         direction: 'sent',
+        type: 'COMMAND',
       },
     ];
     fixture.detectChanges();
@@ -247,6 +256,7 @@ describe('EventListComponent', () => {
         deviceId: 'dev-1',
         timestamp: new Date(),
         payload: 'HIT',
+        type: 'HIT_DETECTED',
       },
     ];
     fixture.detectChanges();
@@ -260,7 +270,9 @@ describe('EventListComponent', () => {
     expect(host.clearCalled).toBe(true);
   });
 
-  it('should display TIMER events by default when hideTimerEvents is false', () => {
+  // --- Direction Filtering Tests ---
+
+  it('should show all events by default and allow filtering by received or sent direction', () => {
     host.testDevices = [
       new Device({
         id: 'dev-1',
@@ -271,32 +283,90 @@ describe('EventListComponent', () => {
     ];
     host.testEvents = [
       {
-        id: 'evt-1',
+        id: 'evt-rx',
         deviceId: 'dev-1',
         timestamp: new Date(),
-        payload: 'TIMER elapsed=1000 remaining=29000',
+        payload: 'SCORE value=10',
+        direction: 'received',
+        type: 'SCORE',
       },
       {
-        id: 'evt-2',
+        id: 'evt-tx',
         deviceId: 'dev-1',
         timestamp: new Date(),
-        payload: 'HIT id=1 target=0 peak=2150 intensity=300',
+        payload: 'RESET',
+        direction: 'sent',
+        type: 'COMMAND',
+      },
+      {
+        id: 'evt-nodir',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'HIT id=1',
+        type: 'HIT_DETECTED',
       },
     ];
     fixture.detectChanges();
 
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.textContent).toContain('TIMER elapsed=1000 remaining=29000');
-    expect(compiled.textContent).toContain('HIT id=1 target=0 peak=2150 intensity=300');
+    // Default: 'all' direction shows all events
+    expect(fixture.nativeElement.textContent).toContain('SCORE value=10');
+    expect(fixture.nativeElement.textContent).toContain('RESET');
+    expect(fixture.nativeElement.textContent).toContain('HIT id=1');
 
-    const checkbox = fixture.nativeElement.querySelector(
-      '[data-testid="hide-timer-checkbox"]',
-    ) as HTMLInputElement;
-    expect(checkbox).toBeTruthy();
-    expect(checkbox.checked).toBe(false);
+    const rxFilterBtn = fixture.nativeElement.querySelector(
+      '[data-testid="filter-direction-received"]',
+    ) as HTMLButtonElement;
+    const txFilterBtn = fixture.nativeElement.querySelector(
+      '[data-testid="filter-direction-sent"]',
+    ) as HTMLButtonElement;
+    const allFilterBtn = fixture.nativeElement.querySelector(
+      '[data-testid="filter-direction-all"]',
+    ) as HTMLButtonElement;
+
+    // Filter by 'received': sent events hidden, nodir is treated as received
+    rxFilterBtn.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('SCORE value=10');
+    expect(fixture.nativeElement.textContent).toContain('HIT id=1');
+    expect(fixture.nativeElement.textContent).not.toContain('RESET');
+
+    // Filter by 'sent': only sent events shown
+    txFilterBtn.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('SCORE value=10');
+    expect(fixture.nativeElement.textContent).not.toContain('HIT id=1');
+    expect(fixture.nativeElement.textContent).toContain('RESET');
+
+    // Switch back to 'all'
+    allFilterBtn.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('SCORE value=10');
+    expect(fixture.nativeElement.textContent).toContain('RESET');
+    expect(fixture.nativeElement.textContent).toContain('HIT id=1');
   });
 
-  it('should hide TIMER events when hideTimerEvents filter is toggled via checkbox', () => {
+  // --- Event Type Filtering Tests ---
+
+  it('should compute availableEventTypes sorted strictly alphabetically with no special ordering for TIMER', () => {
+    host.testEvents = [
+      { id: '1', deviceId: 'dev-1', timestamp: new Date(), payload: 'Z', type: 'ZEBRA' },
+      { id: '2', deviceId: 'dev-1', timestamp: new Date(), payload: 'T', type: 'TIMER' },
+      { id: '3', deviceId: 'dev-1', timestamp: new Date(), payload: 'A', type: 'ALPHA' },
+      { id: '4', deviceId: 'dev-1', timestamp: new Date(), payload: 'M', type: 'MODE' },
+    ];
+    fixture.detectChanges();
+
+    const eventListComponent = fixture.debugElement.children[0]
+      .componentInstance as EventListComponent;
+
+    // Pure alphabetical sort: ALPHA, MODE, TIMER, ZEBRA
+    expect(eventListComponent.availableEventTypes()).toEqual(['ALPHA', 'MODE', 'TIMER', 'ZEBRA']);
+  });
+
+  it('should unselect TIMER events by default while displaying other event types', () => {
     host.testDevices = [
       new Device({
         id: 'dev-1',
@@ -311,50 +381,180 @@ describe('EventListComponent', () => {
         deviceId: 'dev-1',
         timestamp: new Date(),
         payload: 'TIMER elapsed=1000 remaining=29000',
+        type: 'TIMER',
       },
       {
         id: 'evt-2',
         deviceId: 'dev-1',
         timestamp: new Date(),
         payload: 'HIT id=1 target=0 peak=2150 intensity=300',
+        type: 'HIT_DETECTED',
       },
       {
         id: 'evt-3',
         deviceId: 'dev-1',
         timestamp: new Date(),
-        payload: 'MODE active=TIMED param=30',
+        payload: 'SCORE value=5',
+        type: 'SCORE',
       },
     ];
     fixture.detectChanges();
 
-    const checkbox = fixture.nativeElement.querySelector(
-      '[data-testid="hide-timer-checkbox"]',
-    ) as HTMLInputElement;
+    // TIMER is unselected by default, HIT_DETECTED and SCORE are visible
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).not.toContain('TIMER elapsed=1000 remaining=29000');
+    expect(compiled.textContent).toContain('HIT id=1 target=0 peak=2150 intensity=300');
+    expect(compiled.textContent).toContain('SCORE value=5');
 
-    // Toggle hide TIMER filter ON
-    checkbox.click();
+    // TIMER pill button is present and rendered with inactive / line-through styling
+    const timerBtn = fixture.nativeElement.querySelector(
+      '[data-testid="filter-type-TIMER"]',
+    ) as HTMLButtonElement;
+    expect(timerBtn).toBeTruthy();
+    expect(timerBtn.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('should display TIMER events when the TIMER filter button is clicked', () => {
+    host.testDevices = [
+      new Device({
+        id: 'dev-1',
+        name: 'Pico One',
+        state: new DeviceState({ connectionState: 'connected' }),
+        transportType: 'serial',
+      }),
+    ];
+    host.testEvents = [
+      {
+        id: 'evt-1',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'TIMER elapsed=1000 remaining=29000',
+        type: 'TIMER',
+      },
+      {
+        id: 'evt-2',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'HIT id=1 target=0 peak=2150 intensity=300',
+        type: 'HIT_DETECTED',
+      },
+    ];
     fixture.detectChanges();
 
-    expect(host.hideTimer).toBe(true);
     expect(fixture.nativeElement.textContent).not.toContain('TIMER elapsed=1000 remaining=29000');
-    // Non-TIMER events remain visible (including MODE active=TIMED)
-    expect(fixture.nativeElement.textContent).toContain(
-      'HIT id=1 target=0 peak=2150 intensity=300',
-    );
-    expect(fixture.nativeElement.textContent).toContain('MODE active=TIMED param=30');
 
-    // Toggle hide TIMER filter OFF
-    checkbox.click();
+    // Toggle TIMER ON
+    const timerBtn = fixture.nativeElement.querySelector(
+      '[data-testid="filter-type-TIMER"]',
+    ) as HTMLButtonElement;
+    timerBtn.click();
     fixture.detectChanges();
 
-    expect(host.hideTimer).toBe(false);
+    expect(timerBtn.getAttribute('aria-pressed')).toBe('true');
     expect(fixture.nativeElement.textContent).toContain('TIMER elapsed=1000 remaining=29000');
     expect(fixture.nativeElement.textContent).toContain(
       'HIT id=1 target=0 peak=2150 intensity=300',
     );
+
+    // Toggle TIMER back OFF
+    timerBtn.click();
+    fixture.detectChanges();
+
+    expect(timerBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(fixture.nativeElement.textContent).not.toContain('TIMER elapsed=1000 remaining=29000');
   });
 
-  it('should combine device filtering and hideTimerEvents filter', () => {
+  it('should allow toggling off individual event types and selecting all types via All button', () => {
+    host.testDevices = [
+      new Device({
+        id: 'dev-1',
+        name: 'Pico One',
+        state: new DeviceState({ connectionState: 'connected' }),
+        transportType: 'serial',
+      }),
+    ];
+    host.testEvents = [
+      {
+        id: '1',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'HIT peak=2000',
+        type: 'HIT_DETECTED',
+      },
+      {
+        id: '2',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'SCORE value=10',
+        type: 'SCORE',
+      },
+      {
+        id: '3',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'TIMER elapsed=500',
+        type: 'TIMER',
+      },
+    ];
+    fixture.detectChanges();
+
+    // Toggle off SCORE
+    const scoreBtn = fixture.nativeElement.querySelector(
+      '[data-testid="filter-type-SCORE"]',
+    ) as HTMLButtonElement;
+    scoreBtn.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('HIT peak=2000');
+    expect(fixture.nativeElement.textContent).not.toContain('SCORE value=10');
+    expect(fixture.nativeElement.textContent).not.toContain('TIMER elapsed=500');
+
+    // Click "All" types button -> all types selected (including TIMER)
+    const allTypesBtn = fixture.nativeElement.querySelector(
+      '[data-testid="filter-type-all"]',
+    ) as HTMLButtonElement;
+    allTypesBtn.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('HIT peak=2000');
+    expect(fixture.nativeElement.textContent).toContain('SCORE value=10');
+    expect(fixture.nativeElement.textContent).toContain('TIMER elapsed=500');
+  });
+
+  it('should show empty state if all received events are TIMER events and TIMER is unselected', () => {
+    host.testEvents = [
+      {
+        id: 'evt-1',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'TIMER elapsed=100 remaining=900',
+        type: 'TIMER',
+      },
+      {
+        id: 'evt-2',
+        deviceId: 'dev-1',
+        timestamp: new Date(),
+        payload: 'TIMER elapsed=200 remaining=800',
+        type: 'TIMER',
+      },
+    ];
+    fixture.detectChanges();
+
+    // TIMER is unselected by default, so all events are filtered out
+    expect(fixture.nativeElement.textContent).toContain('No events received');
+
+    // Toggle TIMER ON -> events become visible
+    const timerBtn = fixture.nativeElement.querySelector(
+      '[data-testid="filter-type-TIMER"]',
+    ) as HTMLButtonElement;
+    timerBtn.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('No events received');
+    expect(fixture.nativeElement.textContent).toContain('TIMER elapsed=100 remaining=900');
+  });
+
+  it('should combine device filtering, direction filtering, and event type filtering', () => {
     host.testDevices = [
       new Device({
         id: 'dev-1',
@@ -374,153 +574,69 @@ describe('EventListComponent', () => {
         id: 'evt-1',
         deviceId: 'dev-1',
         timestamp: new Date(),
-        payload: 'TIMER elapsed=2000 remaining=28000',
+        payload: 'HIT id=1 target=0',
+        direction: 'received',
+        type: 'HIT_DETECTED',
       },
       {
         id: 'evt-2',
         deviceId: 'dev-1',
         timestamp: new Date(),
-        payload: 'HIT id=1 target=0 peak=1900 intensity=200',
+        payload: 'RESET',
+        direction: 'sent',
+        type: 'COMMAND',
       },
       {
         id: 'evt-3',
         deviceId: 'dev-2',
         timestamp: new Date(),
-        payload: 'SCORE value=10',
+        payload: 'HIT id=2 target=1',
+        direction: 'received',
+        type: 'HIT_DETECTED',
       },
       {
         id: 'evt-4',
-        deviceId: 'dev-2',
+        deviceId: 'dev-1',
         timestamp: new Date(),
-        payload: 'TIMER elapsed=3000 remaining=27000',
+        payload: 'TIMER elapsed=500',
+        direction: 'received',
+        type: 'TIMER',
       },
     ];
     fixture.detectChanges();
 
-    // Filter by Pico One only
+    // Filter by Device: Pico One
     const filterOneBtn = fixture.nativeElement.querySelector(
       '[data-testid="filter-device-dev-1"]',
     ) as HTMLButtonElement;
     filterOneBtn.click();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('TIMER elapsed=2000 remaining=28000');
-    expect(fixture.nativeElement.textContent).toContain(
-      'HIT id=1 target=0 peak=1900 intensity=200',
-    );
-    expect(fixture.nativeElement.textContent).not.toContain('SCORE value=10');
-    expect(fixture.nativeElement.textContent).not.toContain('TIMER elapsed=3000 remaining=27000');
+    expect(fixture.nativeElement.textContent).toContain('HIT id=1 target=0');
+    expect(fixture.nativeElement.textContent).toContain('RESET');
+    expect(fixture.nativeElement.textContent).not.toContain('HIT id=2 target=1'); // dev-2 filtered out
+    expect(fixture.nativeElement.textContent).not.toContain('TIMER elapsed=500'); // TIMER unselected by default
 
-    // Also enable hide TIMER events
-    const checkbox = fixture.nativeElement.querySelector(
-      '[data-testid="hide-timer-checkbox"]',
-    ) as HTMLInputElement;
-    checkbox.click();
+    // Also filter by Direction: Received
+    const rxFilterBtn = fixture.nativeElement.querySelector(
+      '[data-testid="filter-direction-received"]',
+    ) as HTMLButtonElement;
+    rxFilterBtn.click();
     fixture.detectChanges();
 
-    // Only non-TIMER events for Pico One should be visible
-    expect(fixture.nativeElement.textContent).not.toContain('TIMER elapsed=2000 remaining=28000');
-    expect(fixture.nativeElement.textContent).toContain(
-      'HIT id=1 target=0 peak=1900 intensity=200',
-    );
-    expect(fixture.nativeElement.textContent).not.toContain('SCORE value=10');
-    expect(fixture.nativeElement.textContent).not.toContain('TIMER elapsed=3000 remaining=27000');
-  });
+    expect(fixture.nativeElement.textContent).toContain('HIT id=1 target=0');
+    expect(fixture.nativeElement.textContent).not.toContain('RESET'); // sent filtered out
 
-  it('should show empty state if all received events are TIMER events and hideTimerEvents is active', () => {
-    host.testEvents = [
-      {
-        id: 'evt-1',
-        deviceId: 'dev-1',
-        timestamp: new Date(),
-        payload: 'TIMER elapsed=100 remaining=900',
-      },
-      {
-        id: 'evt-2',
-        deviceId: 'dev-1',
-        timestamp: new Date(),
-        payload: 'TIMER elapsed=200 remaining=800',
-      },
-    ];
+    // Enable TIMER
+    const timerBtn = fixture.nativeElement.querySelector(
+      '[data-testid="filter-type-TIMER"]',
+    ) as HTMLButtonElement;
+    timerBtn.click();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).not.toContain('No events received');
-
-    const checkbox = fixture.nativeElement.querySelector(
-      '[data-testid="hide-timer-checkbox"]',
-    ) as HTMLInputElement;
-    checkbox.click();
-    fixture.detectChanges();
-
-    expect(fixture.nativeElement.textContent).toContain('No events received');
-  });
-
-  it('should correctly identify TIMER events using isTimerEvent', () => {
-    const eventListComponent = fixture.debugElement.children[0]
-      .componentInstance as EventListComponent;
-
-    expect(
-      eventListComponent.isTimerEvent({
-        id: '1',
-        deviceId: 'dev-1',
-        timestamp: new Date(),
-        payload: 'TIMER elapsed=5000 remaining=25000',
-      }),
-    ).toBe(true);
-
-    expect(
-      eventListComponent.isTimerEvent({
-        id: '2',
-        deviceId: 'dev-1',
-        timestamp: new Date(),
-        payload: 'timer elapsed=5000',
-      }),
-    ).toBe(true);
-
-    expect(
-      eventListComponent.isTimerEvent({
-        id: '3',
-        deviceId: 'dev-1',
-        timestamp: new Date(),
-        payload: 'TIMER',
-      }),
-    ).toBe(true);
-
-    expect(
-      eventListComponent.isTimerEvent({
-        id: '4',
-        deviceId: 'dev-1',
-        timestamp: new Date(),
-        type: 'TIMER',
-        payload: 'anything',
-      }),
-    ).toBe(true);
-
-    expect(
-      eventListComponent.isTimerEvent({
-        id: '5',
-        deviceId: 'dev-1',
-        timestamp: new Date(),
-        payload: 'MODE active=TIMED param=30',
-      }),
-    ).toBe(false);
-
-    expect(
-      eventListComponent.isTimerEvent({
-        id: '6',
-        deviceId: 'dev-1',
-        timestamp: new Date(),
-        payload: 'HIT id=1 target=0',
-      }),
-    ).toBe(false);
-
-    expect(
-      eventListComponent.isTimerEvent({
-        id: '7',
-        deviceId: 'dev-1',
-        timestamp: new Date(),
-        payload: 'SCORE value=100',
-      }),
-    ).toBe(false);
+    expect(fixture.nativeElement.textContent).toContain('HIT id=1 target=0');
+    expect(fixture.nativeElement.textContent).toContain('TIMER elapsed=500');
+    expect(fixture.nativeElement.textContent).not.toContain('RESET');
+    expect(fixture.nativeElement.textContent).not.toContain('HIT id=2 target=1');
   });
 });

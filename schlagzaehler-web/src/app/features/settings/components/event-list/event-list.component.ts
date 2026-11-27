@@ -1,8 +1,10 @@
 import { DatePipe } from '@angular/common';
-import { Component, computed, input, model, output, signal } from '@angular/core';
+import { Component, computed, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DeviceEvent } from '../../../../core/device/models/device-event.model';
 import { Device } from '../../../../core/device/models/device.model';
+
+export type EventDirectionFilter = 'all' | 'received' | 'sent';
 
 export interface SendRawCommandEvent {
   readonly deviceIds: readonly string[];
@@ -21,15 +23,22 @@ export class EventListComponent {
   readonly sendRaw = output<SendRawCommandEvent>();
 
   /**
-   * Whether to hide TIMER events from the live event stream.
+   * Direction filter for live events.
+   * Defaults to 'all'.
    */
-  readonly hideTimerEvents = model<boolean>(true);
+  readonly selectedDirection = signal<EventDirectionFilter>('all');
 
   /**
    * Selected device IDs for filtering live events.
    * Empty set means show events from all devices.
    */
   readonly selectedFilterDeviceIds = signal<ReadonlySet<string>>(new Set());
+
+  /**
+   * Set of deselected (excluded) event types.
+   * 'TIMER' is unselected by default.
+   */
+  readonly deselectedEventTypes = signal<ReadonlySet<string>>(new Set(['TIMER']));
 
   /**
    * Selected target device IDs for sending raw commands.
@@ -45,16 +54,37 @@ export class EventListComponent {
     this.devices().filter((d) => d.state.connectionState === 'connected'),
   );
 
+  /**
+   * Distinct event types present in the current events stream, sorted alphabetically.
+   */
+  readonly availableEventTypes = computed(() => {
+    const types = new Set<string>();
+    for (const evt of this.events()) {
+      types.add(evt.type);
+    }
+    return Array.from(types).sort((a, b) => a.localeCompare(b));
+  });
+
   readonly filteredEvents = computed(() => {
     const filterIds = this.selectedFilterDeviceIds();
-    const hideTimer = this.hideTimerEvents();
+    const direction = this.selectedDirection();
+    const deselectedTypes = this.deselectedEventTypes();
     const allEvents = this.events();
 
     return allEvents.filter((evt) => {
       if (filterIds.size > 0 && !filterIds.has(evt.deviceId)) {
         return false;
       }
-      return !(hideTimer && this.isTimerEvent(evt));
+      if (direction !== 'all') {
+        const evtDir = evt.direction ?? 'received';
+        if (evtDir !== direction) {
+          return false;
+        }
+      }
+      if (deselectedTypes.has(evt.type)) {
+        return false;
+      }
+      return true;
     });
   });
 
@@ -66,19 +96,16 @@ export class EventListComponent {
     return map;
   });
 
-  /**
-   * Determines whether a given DeviceEvent is a TIMER event.
-   */
-  isTimerEvent(event: DeviceEvent): boolean {
-    if (event.type === 'TIMER') {
-      return true;
-    }
-    const payload = (event.payload ?? '').trim();
-    return /^TIMER(\s|$)/i.test(payload);
-  }
-
   resolveDeviceName(deviceId: string): string {
     return this.deviceNameMap().get(deviceId) ?? deviceId;
+  }
+
+  isDirectionSelected(direction: EventDirectionFilter): boolean {
+    return this.selectedDirection() === direction;
+  }
+
+  setDirectionFilter(direction: EventDirectionFilter): void {
+    this.selectedDirection.set(direction);
   }
 
   isFilterSelected(deviceId: string): boolean {
@@ -99,6 +126,26 @@ export class EventListComponent {
 
   clearFilter(): void {
     this.selectedFilterDeviceIds.set(new Set());
+  }
+
+  isTypeSelected(type: string): boolean {
+    return !this.deselectedEventTypes().has(type);
+  }
+
+  toggleEventType(type: string): void {
+    this.deselectedEventTypes.update((current) => {
+      const next = new Set(current);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  }
+
+  selectAllEventTypes(): void {
+    this.deselectedEventTypes.set(new Set());
   }
 
   isTargetSelected(deviceId: string): boolean {

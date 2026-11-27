@@ -894,7 +894,7 @@ export class DeviceManagerService implements OnDestroy {
     payload: string,
     direction: EventDirection,
     now: number = Date.now(),
-    type?: string,
+    type: string,
   ): void {
     const event: DeviceEvent = {
       id: this.generateId(),
@@ -902,7 +902,7 @@ export class DeviceManagerService implements OnDestroy {
       timestamp: new Date(now),
       payload,
       direction,
-      ...(type !== undefined ? { type } : {}),
+      type,
     };
 
     // Prepend new event (reverse chronological order) and cap at maximum retained events

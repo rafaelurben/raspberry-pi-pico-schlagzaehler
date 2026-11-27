@@ -87,14 +87,14 @@
   </div>
 
   <!-- Filters Section -->
-  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+  <div class="mb-4 flex flex-wrap items-center gap-y-2.5 gap-x-4">
     @if (devices().length > 0) {
       <div
         class="flex flex-wrap items-center gap-1.5"
         role="group"
         aria-label="Filter events by device"
       >
-        <span class="mr-1 text-xs font-medium text-slate-400">Filter:</span>
+        <span class="mr-1 text-xs font-medium text-slate-400">Device:</span>
         <button
           type="button"
           (click)="clearFilter()"
@@ -129,23 +129,101 @@
       </div>
     }
 
-    <!-- Hide TIMER Events Filter -->
-    <div class="flex items-center">
-      <label
-        data-testid="filter-hide-timer"
-        class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700/80 bg-slate-900/60 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:border-slate-600 hover:text-white select-none"
+    <!-- Direction Filter -->
+    <div
+      class="flex flex-wrap items-center gap-1.5"
+      role="group"
+      aria-label="Filter events by direction"
+    >
+      <span class="mr-1 text-xs font-medium text-slate-400">Direction:</span>
+      <button
+        type="button"
+        (click)="setDirectionFilter('all')"
+        aria-label="Show events from all directions"
+        data-testid="filter-direction-all"
+        [attr.aria-pressed]="isDirectionSelected('all')"
+        class="rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer"
+        [class]="
+          isDirectionSelected('all')
+            ? 'bg-indigo-600 text-white'
+            : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+        "
       >
-        <input
-          type="checkbox"
-          [ngModel]="hideTimerEvents()"
-          (ngModelChange)="hideTimerEvents.set($event)"
-          data-testid="hide-timer-checkbox"
-          aria-label="Hide TIMER events"
-          class="sz-checkbox h-3.5 w-3.5"
-        />
-        <span>Hide TIMER events</span>
-      </label>
+        All
+      </button>
+      <button
+        type="button"
+        (click)="setDirectionFilter('received')"
+        aria-label="Show received events"
+        data-testid="filter-direction-received"
+        [attr.aria-pressed]="isDirectionSelected('received')"
+        class="rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer"
+        [class]="
+          isDirectionSelected('received')
+            ? 'bg-indigo-600 text-white'
+            : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+        "
+      >
+        Received
+      </button>
+      <button
+        type="button"
+        (click)="setDirectionFilter('sent')"
+        aria-label="Show sent events"
+        data-testid="filter-direction-sent"
+        [attr.aria-pressed]="isDirectionSelected('sent')"
+        class="rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer"
+        [class]="
+          isDirectionSelected('sent')
+            ? 'bg-indigo-600 text-white'
+            : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+        "
+      >
+        Sent
+      </button>
     </div>
+
+    <!-- Event Type Filter -->
+    @if (availableEventTypes().length > 0) {
+      <div
+        class="flex flex-wrap items-center gap-1.5"
+        role="group"
+        aria-label="Filter events by type"
+      >
+        <span class="mr-1 text-xs font-medium text-slate-400">Type:</span>
+        <button
+          type="button"
+          (click)="selectAllEventTypes()"
+          aria-label="Select all event types"
+          data-testid="filter-type-all"
+          class="rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer"
+          [class]="
+            deselectedEventTypes().size === 0
+              ? 'bg-indigo-600 text-white'
+              : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+          "
+        >
+          All
+        </button>
+        @for (type of availableEventTypes(); track type) {
+          <button
+            type="button"
+            (click)="toggleEventType(type)"
+            [attr.data-testid]="'filter-type-' + type"
+            [attr.aria-label]="'Filter by type ' + type"
+            [attr.aria-pressed]="isTypeSelected(type)"
+            class="rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer"
+            [class]="
+              isTypeSelected(type)
+                ? 'bg-indigo-600 text-white'
+                : 'bg-slate-800/80 text-slate-400 border border-slate-700 hover:text-slate-200'
+            "
+          >
+            {{ type }}
+          </button>
+        }
+      </div>
+    }
   </div>
 
   @if (filteredEvents().length === 0) {
