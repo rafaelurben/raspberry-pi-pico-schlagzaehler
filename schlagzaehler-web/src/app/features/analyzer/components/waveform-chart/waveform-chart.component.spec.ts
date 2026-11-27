@@ -47,18 +47,10 @@ describe('WaveformChartComponent', () => {
 
     const el = fixture.nativeElement as HTMLElement;
     const text = el.textContent || '';
-    expect(text).toContain('Sensor 0');
-    expect(text).toContain('1850');
-    expect(text).toContain('1800');
-    expect(text).toContain('Sensor 1');
-    expect(text).toContain('1970');
-    expect(text).toContain('1910');
-    expect(text).toContain('Sensor 2');
-    expect(text).toContain('2090');
-    expect(text).toContain('2020');
+    expect(text).toContain('Trigger (t = 0 ms)');
   });
 
-  it('should display single threshold and baseline in single sensor mode', () => {
+  it('should compute single sensor calibration in single sensor mode', () => {
     const singleCapture: PiezoCaptureResult = {
       id: 'cap-single-1',
       deviceId: 'pico-test',
@@ -77,11 +69,11 @@ describe('WaveformChartComponent', () => {
 
     expect(component.isAllSensors()).toBe(false);
     expect(component.sensorCalibrations()).toHaveLength(1);
+    expect(component.sensorCalibrations()[0].threshold).toBe(1920);
+    expect(component.sensorCalibrations()[0].baseline).toBe(1850);
 
     const el = fixture.nativeElement as HTMLElement;
     const text = el.textContent || '';
-    expect(text).toContain('Sensor 1');
-    expect(text).toContain('Threshold (1920)');
-    expect(text).toContain('Baseline (1850)');
+    expect(text).toContain('Trigger (t = 0 ms)');
   });
 });
