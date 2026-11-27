@@ -197,7 +197,7 @@ Requests an immediate full telemetry broadcast from Core 0 (`SENSOR_STATUS`, `GA
 ---
 
 ### 5.6 `CMD_SET_MODE` (`0x06`)
-Switches the active game mode. Valid in `MENU` or `READY` states.
+Switches the active game mode. Valid in `MENU` or `READY` states (resets the score and transitions the game state to `READY`).
 
 ```mermaid
 ---

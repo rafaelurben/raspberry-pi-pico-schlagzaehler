@@ -393,13 +393,16 @@ void GameController_on_command(GameController* gc, const Core1ToCore0Message* cm
                 start_game(gc);
             }
             break;
-        case MSG_RESET_GAME:
+        case MSG_RESET_GAME: {
+            GameState old_s = gc->state_model.state;
             GameState_reset_score(&gc->state_model);
             gc->state_model.state = GAME_STATE_READY;
-            broadcast_state_change(gc, gc->state_model.state, GAME_STATE_READY);
+            broadcast_state_change(gc, old_s, GAME_STATE_READY);
             broadcast_score_change(gc);
             break;
-        case MSG_SET_GAME_MODE:
+        }
+        case MSG_SET_GAME_MODE: {
+            GameState old_s = gc->state_model.state;
             gc->state_model.active_mode = cmd->data.set_mode.mode;
             gc->state_model.menu_selected_mode = cmd->data.set_mode.mode;
             if (gc->state_model.active_mode == GAME_MODE_TIMED) {
@@ -410,8 +413,12 @@ void GameController_on_command(GameController* gc, const Core1ToCore0Message* cm
                 gc->state_model.parameter = 0;
             }
             GameState_reset_score(&gc->state_model);
+            gc->state_model.state = GAME_STATE_READY;
+            broadcast_state_change(gc, old_s, GAME_STATE_READY);
             broadcast_mode_change(gc);
+            broadcast_score_change(gc);
             break;
+        }
         case MSG_SET_GAME_PARAMETER: {
             uint32_t param = cmd->data.set_parameter.parameter;
             if (param < 5) param = 5;

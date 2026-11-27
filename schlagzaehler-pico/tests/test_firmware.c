@@ -416,6 +416,99 @@ void test_game_controller_and_modes(void) {
     }
     assert(has_sensor_status && has_state && has_mode && has_score && has_timer);
 
+    /* Test companion MSG_SET_GAME_MODE resets state to READY from MENU */
+    GameController_on_button(&gc, &btn_l);
+    assert(gc.state_model.state == GAME_STATE_MENU);
+    while (OsalQueue_pop(&q0_to_q1, &msg));
+
+    Core1ToCore0Message set_mode_cmd = {
+        .type = MSG_SET_GAME_MODE,
+        .timestamp_us = s_mock_time_us,
+        .data.set_mode = { .mode = GAME_MODE_TIMED }
+    };
+    GameController_on_command(&gc, &set_mode_cmd);
+    assert(gc.state_model.state == GAME_STATE_READY);
+    assert(gc.state_model.active_mode == GAME_MODE_TIMED);
+    assert(gc.state_model.score == 0);
+
+    bool found_state_to_ready = false;
+    bool found_mode_timed = false;
+    bool found_score_zero = false;
+    while (OsalQueue_pop(&q0_to_q1, &msg)) {
+        if (msg.type == MSG_GAME_STATE_CHANGED) {
+            assert(msg.data.game_state.old_state == GAME_STATE_MENU);
+            assert(msg.data.game_state.new_state == GAME_STATE_READY);
+            found_state_to_ready = true;
+        } else if (msg.type == MSG_GAME_MODE_CHANGED) {
+            assert(msg.data.game_mode.mode == GAME_MODE_TIMED);
+            assert(msg.data.game_mode.parameter == cfg.timed_duration_s);
+            found_mode_timed = true;
+        } else if (msg.type == MSG_SCORE_CHANGED) {
+            assert(msg.data.score.score == 0);
+            found_score_zero = true;
+        }
+    }
+    assert(found_state_to_ready && found_mode_timed && found_score_zero);
+
+    /* Test companion MSG_SET_GAME_MODE resets state to READY from RUNNING */
+    HitEvent hit_start = { .hit_id = 99, .sensor_id = 0, .peak_value = 2500, .timestamp_us = s_mock_time_us };
+    GameController_on_hit(&gc, &hit_start);
+    assert(gc.state_model.state == GAME_STATE_RUNNING);
+    assert(gc.state_model.score == 1);
+    while (OsalQueue_pop(&q0_to_q1, &msg));
+
+    set_mode_cmd.data.set_mode.mode = GAME_MODE_RACE;
+    GameController_on_command(&gc, &set_mode_cmd);
+    assert(gc.state_model.state == GAME_STATE_READY);
+    assert(gc.state_model.active_mode == GAME_MODE_RACE);
+    assert(gc.state_model.score == 0);
+
+    found_state_to_ready = false;
+    bool found_mode_race = false;
+    found_score_zero = false;
+    while (OsalQueue_pop(&q0_to_q1, &msg)) {
+        if (msg.type == MSG_GAME_STATE_CHANGED) {
+            assert(msg.data.game_state.old_state == GAME_STATE_RUNNING);
+            assert(msg.data.game_state.new_state == GAME_STATE_READY);
+            found_state_to_ready = true;
+        } else if (msg.type == MSG_GAME_MODE_CHANGED) {
+            assert(msg.data.game_mode.mode == GAME_MODE_RACE);
+            assert(msg.data.game_mode.parameter == cfg.race_target_hits);
+            found_mode_race = true;
+        } else if (msg.type == MSG_SCORE_CHANGED) {
+            assert(msg.data.score.score == 0);
+            found_score_zero = true;
+        }
+    }
+    assert(found_state_to_ready && found_mode_race && found_score_zero);
+
+    /* Test MSG_RESET_GAME resets state to READY and preserves old_state in broadcast */
+    GameController_on_hit(&gc, &hit_start);
+    assert(gc.state_model.state == GAME_STATE_RUNNING);
+    while (OsalQueue_pop(&q0_to_q1, &msg));
+
+    Core1ToCore0Message reset_cmd = {
+        .type = MSG_RESET_GAME,
+        .timestamp_us = s_mock_time_us
+    };
+    GameController_on_command(&gc, &reset_cmd);
+    assert(gc.state_model.state == GAME_STATE_READY);
+    assert(gc.state_model.score == 0);
+
+    found_state_to_ready = false;
+    found_score_zero = false;
+    while (OsalQueue_pop(&q0_to_q1, &msg)) {
+        if (msg.type == MSG_GAME_STATE_CHANGED) {
+            assert(msg.data.game_state.old_state == GAME_STATE_RUNNING);
+            assert(msg.data.game_state.new_state == GAME_STATE_READY);
+            found_state_to_ready = true;
+        } else if (msg.type == MSG_SCORE_CHANGED) {
+            assert(msg.data.score.score == 0);
+            found_score_zero = true;
+        }
+    }
+    assert(found_state_to_ready && found_score_zero);
+
     printf("PASS: test_game_controller_and_modes\n");
 }
 

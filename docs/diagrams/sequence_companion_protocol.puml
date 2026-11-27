@@ -126,15 +126,21 @@ activate App0
 App0 -> GC: GameController_on_command(MSG_SET_GAME_MODE)
 deactivate App0
 activate GC
-GC -> GC: Set active_mode = TIMED, param = 30s
+GC -> GC: Set active_mode = TIMED, param = 30s\nReset score & state -> READY
+GC -> Q01: MSG_GAME_STATE_CHANGED (old=MENU, new=READY)
 GC -> Q01: MSG_GAME_MODE_CHANGED (active=TIMED, param=30)
+GC -> Q01: MSG_SCORE_CHANGED (score=0)
 deactivate GC
 deactivate App0
 
-Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
-activate Proto
-Proto --> Web: <b>MSG_GAME_MODE</b>\n(active=TIMED, param=30)
-deactivate Proto
+loop Drain Mode Configuration Notifications
+    Q01 -> Proto: OsalQueue_pop(&queue_core0_to_core1)\n<size:10><color:#666666>(asynchronous Core 1 loop tick)</color></size>
+    activate Proto
+    Proto --> Web: <b>MSG_GAME_STATE</b>\n(old=MENU, new=READY)
+    Proto --> Web: <b>MSG_GAME_MODE</b>\n(active=TIMED, param=30)
+    Proto --> Web: <b>MSG_SCORE</b>\n(value=0)
+    deactivate Proto
+end
 
 Web -> Proto: <b>CMD_SET_PARAMETER</b>\n(param=45)
 activate Proto
