@@ -17,6 +17,8 @@ export const DEFAULT_SERIAL_CONFIG: SerialConfig = {
   bufferSize: 65536,
 };
 
+export const ALLOWED_SERIAL_USB_FILTERS: SerialPortFilter[] | undefined = [{ usbVendorId: 0x2e8a }];
+
 /**
  * Maximum number of events retained in memory for the live event list.
  */

@@ -1,6 +1,10 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { DEFAULT_SERIAL_CONFIG, SerialConfig } from '../../config/serial.config';
+import {
+  ALLOWED_SERIAL_USB_FILTERS,
+  DEFAULT_SERIAL_CONFIG,
+  SerialConfig,
+} from '../../config/serial.config';
 import { DeviceMetadata } from '../models/device.model';
 import { DeviceTransport } from './device-transport.interface';
 import { WebSerialTransport } from './web-serial-transport';
@@ -54,11 +58,13 @@ export class WebSerialTransportFactory {
   /**
    * Prompts the user to select a serial port using the browser's native device picker.
    */
-  async requestPort(options?: SerialPortRequestOptions): Promise<SerialPort> {
+  async requestPort(): Promise<SerialPort> {
     if (!this.isSupported()) {
       throw new Error('The Web Serial API is not supported in this browser.');
     }
-    return await navigator.serial.requestPort(options);
+    return await navigator.serial.requestPort({
+      filters: ALLOWED_SERIAL_USB_FILTERS,
+    });
   }
 
   /**
