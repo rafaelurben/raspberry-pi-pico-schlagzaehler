@@ -40,7 +40,7 @@ package "Abstraction Layer (OSAL: PicoDma & PicoPiezoAdcDriver)" as AbsLayer #Cy
 ' 3. APPLICATION LAYER (CORE 0 & CORE 1)
 ' ============================================================================
 package "Application Layer (Core 0 & Core 1)" as AppLayer #LightGray {
-    component "HitDetector_process_buffer()\n1. CALIBRATING: mean (baseline) & std dev (noise)\n2. ARMED: dynamic_threshold *= decay_factor\n3. Peak detection & HIT_LOCKOUT (dead time)" as HitDetector #White
+    component "HitDetector_process_buffer()\n1. CALIBRATING: mean (baseline) & std dev (noise)\n2. ARMED: dynamic threshold decay & trigger\n3. Peak detection & HIT_LOCKOUT (dead time)" as HitDetector #White
     component "GameController_on_hit()\nUpdates GameState & Active Mode\n(CountMode / TimedMode / RaceMode)" as GameController #White
     queue "OsalQueue\nqueue_core0_to_core1\n(Core0ToCore1Message)" as InterCoreQueue #White
     component "Core 1 Consumers\nDisplayPresenter (ST7735)\nCompanionProtocol (USB Serial)" as Core1Consumers #White
