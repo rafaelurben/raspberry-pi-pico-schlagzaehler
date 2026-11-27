@@ -251,6 +251,13 @@ void test_hit_detector_and_calibration(void) {
     assert(ev.peak_value == 3200);
     assert(ev.hit_id == 2);
 
+    /* Verify dynamic threshold decays towards base_threshold and never drops below it */
+    assert(hd.channels[2].dynamic_threshold >= (float)hd.channels[2].base_threshold);
+    float prev_dyn = hd.channels[2].dynamic_threshold;
+    HitDetector_process_buffer(&hd, quiet_samples, 384, &ev);
+    assert(hd.channels[2].dynamic_threshold <= prev_dyn);
+    assert(hd.channels[2].dynamic_threshold >= (float)hd.channels[2].base_threshold);
+
     printf("PASS: test_hit_detector_and_calibration\n");
 }
 

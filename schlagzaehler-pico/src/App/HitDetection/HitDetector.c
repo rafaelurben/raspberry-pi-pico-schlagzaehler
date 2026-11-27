@@ -194,6 +194,15 @@ bool HitDetector_is_sensor_ignored(const HitDetector* detector, uint8_t sensor_i
     return detector->channels[sensor_id].ignored;
 }
 
+static inline void HitDetector_decay_channel(HitDetectorChannel* ch, float decay) {
+    float delta = ch->dynamic_threshold - (float)ch->base_threshold;
+    if (delta > 0.0f) {
+        ch->dynamic_threshold = (float)ch->base_threshold + (delta * decay);
+    } else {
+        ch->dynamic_threshold = (float)ch->base_threshold;
+    }
+}
+
 bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, size_t count, HitEvent* out_event) {
     if (!detector || !samples || count == 0) return false;
 
@@ -316,10 +325,7 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
                     if ((float)val > detector->channels[s].dynamic_threshold) {
                         detector->channels[s].dynamic_threshold = (float)val;
                     }
-                    detector->channels[s].dynamic_threshold *= decay;
-                    if (detector->channels[s].dynamic_threshold < (float)detector->channels[s].base_threshold) {
-                        detector->channels[s].dynamic_threshold = (float)detector->channels[s].base_threshold;
-                    }
+                    HitDetector_decay_channel(&detector->channels[s], decay);
                 }
             }
             return false;
@@ -328,10 +334,7 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
         for (size_t t = 0; t < triplet_count; ++t) {
             /* Decay dynamic thresholds for all channels */
             for (size_t s = 0; s < SENSOR_COUNT; ++s) {
-                detector->channels[s].dynamic_threshold *= decay;
-                if (detector->channels[s].dynamic_threshold < (float)detector->channels[s].base_threshold) {
-                    detector->channels[s].dynamic_threshold = (float)detector->channels[s].base_threshold;
-                }
+                HitDetector_decay_channel(&detector->channels[s], decay);
             }
 
             if (!detector->coinc_active) {
@@ -437,10 +440,7 @@ bool HitDetector_process_buffer(HitDetector* detector, const uint16_t* samples, 
                 if ((float)val > detector->channels[s].dynamic_threshold) {
                     detector->channels[s].dynamic_threshold = (float)val;
                 }
-                detector->channels[s].dynamic_threshold *= decay;
-                if (detector->channels[s].dynamic_threshold < (float)detector->channels[s].base_threshold) {
-                    detector->channels[s].dynamic_threshold = (float)detector->channels[s].base_threshold;
-                }
+                HitDetector_decay_channel(&detector->channels[s], decay);
             }
         }
 
