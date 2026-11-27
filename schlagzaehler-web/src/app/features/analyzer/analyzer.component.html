@@ -1,88 +1,73 @@
-<div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+<div class="sz-page">
   <!-- Header -->
-  <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-    <div>
-      <h1 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-        Piezo Signal Analyzer
-      </h1>
-      <p class="mt-1 text-xs text-slate-400 sm:text-sm">
-        Capture, inspect, and export ADC piezo waveforms
-      </p>
-    </div>
-
-    <!-- Capture Controls -->
+  <app-page-header
+    title="Piezo Signal Analyzer"
+    subtitle="Capture, inspect, and export ADC piezo waveforms"
+  >
     @if (activeDevice(); as dev) {
-      <div class="flex flex-wrap items-center gap-3 justify-end">
-        @if (connectedDevices().length > 1) {
-          <select
-            [ngModel]="dev.id"
-            (ngModelChange)="onSelectDevice($event)"
-            aria-label="Select target device"
-            class="sz-select"
-          >
-            @for (d of connectedDevices(); track d.id) {
-              <option [value]="d.id">{{ d.name }}</option>
-            }
-          </select>
-        }
-
-        <!-- Sensor Target Selection -->
+      @if (connectedDevices().length > 1) {
         <select
-          [ngModel]="selectedTarget()"
-          (ngModelChange)="onSelectTarget($event)"
-          [disabled]="isDeviceCapturingOrArmed()"
-          aria-label="Select sensor to capture"
+          [ngModel]="dev.id"
+          (ngModelChange)="onSelectDevice($event)"
+          aria-label="Select target device"
           class="sz-select"
         >
-          @for (opt of sensorTargetOptions; track opt.value) {
-            <option [value]="opt.value">{{ opt.label }}</option>
+          @for (d of connectedDevices(); track d.id) {
+            <option [value]="d.id">{{ d.name }}</option>
           }
         </select>
+      }
 
-        <label
-          class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/60 px-3.5 py-2 text-xs font-medium text-slate-200 select-none"
-        >
-          <input
-            type="checkbox"
-            [ngModel]="isAutoRearmEnabled()"
-            (ngModelChange)="onToggleAutoRearm($event)"
-            class="sz-checkbox"
-          />
-          <span>Auto-Rearm</span>
-        </label>
+      <!-- Sensor Target Selection -->
+      <select
+        [ngModel]="selectedTarget()"
+        (ngModelChange)="onSelectTarget($event)"
+        [disabled]="isDeviceCapturingOrArmed()"
+        aria-label="Select sensor to capture"
+        class="sz-select"
+      >
+        @for (opt of sensorTargetOptions; track opt.value) {
+          <option [value]="opt.value">{{ opt.label }}</option>
+        }
+      </select>
 
-        @if (isDeviceCapturingOrArmed()) {
-          @if (dev.state.sensorState === 'CAPTURE_ARMED') {
-            <button
-              type="button"
-              (click)="onTriggerCapture()"
-              class="sz-btn sz-btn-success sz-btn-md px-4"
-            >
-              <span>Trigger Now</span>
-            </button>
-          }
+      <label
+        class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/60 px-3.5 py-2 text-xs font-medium text-slate-200 select-none"
+      >
+        <input
+          type="checkbox"
+          [ngModel]="isAutoRearmEnabled()"
+          (ngModelChange)="onToggleAutoRearm($event)"
+          class="sz-checkbox"
+        />
+        <span>Auto-Rearm</span>
+      </label>
+
+      @if (isDeviceCapturingOrArmed()) {
+        @if (dev.state.sensorState === 'CAPTURE_ARMED') {
           <button
             type="button"
-            (click)="onStopCapture()"
-            class="sz-btn sz-btn-danger sz-btn-md px-4"
+            (click)="onTriggerCapture()"
+            class="sz-btn sz-btn-success sz-btn-md px-4"
           >
-            <span>Cancel Capture</span>
-          </button>
-        } @else {
-          <button
-            type="button"
-            (click)="onArmCapture()"
-            [disabled]="
-              dev.state.sensorState === 'CALIBRATING' || dev.state.sensorState === 'ERROR'
-            "
-            class="sz-btn sz-btn-primary sz-btn-md"
-          >
-            <span>Arm Capture</span>
+            <span>Trigger Now</span>
           </button>
         }
-      </div>
+        <button type="button" (click)="onStopCapture()" class="sz-btn sz-btn-danger sz-btn-md px-4">
+          <span>Cancel Capture</span>
+        </button>
+      } @else {
+        <button
+          type="button"
+          (click)="onArmCapture()"
+          [disabled]="dev.state.sensorState === 'CALIBRATING' || dev.state.sensorState === 'ERROR'"
+          class="sz-btn sz-btn-primary sz-btn-md"
+        >
+          <span>Arm Capture</span>
+        </button>
+      }
     }
-  </header>
+  </app-page-header>
 
   @if (!activeDevice()) {
     <!-- No Connected Device Empty State -->

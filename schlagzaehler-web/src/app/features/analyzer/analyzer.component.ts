@@ -7,6 +7,7 @@ import {
   PiezoCaptureResult,
 } from '../../core/device/models/piezo-capture.model';
 import { DeviceManagerService } from '../../core/device/services/device-manager.service';
+import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
 import {
   WaveformChartComponent,
   YAxisScale,
@@ -23,7 +24,7 @@ export interface SensorTargetOption {
 
 @Component({
   selector: 'app-analyzer',
-  imports: [FormsModule, RouterLink, DatePipe, WaveformChartComponent],
+  imports: [FormsModule, RouterLink, DatePipe, WaveformChartComponent, PageHeaderComponent],
   templateUrl: './analyzer.component.html',
 })
 export class AnalyzerComponent {
@@ -77,7 +78,7 @@ export class AnalyzerComponent {
       return null;
     }
     const progress = this.deviceManager.captureProgress()[dev.id];
-    return progress !== undefined ? progress : null;
+    return progress ?? null;
   });
 
   readonly isAutoRearmEnabled = computed(() => {

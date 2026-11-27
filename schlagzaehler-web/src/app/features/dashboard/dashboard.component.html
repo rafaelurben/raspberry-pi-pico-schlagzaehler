@@ -1,67 +1,57 @@
-<div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+<div class="sz-page">
   <!-- Header -->
-  <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-    <div>
-      <h1 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">Home</h1>
-      <p class="text-xs text-slate-400 sm:text-sm">
-        Live device overview, scores, timers, and game mode controls
-      </p>
-    </div>
-
-    <!-- Actions -->
-    <div class="flex items-center gap-3">
-      <a routerLink="/settings" class="sz-btn sz-btn-secondary sz-btn-md px-4">
-        <span>Settings &amp; Events</span>
-      </a>
-      <button
-        type="button"
-        (click)="onConnectDevice()"
-        [disabled]="deviceManager.isConnecting() || !deviceManager.isSupported()"
-        data-testid="connect-device-button"
-        class="sz-btn sz-btn-primary sz-btn-md"
-      >
-        @if (deviceManager.isConnecting()) {
-          <svg
-            class="h-4 w-4 animate-spin text-white"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
-            ></circle>
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
-          <span>Connecting...</span>
-        } @else {
-          <svg
-            class="h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
+  <app-page-header
+    title="Home"
+    subtitle="Live device overview, scores, timers, and game mode controls"
+  >
+    <button
+      type="button"
+      (click)="onConnectDevice()"
+      [disabled]="deviceManager.isConnecting() || !deviceManager.isSupported()"
+      data-testid="connect-device-button"
+      class="sz-btn sz-btn-primary sz-btn-md"
+    >
+      @if (deviceManager.isConnecting()) {
+        <svg
+          class="h-4 w-4 animate-spin text-white"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+        >
+          <circle
+            class="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
             stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          <span>Connect device</span>
-        }
-      </button>
-    </div>
-  </header>
+            stroke-width="4"
+          ></circle>
+          <path
+            class="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          ></path>
+        </svg>
+        <span>Connecting...</span>
+      } @else {
+        <svg
+          class="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 4v16m8-8H4"
+          />
+        </svg>
+        <span>Connect device</span>
+      }
+    </button>
+  </app-page-header>
 
   <!-- Unsupported Browser Warning -->
   @if (!deviceManager.isSupported()) {
