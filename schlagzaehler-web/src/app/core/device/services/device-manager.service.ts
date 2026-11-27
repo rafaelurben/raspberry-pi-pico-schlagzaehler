@@ -3,7 +3,7 @@ import { Subscription } from 'rxjs';
 import { MAX_RETAINED_EVENTS, SerialConfig } from '../../config/serial.config';
 import { ConnectionState } from '../models/connection-state.type';
 import { DeviceEvent, EventDirection } from '../models/device-event.model';
-import { Device, DeviceState, SelectableGameMode } from '../models/device.model';
+import { Device, DeviceMetadata, DeviceState, SelectableGameMode } from '../models/device.model';
 import {
   CaptureProtocolMessage,
   PiezoCaptureResult,
@@ -22,6 +22,7 @@ import {
 } from '../protocol/companion-protocol';
 import { DeviceTransport, TransportEvent } from '../transport/device-transport.interface';
 import { WebSerialTransportFactory } from '../transport/web-serial-transport-factory.service';
+import { DeviceStorageService, StoredDevice } from './device-storage.service';
 
 interface ActiveDeviceEntry {
   readonly transport: DeviceTransport;
@@ -41,6 +42,7 @@ interface InProgressCapture {
 @Injectable({ providedIn: 'root' })
 export class DeviceManagerService implements OnDestroy {
   private readonly serialFactory = inject(WebSerialTransportFactory);
+  private readonly storageService = inject(DeviceStorageService);
 
   /**
    * List of all known devices and their current connection and game state.
@@ -95,6 +97,8 @@ export class DeviceManagerService implements OnDestroy {
       this.serialFactory.connect$?.subscribe((port) => {
         void this.handleAutoReconnect(port);
       }) ?? Subscription.EMPTY;
+
+    this.restoreStoredDevices();
   }
 
   /**
@@ -152,10 +156,12 @@ export class DeviceManagerService implements OnDestroy {
     });
 
     this.devices.update((current) => [...current, device]);
+    this.persistDevice(id);
 
     try {
       await this.bindTransport(id, transport);
       this.isConnecting.set(false);
+      this.persistDevice(id);
       return this.getDevice(id) ?? device;
     } catch (err) {
       this.isConnecting.set(false);
@@ -264,6 +270,7 @@ export class DeviceManagerService implements OnDestroy {
               : d,
           ),
         );
+        this.persistDevice(deviceId);
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -306,6 +313,7 @@ export class DeviceManagerService implements OnDestroy {
     }
     this.devices.update((devices) => devices.filter((d) => d.id !== deviceId));
     this.sensorCalibrations.delete(deviceId);
+    this.storageService.removeDevice(deviceId);
   }
 
   /**
@@ -319,6 +327,7 @@ export class DeviceManagerService implements OnDestroy {
     this.devices.update((devices) =>
       devices.map((d) => (d.id === deviceId ? new Device({ ...d, name: trimmed }) : d)),
     );
+    this.persistDevice(deviceId);
   }
 
   /**
@@ -698,6 +707,10 @@ export class DeviceManagerService implements OnDestroy {
       }),
     );
 
+    if (msg.type === 'HANDSHAKE_ACK') {
+      this.persistDevice(deviceId);
+    }
+
     // 4. Record sanitized / formatted message in event log
     this.appendEvent(deviceId, msg.rawText, 'received', now, msg.type);
 
@@ -913,7 +926,8 @@ export class DeviceManagerService implements OnDestroy {
         await this.bindTransport(matchedDevice.id, newTransport);
       }
 
-      const metadata = entry?.transport.getMetadata();
+      const activeTransport = this.activeDevices.get(matchedDevice.id)?.transport;
+      const metadata = activeTransport?.getMetadata();
       if (metadata) {
         this.devices.update((devices) =>
           devices.map((d) =>
@@ -925,10 +939,166 @@ export class DeviceManagerService implements OnDestroy {
               : d,
           ),
         );
+        this.persistDevice(matchedDevice.id);
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       this.handleDeviceError(matchedDevice.id, error);
+    }
+  }
+
+  private restoreStoredDevices(): void {
+    const stored = this.storageService.loadDevices();
+    if (stored.length === 0) {
+      return;
+    }
+
+    const restoredDevices = stored.map(
+      (s) =>
+        new Device({
+          id: s.id,
+          name: s.name,
+          transportType: s.transportType,
+          metadata: s.metadata,
+          state: new DeviceState({ connectionState: 'disconnected' }),
+        }),
+    );
+
+    this.devices.set(restoredDevices);
+    this.syncDeviceCounter(restoredDevices);
+
+    void this.reconnectStoredDevices();
+  }
+
+  private syncDeviceCounter(devices: readonly Device[]): void {
+    for (const dev of devices) {
+      const match = dev.name.match(/^Device\s+(\d+)$/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > this.deviceCounter) {
+          this.deviceCounter = num;
+        }
+      }
+    }
+  }
+
+  private async reconnectStoredDevices(): Promise<void> {
+    if (!this.isSupported()) {
+      return;
+    }
+
+    const candidateDevices = this.devices().filter(
+      (d) =>
+        d.transportType === 'serial' &&
+        d.state.connectionState === 'disconnected' &&
+        !this.manuallyDisconnectedDeviceIds.has(d.id),
+    );
+
+    if (candidateDevices.length === 0) {
+      return;
+    }
+
+    let ports: SerialPort[];
+    try {
+      ports = await this.serialFactory.getPorts();
+    } catch {
+      return;
+    }
+
+    const availablePorts = ports.filter((port) => !port.readable && !port.writable);
+    if (availablePorts.length === 0) {
+      return;
+    }
+
+    const remainingDevices = [...candidateDevices];
+    const usedPorts = new Set<SerialPort>();
+
+    // Pass 1: Match by exact USB vendor and product ID
+    for (const dev of candidateDevices) {
+      if (dev.metadata?.usbVendorId !== undefined) {
+        const matchingPort = availablePorts.find(
+          (p) => !usedPorts.has(p) && this.isPortMatchingMetadata(p, dev.metadata),
+        );
+        if (matchingPort) {
+          usedPorts.add(matchingPort);
+          const idx = remainingDevices.findIndex((d) => d.id === dev.id);
+          if (idx >= 0) {
+            remainingDevices.splice(idx, 1);
+          }
+          await this.attemptReconnectStoredDevice(dev.id, matchingPort);
+        }
+      }
+    }
+
+    // Pass 2: Assign any remaining available ports to remaining stored devices
+    for (const port of availablePorts) {
+      if (usedPorts.has(port) || remainingDevices.length === 0) {
+        continue;
+      }
+      const dev = remainingDevices.shift();
+      if (dev) {
+        usedPorts.add(port);
+        await this.attemptReconnectStoredDevice(dev.id, port);
+      }
+    }
+  }
+
+  private isPortMatchingMetadata(port: SerialPort, metadata?: DeviceMetadata): boolean {
+    if (metadata?.usbVendorId === undefined) {
+      return false;
+    }
+    try {
+      const info = port.getInfo();
+      return (
+        info.usbVendorId === metadata.usbVendorId &&
+        (metadata.usbProductId === undefined || info.usbProductId === metadata.usbProductId)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private async attemptReconnectStoredDevice(deviceId: string, port: SerialPort): Promise<void> {
+    const dev = this.getDevice(deviceId);
+    if (!dev) {
+      return;
+    }
+
+    this.updateDeviceConnectionState(deviceId, 'connecting');
+
+    try {
+      const transport = this.serialFactory.createTransport(port);
+      await this.bindTransport(deviceId, transport);
+      const metadata = transport.getMetadata();
+      if (metadata) {
+        this.devices.update((devices) =>
+          devices.map((d) =>
+            d.id === deviceId
+              ? new Device({
+                  ...d,
+                  metadata: { ...d.metadata, ...metadata },
+                })
+              : d,
+          ),
+        );
+        this.persistDevice(deviceId);
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.handleDeviceError(deviceId, error);
+    }
+  }
+
+  private persistDevice(deviceId: string): void {
+    const dev = this.getDevice(deviceId);
+    if (dev) {
+      const stored: StoredDevice = {
+        id: dev.id,
+        name: dev.name,
+        transportType: dev.transportType,
+        metadata: dev.metadata,
+      };
+      this.storageService.upsertDevice(stored);
     }
   }
 

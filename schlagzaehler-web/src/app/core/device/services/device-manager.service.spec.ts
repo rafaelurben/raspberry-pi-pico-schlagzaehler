@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { BehaviorSubject, Subject } from 'rxjs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ConnectionState } from '../models/connection-state.type';
 import { DeviceMetadata, TransportType } from '../models/device.model';
 import {
@@ -13,6 +13,7 @@ import {
 import { DeviceTransport, TransportEvent } from '../transport/device-transport.interface';
 import { WebSerialTransportFactory } from '../transport/web-serial-transport-factory.service';
 import { DeviceManagerService } from './device-manager.service';
+import { STORAGE_KEY_DEVICES, StoredDevice } from './device-storage.service';
 
 class MockDeviceTransport implements DeviceTransport {
   readonly transportType: TransportType = 'serial';
@@ -194,6 +195,14 @@ class MockWebSerialTransportFactory {
 describe('DeviceManagerService', () => {
   let service: DeviceManagerService;
   let mockFactory: MockWebSerialTransportFactory;
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
 
   const setupService = (factoryOverride?: MockWebSerialTransportFactory) => {
     mockFactory = factoryOverride ?? new MockWebSerialTransportFactory();
@@ -1047,5 +1056,179 @@ describe('DeviceManagerService', () => {
     expect(events.some((e) => e.payload === '[CMD_HANDSHAKE]' && e.direction === 'sent')).toBe(
       true,
     );
+  });
+
+  describe('Storage persistence & reopen reconnection', () => {
+    it('should restore stored devices from localStorage on initialization in disconnected state', () => {
+      const stored: StoredDevice[] = [
+        { id: 'dev-1', name: 'Saved Target 1', transportType: 'serial' },
+        { id: 'dev-2', name: 'Saved Target 2', transportType: 'serial' },
+      ];
+      localStorage.setItem(STORAGE_KEY_DEVICES, JSON.stringify(stored));
+
+      setupService();
+
+      const devices = service.devices();
+      expect(devices).toHaveLength(2);
+      expect(devices[0].id).toBe('dev-1');
+      expect(devices[0].name).toBe('Saved Target 1');
+      expect(devices[0].state.connectionState).toBe('disconnected');
+      expect(devices[1].id).toBe('dev-2');
+      expect(devices[1].name).toBe('Saved Target 2');
+      expect(devices[1].state.connectionState).toBe('disconnected');
+    });
+
+    it('should automatically reconnect matching stored devices when authorized serial ports exist on reopen', async () => {
+      const stored: StoredDevice[] = [
+        {
+          id: 'dev-alpha',
+          name: 'Pico Alpha',
+          transportType: 'serial',
+          metadata: { usbVendorId: 0x2e8a, usbProductId: 0x000a },
+        },
+      ];
+      localStorage.setItem(STORAGE_KEY_DEVICES, JSON.stringify(stored));
+
+      const port1 = {
+        getInfo: () => ({ usbVendorId: 0x2e8a, usbProductId: 0x000a }),
+        readable: null,
+        writable: null,
+      } as unknown as SerialPort;
+
+      const mockTransport = new MockDeviceTransport(
+        { usbVendorId: 0x2e8a, usbProductId: 0x000a },
+        port1,
+      );
+
+      const customFactory = new MockWebSerialTransportFactory();
+      customFactory.portsToReturn = [port1];
+      customFactory.transportsToReturn = [mockTransport];
+
+      setupService(customFactory);
+
+      // Allow async reconnectStoredDevices() task to execute
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.connectCalls).toBe(1);
+      const dev = service.getDevice('dev-alpha');
+      expect(dev).toBeDefined();
+      expect(dev?.state.connectionState).toBe('connecting');
+
+      // Acknowledge handshake
+      emitHandshakeAck(mockTransport);
+      expect(service.getDevice('dev-alpha')?.state.connectionState).toBe('connected');
+    });
+
+    it('should continue reconnecting other stored devices if one port fails to connect', async () => {
+      const stored: StoredDevice[] = [
+        {
+          id: 'dev-fail',
+          name: 'Failing Pico',
+          transportType: 'serial',
+          metadata: { usbVendorId: 0x2e8a, usbProductId: 0x0001 },
+        },
+        {
+          id: 'dev-ok',
+          name: 'Working Pico',
+          transportType: 'serial',
+          metadata: { usbVendorId: 0x2e8a, usbProductId: 0x0002 },
+        },
+      ];
+      localStorage.setItem(STORAGE_KEY_DEVICES, JSON.stringify(stored));
+
+      const portFail = {
+        getInfo: () => ({ usbVendorId: 0x2e8a, usbProductId: 0x0001 }),
+        readable: null,
+        writable: null,
+      } as unknown as SerialPort;
+
+      const portOk = {
+        getInfo: () => ({ usbVendorId: 0x2e8a, usbProductId: 0x0002 }),
+        readable: null,
+        writable: null,
+      } as unknown as SerialPort;
+
+      const transportFail = new MockDeviceTransport(
+        { usbVendorId: 0x2e8a, usbProductId: 0x0001 },
+        portFail,
+      );
+      transportFail.shouldFailConnect = true;
+
+      const transportOk = new MockDeviceTransport(
+        { usbVendorId: 0x2e8a, usbProductId: 0x0002 },
+        portOk,
+      );
+
+      const customFactory = new MockWebSerialTransportFactory();
+      customFactory.portsToReturn = [portFail, portOk];
+      customFactory.transportsToReturn = [transportFail, transportOk];
+
+      setupService(customFactory);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(service.getDevice('dev-fail')?.state.connectionState).toBe('error');
+      expect(service.getDevice('dev-ok')?.state.connectionState).toBe('connecting');
+      emitHandshakeAck(transportOk);
+      expect(service.getDevice('dev-ok')?.state.connectionState).toBe('connected');
+    });
+
+    it('should persist newly attached devices to localStorage', async () => {
+      setupService();
+      const transport = new MockDeviceTransport({ usbVendorId: 0x2e8a, usbProductId: 0x000a });
+      mockFactory.transportsToReturn = [transport];
+
+      const dev = await service.connectSerialDevice('Target One');
+      expect(dev).toBeDefined();
+
+      const raw = localStorage.getItem(STORAGE_KEY_DEVICES);
+      expect(raw).toBeTruthy();
+      const parsed: StoredDevice[] = JSON.parse(raw!);
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].id).toBe(dev!.id);
+      expect(parsed[0].name).toBe('Target One');
+      expect(parsed[0].transportType).toBe('serial');
+    });
+
+    it('should update localStorage when a device is renamed', async () => {
+      setupService();
+      const transport = new MockDeviceTransport();
+      mockFactory.transportsToReturn = [transport];
+
+      const dev = await service.connectSerialDevice('Initial Name');
+      service.updateDeviceName(dev!.id, 'Updated Name');
+
+      const raw = localStorage.getItem(STORAGE_KEY_DEVICES);
+      const parsed: StoredDevice[] = JSON.parse(raw!);
+      expect(parsed[0].name).toBe('Updated Name');
+    });
+
+    it('should update localStorage metadata when HANDSHAKE_ACK is received', async () => {
+      setupService();
+      const transport = new MockDeviceTransport();
+      mockFactory.transportsToReturn = [transport];
+
+      await service.connectSerialDevice('Pico Unit');
+      emitHandshakeAck(transport, 0, 1);
+
+      const raw = localStorage.getItem(STORAGE_KEY_DEVICES);
+      const parsed: StoredDevice[] = JSON.parse(raw!);
+      expect(parsed[0].metadata?.fwVersion).toBe('0.3.0');
+      expect(parsed[0].metadata?.uptimeMs).toBe(9999);
+    });
+
+    it('should remove a device from localStorage when removeDevice is called', async () => {
+      setupService();
+      const transport = new MockDeviceTransport();
+      mockFactory.transportsToReturn = [transport];
+
+      const dev = await service.connectSerialDevice('To Delete');
+      expect(localStorage.getItem(STORAGE_KEY_DEVICES)).toBeTruthy();
+
+      await service.removeDevice(dev!.id);
+      const raw = localStorage.getItem(STORAGE_KEY_DEVICES);
+      const parsed: StoredDevice[] = JSON.parse(raw!);
+      expect(parsed).toHaveLength(0);
+    });
   });
 });
