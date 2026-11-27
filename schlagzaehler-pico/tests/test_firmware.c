@@ -123,8 +123,9 @@ int UsbSerialDriver_read_bytes(uint8_t* buffer, size_t max_len) {
 /* Mock DisplayDriver for testing */
 static char s_last_display_strings[16][64];
 static int s_display_string_count = 0;
+static int s_display_clear_count = 0;
 
-void DisplayDriver_clear(uint16_t color) { (void)color; s_display_string_count = 0; }
+void DisplayDriver_clear(uint16_t color) { (void)color; s_display_clear_count++; s_display_string_count = 0; }
 void DisplayDriver_draw_hline(int16_t y, uint16_t color) { (void)y; (void)color; }
 void DisplayDriver_draw_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) { (void)x; (void)y; (void)w; (void)h; (void)color; }
 void DisplayDriver_fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) { (void)x; (void)y; (void)w; (void)h; (void)color; }
@@ -831,6 +832,129 @@ void test_display_presenter_capturing(void) {
     assert(found_sensor_all);
 
     printf("PASS: test_display_presenter_capturing\n");
+}
+
+void test_display_presenter_runtime_calibration(void) {
+    DisplayPresenter dp;
+    DisplayPresenter_init(&dp);
+
+    /* 1. Complete initial boot into READY */
+    Core0ToCore1Message ready_state_msg = {
+        .type = MSG_GAME_STATE_CHANGED,
+        .timestamp_us = 1000,
+        .data.game_state = { .old_state = GAME_STATE_BOOT, .new_state = GAME_STATE_READY }
+    };
+    DisplayPresenter_handle_message(&dp, &ready_state_msg);
+    Core0ToCore1Message armed_sensor_msg = {
+        .type = MSG_SENSOR_STATUS_CHANGED,
+        .timestamp_us = 1000,
+        .data.sensor_status = { .state = SENSOR_STATE_ARMED, .target = 255 }
+    };
+    DisplayPresenter_handle_message(&dp, &armed_sensor_msg);
+
+    s_display_clear_count = 0;
+    DisplayPresenter_render(&dp);
+    assert(s_display_clear_count == 1); /* Rendered READY */
+
+    /* Spurious timer update while in READY should NOT clear display / flash */
+    Core0ToCore1Message timer_msg = {
+        .type = MSG_TIMER_CHANGED,
+        .timestamp_us = 2000,
+        .data.timer = { .elapsed_ms = 100, .remaining_ms = 0 }
+    };
+    DisplayPresenter_handle_message(&dp, &timer_msg);
+    DisplayPresenter_render(&dp);
+    assert(s_display_clear_count == 1); /* No re-clearing of screen */
+
+    /* 2. Runtime calibration triggered via companion command */
+    Core0ToCore1Message calib_start_msg = {
+        .type = MSG_SENSOR_STATUS_CHANGED,
+        .timestamp_us = 3000,
+        .data.sensor_status = { .state = SENSOR_STATE_CALIBRATING, .target = 255 }
+    };
+    DisplayPresenter_handle_message(&dp, &calib_start_msg);
+    assert(dp.calib_percent == 0);
+    assert(dp.needs_full_redraw == true);
+
+    DisplayPresenter_render(&dp);
+    assert(s_display_clear_count == 2); /* Cleared to render calibration screen */
+
+    bool found_calib_title = false;
+    for (int i = 0; i < s_display_string_count; i++) {
+        if (strcmp(s_last_display_strings[i], "Kalibriere...") == 0) found_calib_title = true;
+    }
+    assert(found_calib_title);
+
+    /* 3. Calibration progress updates: progress bar repaints without screen flicker */
+    Core0ToCore1Message prog_msg = {
+        .type = MSG_CALIBRATION_PROGRESS,
+        .timestamp_us = 4000,
+        .data.calibration_progress = { .progress_percent = 45 }
+    };
+    DisplayPresenter_handle_message(&dp, &prog_msg);
+    DisplayPresenter_render(&dp);
+    assert(s_display_clear_count == 2); /* NOT cleared again! Progress bar updated smoothly */
+
+    bool found_pct_45 = false;
+    for (int i = 0; i < s_display_string_count; i++) {
+        if (strstr(s_last_display_strings[i], "45%") != NULL) found_pct_45 = true;
+    }
+    assert(found_pct_45);
+
+    /* 4. Calibration completes: returns cleanly to READY screen */
+    Core0ToCore1Message calib_end_msg = {
+        .type = MSG_SENSOR_STATUS_CHANGED,
+        .timestamp_us = 5000,
+        .data.sensor_status = { .state = SENSOR_STATE_ARMED, .target = 255 }
+    };
+    DisplayPresenter_handle_message(&dp, &calib_end_msg);
+    Core0ToCore1Message calib_res_msg = {
+        .type = MSG_CALIBRATION_RESULT,
+        .timestamp_us = 5000,
+        .data.calibration_result = {
+            .sensor_id = 0,
+            .success = true,
+            .repeated = false,
+            .baseline = 1980,
+            .noise = 2,
+            .threshold = 2005
+        }
+    };
+    DisplayPresenter_handle_message(&dp, &calib_res_msg);
+
+    DisplayPresenter_render(&dp);
+    assert(s_display_clear_count == 3); /* Cleared to restore READY screen */
+    bool found_ready = false;
+    for (int i = 0; i < s_display_string_count; i++) {
+        if (strcmp(s_last_display_strings[i], "BEREIT!") == 0) found_ready = true;
+    }
+    assert(found_ready);
+
+    /* 5. GameController_on_command aborts RUNNING game if MSG_REQUEST_CALIBRATION is received */
+    Config cfg;
+    Config_set_defaults(&cfg);
+    OsalQueue q0_to_q1;
+    OsalQueue_init(&q0_to_q1, sizeof(Core0ToCore1Message), 64);
+    GameController gc;
+    GameController_init(&gc, &cfg, &q0_to_q1);
+
+    GameController_on_sensor_state(&gc, SENSOR_STATE_CALIBRATING, 255, NULL, NULL, NULL, NULL);
+    GameController_on_sensor_state(&gc, SENSOR_STATE_ARMED, 255, NULL, NULL, NULL, NULL);
+    assert(gc.state_model.state == GAME_STATE_READY);
+
+    HitEvent ev = { .hit_id = 1, .peak_value = 2100, .intensity = 100, .timestamp_us = 6000 };
+    GameController_on_hit(&gc, &ev);
+    assert(gc.state_model.state == GAME_STATE_RUNNING);
+
+    Core1ToCore0Message req_calib = {
+        .type = MSG_REQUEST_CALIBRATION,
+        .timestamp_us = 7000
+    };
+    GameController_on_command(&gc, &req_calib);
+    assert(gc.state_model.state == GAME_STATE_READY);
+    assert(gc.state_model.score == 0);
+
+    printf("PASS: test_display_presenter_runtime_calibration\n");
 }
 
 void test_ignored_sensor_calibration_and_detection(void) {
@@ -1630,6 +1754,7 @@ int main(void) {
     test_signal_capture();
     test_button_controller_interrupts();
     test_display_presenter_capturing();
+    test_display_presenter_runtime_calibration();
     test_ignored_sensor_calibration_and_detection();
     test_all_sensors_ignored_transitions_to_error();
     test_binary_crc16();
@@ -1640,6 +1765,6 @@ int main(void) {
     test_binary_capture_chunked_streaming();
     test_dual_mode_streaming_parser();
     test_pre_capture_repeated_calibration();
-    printf("--- ALL 17 ARCHITECTURE TEST SUITES PASSED! ---\n");
+    printf("--- ALL 18 ARCHITECTURE TEST SUITES PASSED! ---\n");
     return 0;
 }

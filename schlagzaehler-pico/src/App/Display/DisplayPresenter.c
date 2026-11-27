@@ -77,7 +77,7 @@ void DisplayPresenter_handle_message(DisplayPresenter* presenter, const Core0ToC
             if (!msg->data.calibration_result.success) {
                 presenter->sensor_state = SENSOR_STATE_ERROR;
                 presenter->needs_full_redraw = true;
-            } else if (presenter->state == GAME_STATE_BOOT) {
+            } else if (presenter->state == GAME_STATE_BOOT || !msg->data.calibration_result.repeated) {
                 presenter->needs_full_redraw = true;
             }
             break;
@@ -85,10 +85,15 @@ void DisplayPresenter_handle_message(DisplayPresenter* presenter, const Core0ToC
             SensorState old_s = presenter->sensor_state;
             presenter->sensor_state = msg->data.sensor_status.state;
             presenter->capture_target = msg->data.sensor_status.target;
+            if (presenter->sensor_state == SENSOR_STATE_CALIBRATING && old_s != SENSOR_STATE_CALIBRATING) {
+                presenter->calib_percent = 0;
+            }
             if (presenter->sensor_state == SENSOR_STATE_ERROR ||
+                presenter->sensor_state == SENSOR_STATE_CALIBRATING ||
                 presenter->sensor_state == SENSOR_STATE_CAPTURE_ARMED ||
                 presenter->sensor_state == SENSOR_STATE_CAPTURING ||
                 presenter->sensor_state == SENSOR_STATE_CAPTURE_TX_WAIT ||
+                old_s == SENSOR_STATE_CALIBRATING ||
                 old_s == SENSOR_STATE_CAPTURE_ARMED ||
                 old_s == SENSOR_STATE_CAPTURING ||
                 old_s == SENSOR_STATE_CAPTURE_TX_WAIT) {
@@ -293,24 +298,43 @@ void DisplayPresenter_render(DisplayPresenter* presenter) {
         return;
     }
 
+    if (presenter->state == GAME_STATE_BOOT ||
+        presenter->sensor_state == SENSOR_STATE_CALIBRATING ||
+        presenter->sensor_state == SENSOR_STATE_ERROR) {
+        render_boot(presenter);
+        presenter->last_rendered_state = presenter->state;
+        presenter->needs_full_redraw = false;
+        presenter->needs_score_redraw = false;
+        presenter->needs_timer_redraw = false;
+        return;
+    }
+
     switch (presenter->state) {
         case GAME_STATE_BOOT:
             render_boot(presenter);
             break;
         case GAME_STATE_MENU:
-            render_menu(presenter);
+            if (presenter->needs_full_redraw) {
+                render_menu(presenter);
+            }
             break;
         case GAME_STATE_READY:
-            render_ready(presenter);
+            if (presenter->needs_full_redraw) {
+                render_ready(presenter);
+            }
             break;
         case GAME_STATE_RUNNING:
             render_running(presenter);
             break;
         case GAME_STATE_FINISHED:
-            render_finished(presenter);
+            if (presenter->needs_full_redraw) {
+                render_finished(presenter);
+            }
             break;
         case GAME_STATE_CAPTURING:
-            render_capturing(presenter);
+            if (presenter->needs_full_redraw) {
+                render_capturing(presenter);
+            }
             break;
     }
 

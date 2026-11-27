@@ -427,6 +427,14 @@ void GameController_on_command(GameController* gc, const Core1ToCore0Message* cm
             broadcast_score_change(gc);
             broadcast_timer_change(gc);
             break;
+        case MSG_REQUEST_CALIBRATION:
+            if (gc->state_model.state == GAME_STATE_RUNNING) {
+                GameState_reset_score(&gc->state_model);
+                gc->state_model.state = GAME_STATE_READY;
+                broadcast_state_change(gc, GAME_STATE_RUNNING, GAME_STATE_READY);
+                broadcast_score_change(gc);
+            }
+            break;
         default:
             break;
     }
