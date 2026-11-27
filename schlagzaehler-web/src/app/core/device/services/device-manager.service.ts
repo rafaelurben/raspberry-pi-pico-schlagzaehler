@@ -86,7 +86,16 @@ export class DeviceManagerService implements OnDestroy {
   private readonly inProgressCaptures = new Map<string, InProgressCapture>();
   private readonly deviceCaptureTargets = new Map<string, number | 'all' | undefined>();
   private readonly sensorCalibrations = new Map<string, Map<number, SensorCalibration>>();
+  private readonly manuallyDisconnectedDeviceIds = new Set<string>();
+  private readonly autoReconnectSubscription: Subscription;
   private deviceCounter = 0;
+
+  constructor() {
+    this.autoReconnectSubscription =
+      this.serialFactory.connect$?.subscribe((port) => {
+        void this.handleAutoReconnect(port);
+      }) ?? Subscription.EMPTY;
+  }
 
   /**
    * Prompts the user to select a Web Serial port, opens it, and registers the device.
@@ -203,9 +212,7 @@ export class DeviceManagerService implements OnDestroy {
 
   /**
    * Reconnects a previously registered device that disconnected or entered an error state.
-   * If direct reconnection fails (e.g. because the physical USB port was reconnected/replugged),
-   * prompts the user with the port picker and associates the newly selected port with the
-   * existing device.
+   * Delegates reconnection directly to the device transport, keeping DeviceManager transport-independent.
    */
   async reconnectDevice(deviceId: string): Promise<void> {
     const existingDevice = this.getDevice(deviceId);
@@ -216,6 +223,8 @@ export class DeviceManagerService implements OnDestroy {
     }
 
     this.lastError.set(null);
+    this.manuallyDisconnectedDeviceIds.delete(deviceId);
+
     this.devices.update((devices) =>
       devices.map((d) =>
         d.id === deviceId
@@ -235,94 +244,39 @@ export class DeviceManagerService implements OnDestroy {
     );
 
     const entry = this.activeDevices.get(deviceId);
-    if (entry) {
-      try {
-        await entry.transport.connect();
-        return;
-      } catch {
-        // Direct reconnection failed (e.g., physical USB disconnect/reconnect invalidated the port handle).
-        // Clean up previous transport and fall back to the browser port picker below.
-        entry.subscriptions.unsubscribe();
-        try {
-          await entry.transport.disconnect();
-        } catch {
-          // Ignore cleanup errors
-        }
-        this.activeDevices.delete(deviceId);
-
-        // Reset device state back to connecting (clearing any error message emitted by previous transport)
-        this.devices.update((devices) =>
-          devices.map((d) =>
-            d.id === deviceId
-              ? new Device({
-                  ...d,
-                  errorMessage: undefined,
-                  state: new DeviceState({
-                    ...d.state,
-                    connectionState: 'connecting',
-                    gameState: 'UNKNOWN',
-                    sensorState: 'UNKNOWN',
-                    isReady: false,
-                  }),
-                })
-              : d,
-          ),
-        );
-      }
-    }
-
-    if (!this.isSupported()) {
-      const error = new Error('The Web Serial API is not supported in this browser.');
+    if (!entry) {
+      const error = new Error(`Device ${deviceId} has no active transport.`);
       this.handleDeviceError(deviceId, error);
       throw error;
     }
 
-    let port: SerialPort;
     try {
-      port = await this.serialFactory.requestPort();
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'NotFoundError') {
+      await entry.transport.connect();
+      const metadata = entry.transport.getMetadata();
+      if (metadata) {
         this.devices.update((devices) =>
           devices.map((d) =>
             d.id === deviceId
               ? new Device({
                   ...d,
-                  errorMessage: undefined,
-                  state: new DeviceState({ ...d.state, connectionState: 'disconnected' }),
+                  metadata: { ...d.metadata, ...metadata },
                 })
               : d,
           ),
         );
-        return;
       }
+    } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       this.handleDeviceError(deviceId, error);
       throw error;
     }
-
-    const newTransport = this.serialFactory.createTransport(port);
-    const metadata = newTransport.getMetadata();
-    if (metadata) {
-      this.devices.update((devices) =>
-        devices.map((d) =>
-          d.id === deviceId
-            ? new Device({
-                ...d,
-                transportType: newTransport.transportType,
-                metadata: { ...d.metadata, ...metadata },
-              })
-            : d,
-        ),
-      );
-    }
-
-    await this.bindTransport(deviceId, newTransport);
   }
 
   /**
    * Disconnects an active device, releasing its serial port while keeping it available for reconnection.
    */
   async disconnectDevice(deviceId: string): Promise<void> {
+    this.manuallyDisconnectedDeviceIds.add(deviceId);
     const entry = this.activeDevices.get(deviceId);
     if (!entry) {
       this.updateDeviceConnectionState(deviceId, 'disconnected');
@@ -344,6 +298,7 @@ export class DeviceManagerService implements OnDestroy {
    */
   async removeDevice(deviceId: string): Promise<void> {
     await this.disconnectDevice(deviceId);
+    this.manuallyDisconnectedDeviceIds.delete(deviceId);
     const entry = this.activeDevices.get(deviceId);
     if (entry) {
       entry.subscriptions.unsubscribe();
@@ -928,6 +883,55 @@ export class DeviceManagerService implements OnDestroy {
     );
   }
 
+  private async handleAutoReconnect(port: SerialPort): Promise<void> {
+    const candidates = this.devices().filter(
+      (d) =>
+        d.transportType === 'serial' &&
+        d.state.connectionState !== 'connected' &&
+        d.state.connectionState !== 'connecting' &&
+        !this.manuallyDisconnectedDeviceIds.has(d.id),
+    );
+
+    if (candidates.length === 0) {
+      return;
+    }
+
+    const matchedDevice = this.serialFactory.findMatchingDevice(port, candidates);
+    if (!matchedDevice) {
+      return;
+    }
+
+    const entry = this.activeDevices.get(matchedDevice.id);
+    const reconnectable = entry?.transport as
+      { reconnectWithPort?: (port: SerialPort) => Promise<void> } | undefined;
+
+    try {
+      if (reconnectable && typeof reconnectable.reconnectWithPort === 'function') {
+        await reconnectable.reconnectWithPort(port);
+      } else {
+        const newTransport = this.serialFactory.createTransport(port);
+        await this.bindTransport(matchedDevice.id, newTransport);
+      }
+
+      const metadata = entry?.transport.getMetadata();
+      if (metadata) {
+        this.devices.update((devices) =>
+          devices.map((d) =>
+            d.id === matchedDevice.id
+              ? new Device({
+                  ...d,
+                  metadata: { ...d.metadata, ...metadata },
+                })
+              : d,
+          ),
+        );
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.handleDeviceError(matchedDevice.id, error);
+    }
+  }
+
   private generateId(): string {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
       return crypto.randomUUID();
@@ -936,6 +940,7 @@ export class DeviceManagerService implements OnDestroy {
   }
 
   async ngOnDestroy(): Promise<void> {
+    this.autoReconnectSubscription.unsubscribe();
     const ids = Array.from(this.activeDevices.keys());
     const disconnects = ids.map(async (id) => {
       await this.disconnectDevice(id);

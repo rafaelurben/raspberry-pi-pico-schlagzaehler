@@ -29,15 +29,53 @@ class MockDeviceTransport implements DeviceTransport {
   shouldFailConnect = false;
   sentPayloads: (string | Uint8Array)[] = [];
 
-  constructor(private readonly metadata?: DeviceMetadata) {}
+  constructor(
+    private readonly metadata?: DeviceMetadata,
+    private port?: SerialPort,
+    private readonly factory?: MockWebSerialTransportFactory,
+  ) {}
+
+  getPort(): SerialPort | undefined {
+    return this.port;
+  }
 
   getMetadata(): DeviceMetadata | undefined {
     return this.metadata ?? { usbVendorId: 0x2e8a, usbProductId: 0x000a };
   }
 
+  async reconnectWithPort(newPort: SerialPort): Promise<void> {
+    this.port = newPort;
+    await this.connect();
+  }
+
   async connect(): Promise<void> {
     this.connectCalls++;
     if (this.shouldFailConnect) {
+      if (this.factory) {
+        const ports = await this.factory.getPorts();
+        const matched = this.factory.findMatchingPort(ports, this.metadata);
+        if (matched) {
+          this.port = matched;
+          this.shouldFailConnect = false;
+          this.stateSubject.next('connected');
+          return;
+        }
+
+        try {
+          const picked = await this.factory.requestPort();
+          this.port = picked;
+          this.shouldFailConnect = false;
+          this.stateSubject.next('connected');
+          return;
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'NotFoundError') {
+            this.stateSubject.next('disconnected');
+            return;
+          }
+          this.stateSubject.next('error');
+          throw err;
+        }
+      }
       this.stateSubject.next('error');
       throw new Error('Failed to open port');
     }
@@ -83,20 +121,73 @@ class MockWebSerialTransportFactory {
   supported = true;
   transportsToReturn: MockDeviceTransport[] = [];
   requestPortError: Error | null = null;
+  portsToReturn: SerialPort[] = [];
+  requestPortCalls = 0;
+  getPortsCalls = 0;
+  readonly connectSubject = new Subject<SerialPort>();
+  readonly connect$ = this.connectSubject.asObservable();
 
   isSupported(): boolean {
     return this.supported;
   }
 
+  async getPorts(): Promise<SerialPort[]> {
+    this.getPortsCalls++;
+    return this.portsToReturn;
+  }
+
   async requestPort(): Promise<SerialPort> {
+    this.requestPortCalls++;
     if (this.requestPortError) {
       throw this.requestPortError;
     }
     return {} as SerialPort;
   }
 
-  createTransport(): DeviceTransport {
-    return this.transportsToReturn.shift() ?? new MockDeviceTransport();
+  findMatchingPort(ports: readonly SerialPort[], metadata?: DeviceMetadata): SerialPort | null {
+    const available = ports.filter((p) => !p.readable && !p.writable);
+    if (available.length === 0) return null;
+    if (metadata?.usbVendorId !== undefined) {
+      const match = available.find((p) => {
+        try {
+          const info = p.getInfo();
+          return (
+            info.usbVendorId === metadata.usbVendorId &&
+            (metadata.usbProductId === undefined || info.usbProductId === metadata.usbProductId)
+          );
+        } catch {
+          return false;
+        }
+      });
+      if (match) return match;
+    }
+    return available[0] ?? null;
+  }
+
+  findMatchingDevice<T extends { metadata?: DeviceMetadata }>(
+    port: SerialPort,
+    candidates: readonly T[],
+  ): T | null {
+    if (candidates.length === 0 || port.readable || port.writable) return null;
+    try {
+      const info = port.getInfo();
+      if (info.usbVendorId !== undefined) {
+        const match = candidates.find(
+          (c) =>
+            c.metadata?.usbVendorId === info.usbVendorId &&
+            (c.metadata?.usbProductId === undefined ||
+              c.metadata?.usbProductId === info.usbProductId),
+        );
+        if (match) return match;
+      }
+    } catch {
+      // Ignore
+    }
+    return candidates[0] ?? null;
+  }
+
+  createTransport(port?: SerialPort): DeviceTransport {
+    return this.transportsToReturn.shift() ?? new MockDeviceTransport(undefined, port, this);
   }
 }
 
@@ -297,41 +388,7 @@ describe('DeviceManagerService', () => {
     expect(service.getDevice(dev1!.id)?.state.connectionState).toBe('connected');
   });
 
-  it('should prompt user with port picker if reconnection fails and associate new port with existing device', async () => {
-    setupService();
-    const transport1 = new MockDeviceTransport();
-    mockFactory.transportsToReturn = [transport1];
-
-    const dev = await service.connectSerialDevice('My Target');
-    expect(dev?.name).toBe('My Target');
-    const originalId = dev!.id;
-    emitHandshakeAck(transport1);
-
-    // Simulate device disconnected (e.g. unplugged) and transport1 cannot reconnect
-    await service.disconnectDevice(originalId);
-    transport1.shouldFailConnect = true;
-
-    const transport2 = new MockDeviceTransport({ usbVendorId: 0x2e8a, usbProductId: 0x000b });
-    mockFactory.transportsToReturn = [transport2];
-
-    await service.reconnectDevice(originalId);
-
-    // transport1 was attempted and failed
-    expect(transport1.connectCalls).toBe(2);
-    // transport2 was created from port picker and connected
-    expect(transport2.connectCalls).toBe(1);
-
-    const reconnectedDevice = service.getDevice(originalId);
-    expect(reconnectedDevice).toBeDefined();
-    expect(reconnectedDevice?.id).toBe(originalId);
-    expect(reconnectedDevice?.name).toBe('My Target');
-    expect(reconnectedDevice?.state.connectionState).toBe('connecting');
-    emitHandshakeAck(transport2);
-    expect(service.getDevice(originalId)?.state.connectionState).toBe('connected');
-    expect(reconnectedDevice?.metadata?.usbProductId).toBe(0x000b);
-  });
-
-  it('should gracefully handle user cancelling port picker when reconnection fails', async () => {
+  it('should set error state if entry.transport.connect() fails on reconnect', async () => {
     setupService();
     const transport1 = new MockDeviceTransport();
     mockFactory.transportsToReturn = [transport1];
@@ -341,49 +398,6 @@ describe('DeviceManagerService', () => {
 
     await service.disconnectDevice(devId);
     transport1.shouldFailConnect = true;
-
-    // Simulate user cancelling port picker
-    mockFactory.requestPortError = new DOMException('User cancelled', 'NotFoundError');
-
-    await expect(service.reconnectDevice(devId)).resolves.toBeUndefined();
-
-    const device = service.getDevice(devId);
-    expect(device?.state.connectionState).toBe('disconnected');
-    expect(device?.errorMessage).toBeUndefined();
-  });
-
-  it('should fail reconnection if Web Serial is not supported when direct reconnect fails', async () => {
-    const unsupportedFactory = new MockWebSerialTransportFactory();
-    unsupportedFactory.supported = false;
-    setupService(unsupportedFactory);
-
-    const transport1 = new MockDeviceTransport();
-    const dev = await service.attachDevice(transport1);
-    const devId = dev.id;
-
-    await service.disconnectDevice(devId);
-    transport1.shouldFailConnect = true;
-
-    await expect(service.reconnectDevice(devId)).rejects.toThrow(
-      'The Web Serial API is not supported in this browser.',
-    );
-    expect(service.getDevice(devId)?.state.connectionState).toBe('error');
-  });
-
-  it('should set error state if new transport fails to connect after port selection', async () => {
-    setupService();
-    const transport1 = new MockDeviceTransport();
-    mockFactory.transportsToReturn = [transport1];
-
-    const dev = await service.connectSerialDevice();
-    const devId = dev!.id;
-
-    await service.disconnectDevice(devId);
-    transport1.shouldFailConnect = true;
-
-    const transport2 = new MockDeviceTransport();
-    transport2.shouldFailConnect = true;
-    mockFactory.transportsToReturn = [transport2];
 
     await expect(service.reconnectDevice(devId)).rejects.toThrow('Failed to open port');
     expect(service.getDevice(devId)?.state.connectionState).toBe('error');
@@ -397,7 +411,7 @@ describe('DeviceManagerService', () => {
     );
   });
 
-  it('should show port picker directly if device has no active transport entry', async () => {
+  it('should throw error if device has no active transport entry', async () => {
     setupService();
     const transport1 = new MockDeviceTransport();
     mockFactory.transportsToReturn = [transport1];
@@ -409,15 +423,146 @@ describe('DeviceManagerService', () => {
     // Manually delete active transport entry to simulate orphaned/lost transport
     (service as unknown as { activeDevices: Map<string, unknown> }).activeDevices.delete(devId);
 
-    const transport2 = new MockDeviceTransport();
-    mockFactory.transportsToReturn = [transport2];
+    await expect(service.reconnectDevice(devId)).rejects.toThrow(
+      `Device ${devId} has no active transport.`,
+    );
+    expect(service.getDevice(devId)?.state.connectionState).toBe('error');
+  });
 
-    await service.reconnectDevice(devId);
-    expect(transport2.connectCalls).toBe(1);
-    expect(service.getDevice(devId)?.state.connectionState).toBe('connecting');
-    emitHandshakeAck(transport2);
+  it('should automatically reconnect unintentionally disconnected device when serial connect event fires', async () => {
+    setupService();
+    const transport1 = new MockDeviceTransport({ usbVendorId: 0x2e8a, usbProductId: 0x000a });
+    mockFactory.transportsToReturn = [transport1];
+
+    const dev = await service.connectSerialDevice('Pico Unit');
+    const devId = dev!.id;
+    emitHandshakeAck(transport1);
     expect(service.getDevice(devId)?.state.connectionState).toBe('connected');
-    expect(service.getDevice(devId)?.name).toBe('Device X');
+
+    // Simulate unexpected disconnect (e.g. cable pulled, state emits 'disconnected' without calling disconnectDevice)
+    transport1.stateSubject.next('disconnected');
+    expect(service.getDevice(devId)?.state.connectionState).toBe('disconnected');
+
+    // User plugs USB cable back in: connect event fires on navigator.serial
+    const reconnectedPort = {
+      getInfo: () => ({ usbVendorId: 0x2e8a, usbProductId: 0x000a }),
+      readable: null,
+      writable: null,
+    } as unknown as SerialPort;
+
+    mockFactory.connectSubject.next(reconnectedPort);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Automatically reconnected via transport's reconnectWithPort
+    expect(transport1.connectCalls).toBe(2);
+    expect(transport1.getPort()).toBe(reconnectedPort);
+    expect(service.getDevice(devId)?.state.connectionState).toBe('connecting');
+    emitHandshakeAck(transport1);
+    expect(service.getDevice(devId)?.state.connectionState).toBe('connected');
+  });
+
+  it('should NOT automatically reconnect a device that was manually disconnected via disconnectDevice()', async () => {
+    setupService();
+    const transport1 = new MockDeviceTransport({ usbVendorId: 0x2e8a, usbProductId: 0x000a });
+    mockFactory.transportsToReturn = [transport1];
+
+    const dev = await service.connectSerialDevice();
+    const devId = dev!.id;
+    emitHandshakeAck(transport1);
+
+    // Explicit manual disconnect
+    await service.disconnectDevice(devId);
+    expect(service.getDevice(devId)?.state.connectionState).toBe('disconnected');
+
+    // Serial connect event fires for the port
+    const port = {
+      getInfo: () => ({ usbVendorId: 0x2e8a, usbProductId: 0x000a }),
+      readable: null,
+      writable: null,
+    } as unknown as SerialPort;
+
+    mockFactory.connectSubject.next(port);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Should NOT have attempted reconnection
+    expect(transport1.connectCalls).toBe(1);
+    expect(service.getDevice(devId)?.state.connectionState).toBe('disconnected');
+  });
+
+  it('should clear manual disconnect status when manually reconnecting so future unexpected disconnects auto-reconnect', async () => {
+    setupService();
+    const transport1 = new MockDeviceTransport({ usbVendorId: 0x2e8a, usbProductId: 0x000a });
+    mockFactory.transportsToReturn = [transport1];
+
+    const dev = await service.connectSerialDevice();
+    const devId = dev!.id;
+    emitHandshakeAck(transport1);
+
+    // 1. Manually disconnect
+    await service.disconnectDevice(devId);
+    expect(service.getDevice(devId)?.state.connectionState).toBe('disconnected');
+
+    // 2. User manually reconnects
+    await service.reconnectDevice(devId);
+    expect(transport1.connectCalls).toBe(2);
+    expect(service.getDevice(devId)?.state.connectionState).toBe('connecting');
+    emitHandshakeAck(transport1);
+    expect(service.getDevice(devId)?.state.connectionState).toBe('connected');
+
+    // 3. Now an unexpected disconnect occurs
+    transport1.stateSubject.next('disconnected');
+    expect(service.getDevice(devId)?.state.connectionState).toBe('disconnected');
+
+    // 4. Re-plug USB -> should auto-reconnect!
+    const port = {
+      getInfo: () => ({ usbVendorId: 0x2e8a, usbProductId: 0x000a }),
+      readable: null,
+      writable: null,
+    } as unknown as SerialPort;
+
+    mockFactory.connectSubject.next(port);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(transport1.connectCalls).toBe(3);
+    expect(transport1.getPort()).toBe(port);
+    expect(service.getDevice(devId)?.state.connectionState).toBe('connecting');
+    emitHandshakeAck(transport1);
+    expect(service.getDevice(devId)?.state.connectionState).toBe('connected');
+  });
+
+  it('should match the correct device by USB vendor and product ID during auto-reconnect with multiple candidates', async () => {
+    setupService();
+    const transportA = new MockDeviceTransport({ usbVendorId: 0x2e8a, usbProductId: 0x000a });
+    const transportB = new MockDeviceTransport({ usbVendorId: 0x1234, usbProductId: 0x5678 });
+    mockFactory.transportsToReturn = [transportA, transportB];
+
+    const devA = await service.connectSerialDevice('Target A');
+    const devB = await service.connectSerialDevice('Target B');
+    emitHandshakeAck(transportA);
+    emitHandshakeAck(transportB);
+
+    // Both disconnect unexpectedly
+    transportA.stateSubject.next('disconnected');
+    transportB.stateSubject.next('disconnected');
+
+    // Only device B is re-plugged
+    const portB = {
+      getInfo: () => ({ usbVendorId: 0x1234, usbProductId: 0x5678 }),
+      readable: null,
+      writable: null,
+    } as unknown as SerialPort;
+
+    mockFactory.connectSubject.next(portB);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Only Device B should be reconnected
+    expect(transportB.connectCalls).toBe(2);
+    expect(transportB.getPort()).toBe(portB);
+    expect(transportA.connectCalls).toBe(1);
+    expect(service.getDevice(devB!.id)?.state.connectionState).toBe('connecting');
+    emitHandshakeAck(transportB);
+    expect(service.getDevice(devB!.id)?.state.connectionState).toBe('connected');
+    expect(service.getDevice(devA!.id)?.state.connectionState).toBe('disconnected');
   });
 
   it('should send commands to one or multiple devices and log sent events', async () => {

@@ -4,6 +4,7 @@ import { ConnectionState } from '../models/connection-state.type';
 import { DeviceMetadata, TransportType } from '../models/device.model';
 import { DeviceTransport, TransportEvent } from './device-transport.interface';
 import { DualEventParser } from '../protocol/parser/dual-event-parser';
+import type { WebSerialTransportFactory } from './web-serial-transport-factory.service';
 
 /**
  * Web Serial implementation of DeviceTransport.
@@ -25,18 +26,40 @@ export class WebSerialTransport implements DeviceTransport {
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private isDisconnecting = false;
   private isReading = false;
+  private cachedMetadata?: DeviceMetadata;
+
+  private readonly handlePortDisconnect = (): void => {
+    if (!this.isDisconnecting && this.stateSubject.value !== 'disconnected') {
+      this.stateSubject.next('disconnected');
+    }
+  };
 
   constructor(
-    private readonly port: SerialPort,
+    private port: SerialPort,
     private readonly config: SerialConfig = DEFAULT_SERIAL_CONFIG,
-  ) {}
+    private readonly factory?: WebSerialTransportFactory,
+  ) {
+    this.cachedMetadata = this.extractMetadata(port);
+    this.port.addEventListener?.('disconnect', this.handlePortDisconnect);
+  }
+
+  /**
+   * Returns the underlying SerialPort instance.
+   */
+  getPort(): SerialPort {
+    return this.port;
+  }
 
   /**
    * Retrieves USB vendor and product ID from port metadata if available.
    */
   getMetadata(): DeviceMetadata | undefined {
+    return this.extractMetadata(this.port) ?? this.cachedMetadata;
+  }
+
+  private extractMetadata(port: SerialPort): DeviceMetadata | undefined {
     try {
-      const info = this.port.getInfo();
+      const info = port.getInfo();
       return {
         usbVendorId: info.usbVendorId,
         usbProductId: info.usbProductId,
@@ -46,8 +69,33 @@ export class WebSerialTransport implements DeviceTransport {
     }
   }
 
+  private setPort(newPort: SerialPort): void {
+    this.port.removeEventListener?.('disconnect', this.handlePortDisconnect);
+    this.port = newPort;
+    const meta = this.extractMetadata(newPort);
+    if (meta) {
+      this.cachedMetadata = { ...this.cachedMetadata, ...meta };
+    }
+    this.port.addEventListener?.('disconnect', this.handlePortDisconnect);
+  }
+
+  private async openCurrentPort(): Promise<void> {
+    if (!this.port.readable && !this.port.writable) {
+      await this.port.open({
+        baudRate: this.config.baudRate,
+        dataBits: this.config.dataBits,
+        stopBits: this.config.stopBits,
+        parity: this.config.parity,
+        bufferSize: this.config.bufferSize,
+      });
+    }
+  }
+
   /**
    * Opens the serial port and initiates the read loop.
+   * If the current port cannot be opened (e.g. because the device was unplugged/replugged
+   * and the port handle is stale), it tries to reconnect via navigator.serial.getPorts()
+   * first before showing the native browser port picker.
    */
   async connect(): Promise<void> {
     if (this.stateSubject.value === 'connected' || this.stateSubject.value === 'connecting') {
@@ -60,23 +108,66 @@ export class WebSerialTransport implements DeviceTransport {
     this.stateSubject.next('connecting');
     this.isDisconnecting = false;
 
+    // 1. Try direct connection with current port
+    let directError: unknown;
     try {
-      await this.port.open({
-        baudRate: this.config.baudRate,
-        dataBits: this.config.dataBits,
-        stopBits: this.config.stopBits,
-        parity: this.config.parity,
-        bufferSize: this.config.bufferSize,
-      });
+      await this.openCurrentPort();
+      this.stateSubject.next('connected');
+      this.startReading();
+      return;
+    } catch (err) {
+      directError = err;
+    }
 
+    // If direct connect failed and no factory is available or unsupported, fail immediately
+    if (!this.factory || !this.factory.isSupported()) {
+      const error = directError instanceof Error ? directError : new Error(String(directError));
+      this.stateSubject.next('error');
+      this.errorsSubject.next(error);
+      throw error;
+    }
+
+    // 2. Try reconnecting via navigator.serial.getPorts() first before showing the picker
+    try {
+      const ports = await this.factory.getPorts();
+      const matchedPort = this.factory.findMatchingPort(ports, this.cachedMetadata);
+      if (matchedPort) {
+        this.setPort(matchedPort);
+        await this.openCurrentPort();
+        this.stateSubject.next('connected');
+        this.startReading();
+        return;
+      }
+    } catch {
+      // Fall through to requestPort picker below
+    }
+
+    // 3. Fallback to native browser picker (requestPort)
+    try {
+      const pickedPort = await this.factory.requestPort();
+      this.setPort(pickedPort);
+      await this.openCurrentPort();
       this.stateSubject.next('connected');
       this.startReading();
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'NotFoundError') {
+        this.stateSubject.next('disconnected');
+        return;
+      }
       const error = err instanceof Error ? err : new Error(String(err));
       this.stateSubject.next('error');
       this.errorsSubject.next(error);
       throw error;
     }
+  }
+
+  /**
+   * Adopts a new SerialPort instance (e.g. upon auto-reconnect) and connects.
+   */
+  async reconnectWithPort(newPort: SerialPort): Promise<void> {
+    await this.cleanupBeforeReconnect();
+    this.setPort(newPort);
+    await this.connect();
   }
 
   /**
